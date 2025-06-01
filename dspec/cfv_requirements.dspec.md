@@ -88,6 +88,80 @@ requirement cfv_requirements.UILayout_ErrorDisplay {
     source: "CascadeFlowVisualizer Library Specification, Section III.D"
 }
 
+// --- NEW LAYOUT AND STYLING REQUIREMENTS ---
+
+requirement cfv_requirements.FR12_LeftToRightFlowLayout {
+    title: "FR12: Left-to-Right Flow Layout"
+    description: "Flow Detail graphs must render with left-to-right orientation by default. Triggers appear on the left, steps flow from left to right, and final outputs appear on the right."
+    priority: "High"
+    status: "Accepted"
+    source: "User Requirements - Enhanced Layout"
+    acceptance_criteria: [
+        "Given a flow is displayed in Flow Detail view",
+        "Then the trigger node should appear on the left side",
+        "And step nodes should be arranged from left to right in execution order",
+        "And the layout should use ELK.js with 'RIGHT' direction configuration"
+    ]
+}
+
+requirement cfv_requirements.FR13_ImprovedNodeStyling {
+    title: "FR13: Improved Node Styling and Background Handling"
+    description: "Node components must properly handle styling so that backgrounds are contained within node boundaries and visual elements are properly positioned."
+    priority: "High"
+    status: "Accepted"
+    source: "User Requirements - Enhanced Styling"
+    acceptance_criteria: [
+        "Given a node is rendered",
+        "Then the background styling should be contained within the node boundaries",
+        "And text and visual elements should be properly positioned within the node",
+        "And node borders and shadows should render correctly"
+    ]
+}
+
+requirement cfv_requirements.FR14_SystemOverviewNavigation {
+    title: "FR14: System Overview Flow Navigation"
+    description: "In System Overview mode, clicking on a flow node must navigate to that flow's Detail View. The navigation should update the current view mode and selected flow."
+    priority: "High"
+    status: "Accepted"
+    source: "User Requirements - Enhanced Navigation"
+    acceptance_criteria: [
+        "Given the visualizer is in System Overview mode",
+        "When a flow node is clicked",
+        "Then the visualizer should switch to Flow Detail mode",
+        "And the clicked flow should be displayed in detail",
+        "And the navigation state should be updated accordingly"
+    ]
+}
+
+requirement cfv_requirements.FR15_SystemOverviewLeftToRightLayout {
+    title: "FR15: System Overview Left-to-Right Layout"
+    description: "System Overview graphs must render with left-to-right orientation. Triggers should appear on the left/top, flows in the center, and invocation relationships should flow from left to right."
+    priority: "High"
+    status: "Accepted"
+    source: "User Requirements - Enhanced Layout"
+    acceptance_criteria: [
+        "Given the System Overview is displayed",
+        "Then trigger nodes should appear on the left or top",
+        "And flow nodes should be arranged in the center",
+        "And invocation edges should flow from left to right",
+        "And the overall layout should be left-to-right oriented"
+    ]
+}
+
+requirement cfv_requirements.FR16_ComplexExampleSupport {
+    title: "FR16: Complex Example Support (Casino Platform)"
+    description: "The visualizer must support complex, real-world examples like a casino platform (stake.com style) with multiple interconnected flows, external integrations, and sophisticated business logic."
+    priority: "Medium"
+    status: "Accepted"
+    source: "User Requirements - Complex Examples"
+    acceptance_criteria: [
+        "Given a complex casino platform DSL is loaded",
+        "Then all flows should be properly parsed and displayed",
+        "And complex component relationships should be visualized correctly",
+        "And the system should handle multiple modules with imports",
+        "And performance should remain acceptable with 50+ nodes"
+    ]
+}
 
 // --- Derived from Section IV: Functional Requirements (FR) ---
 
@@ -218,7 +292,7 @@ requirement cfv_requirements.FR5_InformationDisplay_ConsumerProvided {
 
 requirement cfv_requirements.FR6_Layout_ELKjs {
     title: "FR6: Layout (ELK.js)"
-    description: "Use `elkjs-reactflow` (or direct ELK.js integration) for automatic graph layout, configurable via `props.elkOptions`."
+    description: "Use `elkjs-reactflow` (or direct ELK.js integration) for automatic graph layout, configurable via `props.elkOptions`. Default to left-to-right orientation for both flow detail and system overview."
     priority: "Critical"
     status: "Accepted"
     source: "CascadeFlowVisualizer Library Specification, Section IV.FR6"

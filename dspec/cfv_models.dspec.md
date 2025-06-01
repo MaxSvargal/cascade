@@ -83,6 +83,7 @@ model cfv_models.LayoutOptions {
     direction?: cfv_models.LayoutDirectionEnum { description: "Primary layout direction." }
     spacing?: cfv_models.LayoutSpacing { description: "Spacing configuration between elements." }
     nodeSize?: cfv_models.NodeSizeOptions { description: "Node sizing configuration." }
+    nodeStyle?: cfv_models.NodeStyleOptions { description: "Node styling configuration." }
 }
     model cfv_models.LayoutAlgorithmEnum {
         type: String
@@ -102,6 +103,28 @@ model cfv_models.LayoutOptions {
         width?: Number { description: "Default node width." }
         height?: Number { description: "Default node height." }
         calculateFromContent?: Boolean { description: "Whether to calculate size based on content." }
+        minWidth?: Number { description: "Minimum node width." }
+        maxWidth?: Number { description: "Maximum node width." }
+        minHeight?: Number { description: "Minimum node height." }
+        maxHeight?: Number { description: "Maximum node height." }
+        padding?: cfv_models.NodePadding { description: "Internal padding for node content." }
+    }
+    model cfv_models.NodePadding {
+        top?: Number { description: "Top padding in pixels." }
+        right?: Number { description: "Right padding in pixels." }
+        bottom?: Number { description: "Bottom padding in pixels." }
+        left?: Number { description: "Left padding in pixels." }
+    }
+    model cfv_models.NodeStyleOptions {
+        containBackground?: Boolean { description: "Whether to contain background within node boundaries." }
+        borderRadius?: Number { description: "Border radius for nodes." }
+        borderWidth?: Number { description: "Border width for nodes." }
+        shadowEnabled?: Boolean { description: "Whether to enable drop shadows." }
+        textAlignment?: cfv_models.TextAlignmentEnum { description: "Text alignment within nodes." }
+    }
+    model cfv_models.TextAlignmentEnum {
+        type: String
+        constraints: "enum:['left', 'center', 'right']"
     }
 
 // --- Node & Edge Data Payloads (Enhanced) ---

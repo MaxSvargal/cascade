@@ -1,5 +1,5 @@
-// SubFlowInvoker Node Component
-// Specialized node for steps that invoke other flows
+// Enhanced SubFlowInvoker Node Component
+// Updated for left-to-right layout and improved styling
 
 import React from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
@@ -16,55 +16,149 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
     }
   };
 
+  const getStatusIcon = () => {
+    switch (data.executionStatus) {
+      case 'SUCCESS': return '✅';
+      case 'FAILURE': return '❌';
+      case 'RUNNING': return '⏳';
+      case 'SKIPPED': return '⏭️';
+      default: return '🔗';
+    }
+  };
+
   return (
     <div
       style={{
-        padding: '10px',
+        padding: '12px 16px',
         border: `2px solid ${selected ? '#1976D2' : '#9C27B0'}`,
-        borderRadius: '8px',
+        borderRadius: '12px',
         backgroundColor: '#F3E5F5',
-        minWidth: '140px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        minWidth: '200px',
+        maxWidth: '320px',
+        boxShadow: selected 
+          ? '0 4px 12px rgba(25, 118, 210, 0.3)' 
+          : '0 2px 8px rgba(156, 39, 176, 0.2)',
+        transition: 'all 0.2s ease',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative'
       }}
     >
-      <Handle type="target" position={Position.Top} />
+      {/* Left handle for inputs (from previous steps) */}
+      <Handle type="target" position={Position.Left} />
       
-      <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#7B1FA2' }}>
+      <div style={{ 
+        fontWeight: 'bold', 
+        marginBottom: '8px', 
+        color: '#7B1FA2',
+        fontSize: '14px',
+        textAlign: 'center',
+        wordWrap: 'break-word',
+        lineHeight: '1.2'
+      }}>
         🔗 {data.label}
       </div>
       
-      <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>
+      <div style={{ 
+        fontSize: '11px', 
+        color: '#9C27B0', 
+        marginBottom: '8px',
+        textAlign: 'center',
+        fontWeight: '500',
+        backgroundColor: '#E1BEE7',
+        padding: '4px 8px',
+        borderRadius: '6px',
+        wordWrap: 'break-word'
+      }}>
         Invokes: {data.invokedFlowFqn}
       </div>
       
       {data.resolvedComponentFqn && (
-        <div style={{ fontSize: '10px', color: '#888', marginBottom: '4px' }}>
+        <div style={{ 
+          fontSize: '10px', 
+          color: '#666', 
+          marginBottom: '6px',
+          textAlign: 'center',
+          wordWrap: 'break-word',
+          fontFamily: 'monospace',
+          backgroundColor: '#F5F5F5',
+          padding: '2px 6px',
+          borderRadius: '4px'
+        }}>
           {data.resolvedComponentFqn}
         </div>
       )}
       
       {data.executionStatus && (
-        <div 
-          style={{ 
-            fontSize: '10px', 
-            color: 'white',
-            backgroundColor: getStatusColor(),
-            padding: '2px 6px',
-            borderRadius: '4px',
-            display: 'inline-block'
-          }}
-        >
-          {data.executionStatus}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: '6px'
+        }}>
+          <div 
+            style={{ 
+              fontSize: '10px', 
+              color: 'white',
+              backgroundColor: getStatusColor(),
+              padding: '4px 8px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontWeight: '500'
+            }}
+          >
+            <span>{getStatusIcon()}</span>
+            <span>{data.executionStatus}</span>
+          </div>
+        </div>
+      )}
+
+      {data.executionDurationMs && (
+        <div style={{ 
+          fontSize: '10px', 
+          color: '#888',
+          textAlign: 'center',
+          marginBottom: '4px'
+        }}>
+          ⏱️ {data.executionDurationMs}ms
+        </div>
+      )}
+
+      {data.contextVarUsages && data.contextVarUsages.length > 0 && (
+        <div style={{ 
+          fontSize: '9px', 
+          color: '#999',
+          textAlign: 'center',
+          marginBottom: '4px',
+          wordWrap: 'break-word'
+        }}>
+          Context: {data.contextVarUsages.slice(0, 2).join(', ')}
+          {data.contextVarUsages.length > 2 && '...'}
         </div>
       )}
       
       {data.error && (
-        <div style={{ fontSize: '10px', color: 'red', marginTop: '4px' }}>
-          ⚠ {data.error.message}
+        <div style={{ 
+          fontSize: '10px', 
+          color: '#F44336', 
+          marginTop: '6px',
+          textAlign: 'center',
+          backgroundColor: '#FFEBEE',
+          padding: '4px 6px',
+          borderRadius: '4px',
+          border: '1px solid #FFCDD2',
+          wordWrap: 'break-word'
+        }}>
+          ⚠️ {data.error.message}
         </div>
       )}
       
-      <Handle type="source" position={Position.Bottom} />
+      {/* Right handle for outputs (to next steps) */}
+      <Handle type="source" position={Position.Right} />
     </div>
   );
 };

@@ -223,61 +223,72 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
 }
 
 /**
- * Generate System Overview Graph Data
+ * Generate System Overview Graph Data with Navigation Support
  * From cfv_internal_code.GraphBuilderService_GenerateSystemOverviewGraphData
  */
 export async function generateSystemOverviewGraphData(
   moduleRegistry: IModuleRegistry,
   parseContextVarsFn: (value: string) => string[],
-  useAutoLayout: boolean = true
+  useAutoLayout: boolean = true,
+  onFlowNodeClick?: (flowFqn: string) => void
 ): Promise<GraphData> {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
-
+  
   const allModules = moduleRegistry.getAllLoadedModules();
   
-  // Generate flow nodes
+  // Generate flow nodes and trigger nodes with navigation support
   allModules.forEach(module => {
     if (module.definitions?.flows) {
       module.definitions.flows.forEach((flow: any) => {
         const flowFqn = `${module.fqn}.${flow.name}`;
         
-        const nodeData: SystemGraphNodeData = {
+        // Add flow node with click handler for navigation
+        const flowNodeData: SystemGraphNodeData = {
           label: flow.name,
           fqn: flowFqn,
           dslObject: flow,
-          contextVarUsages: parseContextVarsFn(JSON.stringify(flow))
+          resolvedComponentFqn: undefined,
+          componentSchema: undefined,
+          isNamedComponent: false,
+          contextVarUsages: parseContextVarsFn(JSON.stringify(flow)),
+          // Add navigation metadata to node data
+          navigatable: true,
+          targetFlowFqn: flowFqn,
+          onFlowNodeClick: onFlowNodeClick
         };
-
+        
         nodes.push({
           id: flowFqn,
           type: 'systemFlowNode',
-          position: { x: 0, y: 0 }, // Will be positioned by ELK
-          data: nodeData
+          position: { x: 0, y: 0 },
+          data: flowNodeData
         });
-
-        // Generate trigger nodes and edges
+        
+        // Add trigger node and edge if present
         if (flow.trigger) {
           const triggerNodeId = `trigger-${flowFqn}`;
           const triggerNodeData: SystemGraphNodeData = {
             label: `${flow.trigger.type}`,
             fqn: triggerNodeId,
             dslObject: flow.trigger,
+            resolvedComponentFqn: flow.trigger.type,
+            componentSchema: undefined,
+            isNamedComponent: false,
             contextVarUsages: parseContextVarsFn(JSON.stringify(flow.trigger))
           };
-
+          
           nodes.push({
             id: triggerNodeId,
             type: 'systemTriggerNode',
             position: { x: 0, y: 0 },
             data: triggerNodeData
           });
-
-          // Edge from trigger to flow
+          
           const edgeData: SystemEdgeData = {
             type: 'triggerLinkEdge'
           };
-
+          
           edges.push({
             id: `${triggerNodeId}-${flowFqn}`,
             source: triggerNodeId,
@@ -286,7 +297,7 @@ export async function generateSystemOverviewGraphData(
             data: edgeData
           });
         }
-
+        
         // Generate invocation edges for SubFlowInvoker steps
         if (flow.steps) {
           flow.steps.forEach((step: any) => {
@@ -295,7 +306,7 @@ export async function generateSystemOverviewGraphData(
               const edgeData: SystemEdgeData = {
                 type: 'invocationEdge'
               };
-
+              
               edges.push({
                 id: `${flowFqn}-${step.config.flow_fqn}`,
                 source: flowFqn,
@@ -309,8 +320,8 @@ export async function generateSystemOverviewGraphData(
       });
     }
   });
-
-  // Apply automatic layout if requested
+  
+  // Apply automatic layout if requested with left-to-right orientation
   if (useAutoLayout && nodes.length > 0) {
     try {
       const layouted = await layoutNodes(nodes, edges, layoutPresets.systemOverview);
@@ -319,6 +330,6 @@ export async function generateSystemOverviewGraphData(
       console.warn('Auto-layout failed, using manual positions:', error);
     }
   }
-
+  
   return { nodes, edges };
 } 

@@ -130,6 +130,12 @@ export interface TriggerEntryPointNodeData extends BaseNodeData {
 export interface SystemGraphNodeData extends BaseNodeData {
   /** FQN of the flow or unique ID for the trigger source. */
   fqn: string;
+  /** Whether this node supports navigation (for flow nodes). */
+  navigatable?: boolean;
+  /** Target flow FQN for navigation (for flow nodes). */
+  targetFlowFqn?: string;
+  /** Click handler for navigation (for flow nodes). */
+  onFlowNodeClick?: (flowFqn: string) => void;
 }
 
 export interface BaseEdgeData {

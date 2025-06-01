@@ -269,33 +269,61 @@ code cfv_internal_code.LayoutService_AutomaticLayout {
     
     detailed_behavior: `
         // Human Review Focus: ELK.js integration, layout algorithm configuration, node sizing.
-        // AI Agent Target: Generate automatic graph layout using ELK.js.
+        // AI Agent Target: Generate automatic graph layout using ELK.js with left-to-right defaults.
 
-        // 1. Validate inputs and set defaults
+        // 1. Validate inputs and set defaults with left-to-right orientation
         IF nodes.length IS_ZERO THEN
             RETURN_VALUE { nodes, edges }
         END_IF
+        
+        DECLARE defaultLayoutOptions = {
+            algorithm: "layered",
+            direction: "RIGHT", // Default to left-to-right
+            spacing: {
+                nodeNode: 80,
+                edgeNode: 20,
+                edgeEdge: 10,
+                layerSpacing: 100
+            },
+            nodeSize: {
+                width: 200,
+                height: 80,
+                calculateFromContent: true,
+                minWidth: 150,
+                maxWidth: 300,
+                minHeight: 60,
+                maxHeight: 120,
+                padding: { top: 8, right: 12, bottom: 8, left: 12 }
+            },
+            nodeStyle: {
+                containBackground: true,
+                borderRadius: 8,
+                borderWidth: 1,
+                shadowEnabled: true,
+                textAlignment: "center"
+            }
+        }
         
         DECLARE layoutOptions = MERGE_OBJECTS(defaultLayoutOptions, options)
         
         // 2. Calculate node sizes based on content if enabled
         IF layoutOptions.nodeSize.calculateFromContent IS_TRUE THEN
             FOR_EACH node IN nodes
-                DECLARE calculatedSize = CALL calculateNodeSize WITH node
-                ASSIGN node.style = MERGE_OBJECTS(node.style, calculatedSize)
+                DECLARE calculatedSize = CALL calculateNodeSizeWithStyling WITH node, layoutOptions.nodeSize
+                ASSIGN node.style = MERGE_OBJECTS(node.style, calculatedSize, layoutOptions.nodeStyle)
             END_FOR
         END_IF
         
         // 3. Convert React Flow format to ELK format
-        DECLARE elkNodes = MAP nodes TO elkNode FORMAT
+        DECLARE elkNodes = MAP nodes TO elkNode FORMAT WITH layoutOptions
         DECLARE elkEdges = MAP edges TO elkEdge FORMAT
         
-        // 4. Configure ELK layout options based on algorithm
-        DECLARE elkLayoutOptions = BUILD_ELK_OPTIONS(layoutOptions)
+        // 4. Configure ELK layout options based on algorithm and direction
+        DECLARE elkLayoutOptions = BUILD_ELK_OPTIONS_WITH_DIRECTION(layoutOptions)
         
         // 5. Execute ELK layout
         TRY
-            DECLARE layoutedGraph = AWAIT elk.layout WITH elkGraph
+            DECLARE layoutedGraph = AWAIT elk.layout WITH elkGraph AND elkLayoutOptions
             DECLARE layoutedNodes = APPLY_ELK_POSITIONS_TO_REACT_FLOW_NODES(layoutedGraph, nodes)
             RETURN_VALUE { nodes: layoutedNodes, edges }
         CATCH_ERROR error
@@ -311,38 +339,134 @@ code cfv_internal_code.LayoutService_AutomaticLayout {
 }
 
 code cfv_internal_code.LayoutService_ContentBasedSizing {
-    title: "Content-Based Node Sizing Calculation"
+    title: "Enhanced Content-Based Node Sizing with Styling"
     part_of_design: cfv_designs.LayoutService
     language: "TypeScript"
     implementation_location: {
         filepath: "services/layoutService.ts",
-        entry_point_name: "calculateNodeSize",
+        entry_point_name: "calculateNodeSizeWithStyling",
         entry_point_type: "function"
     }
-    signature: "(node: Node) => { width: number; height: number }"
+    signature: "(node: Node, sizeOptions: cfv_models.NodeSizeOptions) => { width: number; height: number; style: object }"
     
     detailed_behavior: `
-        // Calculate node dimensions based on content
-        DECLARE baseWidth = 150
-        DECLARE baseHeight = 80
+        // Calculate node dimensions based on content with enhanced styling support
+        DECLARE baseWidth = sizeOptions.width OR 200
+        DECLARE baseHeight = sizeOptions.height OR 80
+        DECLARE padding = sizeOptions.padding OR { top: 8, right: 12, bottom: 8, left: 12 }
         
         IF node.data?.label IS_DEFINED THEN
+            // Calculate text dimensions
             DECLARE textLength = node.data.label.length
-            DECLARE calculatedWidth = MAX(baseWidth, textLength * 8 + 40)
+            DECLARE estimatedTextWidth = textLength * 8 + padding.left + padding.right
+            DECLARE calculatedWidth = MAX(baseWidth, estimatedTextWidth)
             
-            DECLARE calculatedHeight = baseHeight
+            // Calculate height based on content
+            DECLARE calculatedHeight = baseHeight + padding.top + padding.bottom
             IF node.data?.resolvedComponentFqn THEN calculatedHeight += 20
             IF node.data?.executionStatus THEN calculatedHeight += 20
             IF node.data?.error THEN calculatedHeight += 20
             IF node.data?.invokedFlowFqn THEN calculatedHeight += 20
             
+            // Apply min/max constraints
+            DECLARE finalWidth = CLAMP(calculatedWidth, sizeOptions.minWidth OR 150, sizeOptions.maxWidth OR 300)
+            DECLARE finalHeight = CLAMP(calculatedHeight, sizeOptions.minHeight OR 60, sizeOptions.maxHeight OR 120)
+            
+            // Generate styling that contains background within boundaries
+            DECLARE nodeStyle = {
+                width: finalWidth,
+                height: finalHeight,
+                padding: `${padding.top}px ${padding.right}px ${padding.bottom}px ${padding.left}px`,
+                boxSizing: "border-box",
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                alignItems: "center"
+            }
+            
             RETURN_VALUE {
-                width: MIN(calculatedWidth, 250),
-                height: MIN(calculatedHeight, 150)
+                width: finalWidth,
+                height: finalHeight,
+                style: nodeStyle
             }
         END_IF
         
-        RETURN_VALUE { width: baseWidth, height: baseHeight }
+        RETURN_VALUE { 
+            width: baseWidth, 
+            height: baseHeight,
+            style: {
+                width: baseWidth,
+                height: baseHeight,
+                padding: `${padding.top}px ${padding.right}px ${padding.bottom}px ${padding.left}px`,
+                boxSizing: "border-box"
+            }
+        }
+    `
+}
+
+code cfv_internal_code.LayoutService_LayoutPresets {
+    title: "Layout Presets for Different View Types"
+    part_of_design: cfv_designs.LayoutService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/layoutService.ts",
+        entry_point_name: "layoutPresets",
+        entry_point_type: "constant"
+    }
+    signature: "Record<string, cfv_models.LayoutOptions>"
+    
+    detailed_behavior: `
+        // Define layout presets optimized for different visualization modes
+        DECLARE layoutPresets = {
+            flowDetail: {
+                algorithm: "layered",
+                direction: "RIGHT", // Left-to-right flow
+                spacing: {
+                    nodeNode: 80,
+                    edgeNode: 20,
+                    layerSpacing: 120
+                },
+                nodeSize: {
+                    calculateFromContent: true,
+                    minWidth: 180,
+                    maxWidth: 280,
+                    padding: { top: 12, right: 16, bottom: 12, left: 16 }
+                }
+            },
+            systemOverview: {
+                algorithm: "layered",
+                direction: "RIGHT", // Left-to-right system flow
+                spacing: {
+                    nodeNode: 100,
+                    edgeNode: 30,
+                    layerSpacing: 150
+                },
+                nodeSize: {
+                    calculateFromContent: true,
+                    minWidth: 200,
+                    maxWidth: 300,
+                    padding: { top: 16, right: 20, bottom: 16, left: 20 }
+                }
+            },
+            compact: {
+                algorithm: "layered",
+                direction: "RIGHT",
+                spacing: {
+                    nodeNode: 60,
+                    edgeNode: 15,
+                    layerSpacing: 80
+                },
+                nodeSize: {
+                    calculateFromContent: true,
+                    minWidth: 120,
+                    maxWidth: 200,
+                    padding: { top: 8, right: 12, bottom: 8, left: 12 }
+                }
+            }
+        }
+        
+        RETURN_VALUE layoutPresets
     `
 }
 
@@ -774,7 +898,7 @@ code cfv_internal_code.GraphBuilderService_GenerateFlowDetailGraphData {
 }
 
 code cfv_internal_code.GraphBuilderService_GenerateSystemOverviewGraphData {
-    title: "Generate System Overview Graph Data with Enhanced Features"
+    title: "Generate System Overview Graph Data with Enhanced Features and Navigation"
     part_of_design: cfv_designs.GraphBuilderService
     language: "TypeScript"
     implementation_location: {
@@ -782,7 +906,7 @@ code cfv_internal_code.GraphBuilderService_GenerateSystemOverviewGraphData {
         entry_point_name: "generateSystemOverviewGraphData",
         entry_point_type: "async_function"
     }
-    signature: "(moduleRegistry: cfv_models.IModuleRegistry, parseContextVarsFn: (value: string) => string[], useAutoLayout?: boolean) => Promise<GraphData>"
+    signature: "(moduleRegistry: cfv_models.IModuleRegistry, parseContextVarsFn: (value: string) => string[], useAutoLayout?: boolean, onFlowNodeClick?: (flowFqn: string) => void) => Promise<GraphData>"
     
     detailed_behavior: `
         DECLARE nodes = []
@@ -790,14 +914,19 @@ code cfv_internal_code.GraphBuilderService_GenerateSystemOverviewGraphData {
         
         DECLARE allModules = CALL moduleRegistry.getAllLoadedModules
         
-        // Generate flow nodes and trigger nodes
+        // Generate flow nodes and trigger nodes with navigation support
         FOR_EACH module IN allModules
             IF module.definitions?.flows IS_DEFINED THEN
                 FOR_EACH flow IN module.definitions.flows
                     DECLARE flowFqn = "${module.fqn}.${flow.name}"
                     
-                    // Add flow node
+                    // Add flow node with click handler for navigation
                     DECLARE flowNodeData = BUILD_SYSTEM_FLOW_NODE_DATA(flow, flowFqn, parseContextVarsFn)
+                    // Add navigation metadata to node data
+                    ASSIGN flowNodeData.navigatable = true
+                    ASSIGN flowNodeData.targetFlowFqn = flowFqn
+                    ASSIGN flowNodeData.onFlowNodeClick = onFlowNodeClick
+                    
                     ADD_TO nodes {
                         id: flowFqn,
                         type: "systemFlowNode",
@@ -845,7 +974,7 @@ code cfv_internal_code.GraphBuilderService_GenerateSystemOverviewGraphData {
             END_IF
         END_FOR
         
-        // Apply automatic layout if requested
+        // Apply automatic layout if requested with left-to-right orientation
         IF useAutoLayout AND nodes.length > 0 THEN
             TRY
                 DECLARE layouted = AWAIT CALL layoutNodes WITH nodes, edges, layoutPresets.systemOverview

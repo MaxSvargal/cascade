@@ -55,15 +55,15 @@ export async function layoutNodes(
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const {
     algorithm = 'layered',
-    direction = 'DOWN',
+    direction = 'RIGHT',
     spacing = {
-      nodeNode: 50,
-      edgeNode: 10,
+      nodeNode: 80,
+      edgeNode: 20,
       edgeEdge: 10,
-      layerSpacing: 100
+      layerSpacing: 120
     },
     nodeSize = {
-      width: 150,
+      width: 200,
       height: 80,
       calculateFromContent: true
     }
@@ -77,7 +77,7 @@ export async function layoutNodes(
   const elkNodes = nodes.map(node => {
     const size = nodeSize.calculateFromContent 
       ? calculateNodeSize(node)
-      : { width: nodeSize.width || 150, height: nodeSize.height || 80 };
+      : { width: nodeSize.width || 200, height: nodeSize.height || 80 };
     
     return {
       id: node.id,
@@ -103,14 +103,14 @@ export async function layoutNodes(
   const layoutOptions: Record<string, string> = {
     'elk.algorithm': algorithm,
     'elk.direction': direction,
-    'elk.spacing.nodeNode': (spacing.nodeNode || 50).toString(),
-    'elk.spacing.edgeNode': (spacing.edgeNode || 10).toString(),
+    'elk.spacing.nodeNode': (spacing.nodeNode || 80).toString(),
+    'elk.spacing.edgeNode': (spacing.edgeNode || 20).toString(),
     'elk.spacing.edgeEdge': (spacing.edgeEdge || 10).toString(),
   };
 
   // Algorithm-specific options
   if (algorithm === 'layered') {
-    layoutOptions['elk.layered.spacing.nodeNodeBetweenLayers'] = (spacing.layerSpacing || 100).toString();
+    layoutOptions['elk.layered.spacing.nodeNodeBetweenLayers'] = (spacing.layerSpacing || 120).toString();
     layoutOptions['elk.layered.crossingMinimization.strategy'] = 'LAYER_SWEEP';
     layoutOptions['elk.layered.nodePlacement.strategy'] = 'SIMPLE';
   } else if (algorithm === 'force') {
@@ -165,10 +165,10 @@ export async function layoutNodes(
 export const layoutPresets = {
   flowDetail: {
     algorithm: 'layered' as const,
-    direction: 'DOWN' as const,
+    direction: 'RIGHT' as const,
     spacing: {
-      nodeNode: 60,
-      edgeNode: 15,
+      nodeNode: 80,
+      edgeNode: 20,
       layerSpacing: 120
     },
     nodeSize: {
@@ -176,11 +176,12 @@ export const layoutPresets = {
     }
   },
   systemOverview: {
-    algorithm: 'force' as const,
+    algorithm: 'layered' as const,
     direction: 'RIGHT' as const,
     spacing: {
       nodeNode: 100,
-      edgeNode: 20
+      edgeNode: 30,
+      layerSpacing: 150
     },
     nodeSize: {
       calculateFromContent: true
@@ -188,15 +189,15 @@ export const layoutPresets = {
   },
   compact: {
     algorithm: 'layered' as const,
-    direction: 'DOWN' as const,
+    direction: 'RIGHT' as const,
     spacing: {
-      nodeNode: 30,
-      edgeNode: 10,
+      nodeNode: 60,
+      edgeNode: 15,
       layerSpacing: 80
     },
     nodeSize: {
-      width: 120,
-      height: 60,
+      width: 150,
+      height: 70,
       calculateFromContent: false
     }
   }

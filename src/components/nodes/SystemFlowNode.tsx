@@ -6,40 +6,105 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { SystemGraphNodeData } from '@/models/cfv_models_generated';
 
 const SystemFlowNode: React.FC<NodeProps<SystemGraphNodeData>> = ({ data, selected }) => {
+  const handleClick = () => {
+    if (data.navigatable && data.onFlowNodeClick && data.targetFlowFqn) {
+      data.onFlowNodeClick(data.targetFlowFqn);
+    }
+  };
+
   return (
     <div
+      onClick={handleClick}
       style={{
         padding: '12px',
         border: `2px solid ${selected ? '#1976D2' : '#FF9800'}`,
         borderRadius: '12px',
         backgroundColor: '#FFF3E0',
         minWidth: '160px',
-        boxShadow: '0 3px 6px rgba(0,0,0,0.15)'
+        maxWidth: '280px',
+        boxShadow: '0 3px 6px rgba(0,0,0,0.15)',
+        cursor: data.navigatable ? 'pointer' : 'default',
+        transition: 'all 0.2s ease',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative'
+      }}
+      onMouseEnter={(e) => {
+        if (data.navigatable) {
+          e.currentTarget.style.transform = 'scale(1.02)';
+          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (data.navigatable) {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = '0 3px 6px rgba(0,0,0,0.15)';
+        }
       }}
     >
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Left} />
       
-      <div style={{ fontWeight: 'bold', marginBottom: '6px', color: '#E65100', fontSize: '14px' }}>
+      <div style={{ 
+        fontWeight: 'bold', 
+        marginBottom: '6px', 
+        color: '#E65100', 
+        fontSize: '14px',
+        textAlign: 'center',
+        wordWrap: 'break-word'
+      }}>
         📋 {data.label}
       </div>
       
-      <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>
-        Flow: {data.fqn}
+      <div style={{ 
+        fontSize: '11px', 
+        color: '#666', 
+        marginBottom: '4px',
+        textAlign: 'center',
+        wordWrap: 'break-word'
+      }}>
+        {data.fqn}
       </div>
       
       {data.contextVarUsages && data.contextVarUsages.length > 0 && (
-        <div style={{ fontSize: '10px', color: '#888' }}>
-          Context vars: {data.contextVarUsages.join(', ')}
+        <div style={{ 
+          fontSize: '10px', 
+          color: '#888',
+          textAlign: 'center',
+          wordWrap: 'break-word'
+        }}>
+          Context: {data.contextVarUsages.slice(0, 3).join(', ')}
+          {data.contextVarUsages.length > 3 && '...'}
         </div>
       )}
       
       {data.error && (
-        <div style={{ fontSize: '10px', color: 'red', marginTop: '4px' }}>
+        <div style={{ 
+          fontSize: '10px', 
+          color: 'red', 
+          marginTop: '4px',
+          textAlign: 'center',
+          wordWrap: 'break-word'
+        }}>
           ⚠ {data.error.message}
         </div>
       )}
+
+      {data.navigatable && (
+        <div style={{
+          position: 'absolute',
+          top: '4px',
+          right: '4px',
+          fontSize: '10px',
+          color: '#1976D2',
+          fontWeight: 'bold'
+        }}>
+          →
+        </div>
+      )}
       
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Right} />
     </div>
   );
 };
