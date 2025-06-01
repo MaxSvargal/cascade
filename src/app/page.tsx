@@ -4,7 +4,11 @@ import React from 'react';
 import CascadeFlowVisualizer from '@/components/CascadeFlowVisualizer';
 import StepNode from '@/components/nodes/StepNode';
 import TriggerNode from '@/components/nodes/TriggerNode';
+import SubFlowInvokerNode from '@/components/nodes/SubFlowInvokerNode';
+import SystemFlowNode from '@/components/nodes/SystemFlowNode';
+import SystemTriggerNode from '@/components/nodes/SystemTriggerNode';
 import FlowEdge from '@/components/edges/FlowEdge';
+import SystemEdge from '@/components/edges/SystemEdge';
 import { 
   CascadeFlowVisualizerProps, 
   DslModuleInput, 
@@ -48,13 +52,29 @@ flows:
         inputs_map:
           input: "steps.fetch_data.outputs.response"
         run_after: ["fetch_data"]
+      - step_id: invoke_subflow
+        component_ref: StdLib:SubFlowInvoker
+        config:
+          flow_fqn: "com.example.demo.HelperFlow"
+        inputs_map:
+          data: "steps.process_data.outputs.result"
+        run_after: ["process_data"]
       - step_id: save_result
         component_ref: StdLib:FileWrite
         config:
           path: "/tmp/result.json"
         inputs_map:
-          data: "steps.process_data.outputs.result"
-        run_after: ["process_data"]
+          data: "steps.invoke_subflow.outputs.result"
+        run_after: ["invoke_subflow"]
+  - name: HelperFlow
+    trigger:
+      type: ManualTrigger
+    steps:
+      - step_id: helper_step
+        component_ref: StdLib:DataTransform
+        config:
+          transformation: "lowercase"
+        run_after: []
     `
   }
 ];
@@ -88,6 +108,15 @@ const sampleComponentSchemas: Record<string, ComponentSchema> = {
         path: { type: 'string' }
       }
     }
+  },
+  'StdLib:SubFlowInvoker': {
+    fqn: 'StdLib:SubFlowInvoker',
+    configSchema: {
+      type: 'object',
+      properties: {
+        flow_fqn: { type: 'string' }
+      }
+    }
   }
 };
 
@@ -95,15 +124,15 @@ const sampleComponentSchemas: Record<string, ComponentSchema> = {
 const nodeTypes = {
   stepNode: StepNode,
   triggerNode: TriggerNode,
-  subFlowInvokerNode: StepNode, // Reuse StepNode for now
-  systemFlowNode: StepNode,
-  systemTriggerNode: TriggerNode
+  subFlowInvokerNode: SubFlowInvokerNode,
+  systemFlowNode: SystemFlowNode,
+  systemTriggerNode: SystemTriggerNode
 };
 
 // Custom edge types
 const edgeTypes = {
   flowEdge: FlowEdge,
-  systemEdge: FlowEdge
+  systemEdge: SystemEdge
 };
 
 // Sample inspector tab renderers

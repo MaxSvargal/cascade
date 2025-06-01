@@ -14,6 +14,7 @@ import {
   FlowExecutionTrace,
   VisualizerModeEnum
 } from '@/models/cfv_models_generated';
+import { layoutNodes } from './layoutService';
 
 export interface GraphData {
   nodes: Node[];
@@ -27,14 +28,15 @@ export interface GenerateFlowDetailParams {
   parseContextVarsFn: (value: string) => string[];
   componentSchemas: Record<string, ComponentSchema>;
   traceData?: FlowExecutionTrace;
+  useAutoLayout?: boolean;
 }
 
 /**
  * Generate Flow Detail Graph Data
  * From cfv_internal_code.GraphBuilderService_GenerateFlowDetailGraphData
  */
-export function generateFlowDetailGraphData(params: GenerateFlowDetailParams): GraphData {
-  const { flowFqn, mode, moduleRegistry, parseContextVarsFn, componentSchemas, traceData } = params;
+export async function generateFlowDetailGraphData(params: GenerateFlowDetailParams): Promise<GraphData> {
+  const { flowFqn, mode, moduleRegistry, parseContextVarsFn, componentSchemas, traceData, useAutoLayout = true } = params;
   
   const flowDefinition = moduleRegistry.getFlowDefinition(flowFqn);
   if (!flowDefinition) {
@@ -181,6 +183,16 @@ export function generateFlowDetailGraphData(params: GenerateFlowDetailParams): G
     });
   }
 
+  // Apply automatic layout if requested
+  if (useAutoLayout && nodes.length > 0) {
+    try {
+      const layouted = await layoutNodes(nodes, edges, { direction: 'DOWN' });
+      return layouted;
+    } catch (error) {
+      console.warn('Auto-layout failed, using manual positions:', error);
+    }
+  }
+
   return { nodes, edges };
 }
 
@@ -188,10 +200,11 @@ export function generateFlowDetailGraphData(params: GenerateFlowDetailParams): G
  * Generate System Overview Graph Data
  * From cfv_internal_code.GraphBuilderService_GenerateSystemOverviewGraphData
  */
-export function generateSystemOverviewGraphData(
+export async function generateSystemOverviewGraphData(
   moduleRegistry: IModuleRegistry,
-  parseContextVarsFn: (value: string) => string[]
-): GraphData {
+  parseContextVarsFn: (value: string) => string[],
+  useAutoLayout: boolean = true
+): Promise<GraphData> {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
@@ -270,6 +283,19 @@ export function generateSystemOverviewGraphData(
       });
     }
   });
+
+  // Apply automatic layout if requested
+  if (useAutoLayout && nodes.length > 0) {
+    try {
+      const layouted = await layoutNodes(nodes, edges, { 
+        direction: 'RIGHT',
+        spacing: { nodeNode: 80, edgeNode: 20 }
+      });
+      return layouted;
+    } catch (error) {
+      console.warn('Auto-layout failed, using manual positions:', error);
+    }
+  }
 
   return { nodes, edges };
 } 
