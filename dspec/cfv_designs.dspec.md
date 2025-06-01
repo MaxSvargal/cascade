@@ -101,16 +101,27 @@ design cfv_designs.GraphBuilderService {
 }
 
 design cfv_designs.LayoutService {
-    title: "LayoutService (Integrates elkjs-reactflow)"
-    description: "Applies ELK.js layout algorithm to generated graph data."
+    title: "LayoutService (Enhanced ELK.js Integration)"
+    description: "Advanced automatic graph layout service using ELK.js with multiple algorithms and intelligent node sizing."
     part_of: cfv_designs.CascadeFlowVisualizerComponent
     responsibilities: [
-        "Consume `nodes` and `edges` from GraphBuilderService.",
-        "Utilize ELK.js (via `elkjs-reactflow` or direct integration) to compute layout positions.",
-        "Apply `props.elkOptions` for layout customization."
+        "Provide multiple layout algorithms (layered, force, mrtree, radial, disco).",
+        "Calculate content-based node sizing with configurable limits.",
+        "Apply algorithm-specific optimizations and spacing configurations.",
+        "Provide layout presets for different use cases (flowDetail, systemOverview, compact).",
+        "Handle layout failures gracefully with fallback to manual positioning."
     ]
-    dependencies: [cfv_designs.GraphBuilderService, "props.elkOptions"]
-    source: "CascadeFlowVisualizer Library Specification, Section VII.3"
+    dependencies: [
+        cfv_designs.GraphBuilderService,
+        "elkjs/lib/elk.bundled.js",
+        "props.elkOptions"
+    ]
+    exposes_interface: {
+        layoutNodes: "async (nodes: Node[], edges: Edge[], options?: LayoutOptions) => Promise<{ nodes: Node[]; edges: Edge[] }>",
+        calculateNodeSize: "(node: Node) => { width: number; height: number }",
+        layoutPresets: "Record<string, LayoutOptions>"
+    }
+    source: "Enhanced implementation with advanced ELK.js features"
 }
 
 design cfv_designs.SelectionService {
@@ -161,4 +172,238 @@ design cfv_designs.TraceListService {
     ]
     dependencies: ["props.fetchTraceList", "props.renderFlowRunListItem"]
     source: "CascadeFlowVisualizer Library Specification, Section VII.7"
+}
+
+// --- Enhanced Services (New Implementations) ---
+
+design cfv_designs.TraceVisualizationService {
+    title: "TraceVisualizationService (Execution Trace Overlays)"
+    description: "Enhances graph elements with execution trace data, critical path analysis, and performance metrics."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Enhance nodes with trace overlay data (execution status, timing, data summaries).",
+        "Enhance edges with execution path information and data flow details.",
+        "Calculate critical path through execution based on duration analysis.",
+        "Apply trace-based styling for visual differentiation of execution states.",
+        "Provide execution order visualization and performance metrics overlay.",
+        "Extract and display error details for failed executions."
+    ]
+    dependencies: [
+        cfv_designs.GraphBuilderService,
+        "props.traceData"
+    ]
+    exposes_interface: {
+        enhanceNodesWithTrace: "(nodes: Node[], traceData: FlowExecutionTrace, options?: TraceVisualizationOptions) => Node[]",
+        enhanceEdgesWithTrace: "(edges: Edge[], traceData: FlowExecutionTrace, options?: TraceVisualizationOptions) => Edge[]",
+        calculateCriticalPath: "(traceData: FlowExecutionTrace) => Set<string>"
+    }
+    source: "New implementation for advanced trace visualization"
+}
+
+design cfv_designs.YamlReconstructionService {
+    title: "YamlReconstructionService (Module Save Operations)"
+    description: "Reconstructs YAML content from DSL module representations and handles configuration changes for save operations."
+    part_of: cfv_designs.InspectorStateService
+    responsibilities: [
+        "Reconstruct valid YAML content from parsed DSL module representations.",
+        "Apply configuration changes to module representations with path-based updates.",
+        "Create save payloads with validation and error handling.",
+        "Preserve YAML structure and formatting where possible.",
+        "Validate reconstructed YAML against original module structure."
+    ]
+    dependencies: [
+        cfv_designs.ModuleRegistryService,
+        "yaml.stringify",
+        "yaml.parse"
+    ]
+    exposes_interface: {
+        reconstructModuleYaml: "(moduleRep: DslModuleRepresentation, options?: ReconstructionOptions) => string",
+        applyConfigChanges: "(moduleRep: DslModuleRepresentation, pathToConfig: (string | number)[], newConfigValue: any) => DslModuleRepresentation",
+        createSavePayload: "(moduleRep: DslModuleRepresentation, options?: ReconstructionOptions) => SaveModulePayload",
+        validateReconstructedYaml: "(original: DslModuleRepresentation, reconstructed: string) => { isValid: boolean; errors: string[] }"
+    }
+    source: "New implementation for YAML round-trip editing"
+}
+
+design cfv_designs.TestCaseService {
+    title: "TestCaseService (Property Testing Management)"
+    description: "Manages flow test case definitions, validation, and execution interface for property testing."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Generate test case templates for flows (happy path, error handling, performance).",
+        "Create test cases from templates with customization options.",
+        "Validate test case definitions against flow structures and schemas.",
+        "Generate mock responses for common component types.",
+        "Evaluate test assertions against execution results.",
+        "Provide test execution simulation and result validation."
+    ]
+    dependencies: [
+        cfv_designs.ModuleRegistryService,
+        "props.onRunTestCase"
+    ]
+    exposes_interface: {
+        generateTestCaseTemplates: "(flowFqn: string, moduleRegistry: IModuleRegistry) => TestCaseTemplate[]",
+        createTestCaseFromTemplate: "(template: TestCaseTemplate, flowFqn: string, customizations?: Partial<FlowTestCase>) => FlowTestCase",
+        validateTestCase: "(testCase: FlowTestCase, moduleRegistry: IModuleRegistry) => { isValid: boolean; errors: string[] }",
+        generateMockResponses: "(flowFqn: string, moduleRegistry: IModuleRegistry) => MockedComponentResponse[]",
+        evaluateAssertions: "(assertions: TestCaseAssertion[], testResult: any) => AssertionResult[]"
+    }
+    source: "New implementation for comprehensive test case management"
+}
+
+design cfv_designs.EnhancedGraphBuilderService {
+    title: "GraphBuilderService (Enhanced with Advanced Features)"
+    description: "Enhanced graph builder service with automatic layout integration, trace visualization, and advanced node/edge generation."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Generate enhanced node data with trace overlays and execution status.",
+        "Create specialized node types (StepNode, TriggerNode, SubFlowInvokerNode, SystemFlowNode, SystemTriggerNode).",
+        "Generate enhanced edge data with execution path information.",
+        "Integrate automatic layout application with ELK.js.",
+        "Apply trace visualization enhancements when trace data is available.",
+        "Support multiple graph generation modes (design, trace, test_result).",
+        "Handle component resolution with import-aware lookup.",
+        "Generate system overview graphs with flow relationships and invocations."
+    ]
+    dependencies: [
+        cfv_designs.ModuleRegistryService,
+        cfv_designs.LayoutService,
+        cfv_designs.TraceVisualizationService,
+        "props.parseContextVariables",
+        "props.traceData"
+    ]
+    exposes_interface: {
+        generateFlowDetailGraphData: "(params: GenerateFlowDetailParams) => Promise<GraphData>",
+        generateSystemOverviewGraphData: "(moduleRegistry: IModuleRegistry, parseContextVarsFn: (value: string) => string[], useAutoLayout?: boolean) => Promise<GraphData>"
+    }
+    source: "Enhanced implementation with advanced features and integrations"
+}
+
+design cfv_designs.EnhancedModuleRegistryService {
+    title: "ModuleRegistryService (Enhanced with Advanced Resolution)"
+    description: "Enhanced module registry service with comprehensive component resolution, import handling, and error management."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Manage DSL module loading with comprehensive error handling.",
+        "Parse YAML content with detailed error reporting and validation.",
+        "Resolve component references across modules with import awareness.",
+        "Handle module imports and aliases with recursive loading.",
+        "Provide synchronous access to loaded data through IModuleRegistry interface.",
+        "Support component schema integration and validation.",
+        "Manage loading states and prevent duplicate requests."
+    ]
+    dependencies: [
+        "yaml.parse",
+        "props.requestModule",
+        "props.onModuleLoadError",
+        "props.componentSchemas"
+    ]
+    exposes_interface: cfv_models.IModuleRegistry
+    enhanced_features: [
+        "Import-aware component resolution",
+        "Recursive module loading for dependencies",
+        "Comprehensive error handling and reporting",
+        "Component schema integration",
+        "Loading state management"
+    ]
+    source: "Enhanced implementation with advanced module management"
+}
+
+// --- Component Design Enhancements ---
+
+design cfv_designs.EnhancedNodeComponents {
+    title: "Enhanced Node Component Library"
+    description: "Comprehensive set of React components for rendering different types of flow nodes with advanced features."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Render step nodes with execution status styling and error display.",
+        "Render trigger nodes with distinct visual styling.",
+        "Render sub-flow invoker nodes with navigation capabilities.",
+        "Render system flow nodes for overview visualization.",
+        "Render system trigger nodes for system-level triggers.",
+        "Support trace overlay visualization with execution timing and status.",
+        "Provide consistent styling and interaction patterns."
+    ]
+    components: [
+        "StepNode: Standard flow step with execution status",
+        "TriggerNode: Flow trigger entry point",
+        "SubFlowInvokerNode: Sub-flow invocation with navigation",
+        "SystemFlowNode: System overview flow representation",
+        "SystemTriggerNode: System overview trigger representation"
+    ]
+    source: "Enhanced implementation with comprehensive node types"
+}
+
+design cfv_designs.EnhancedEdgeComponents {
+    title: "Enhanced Edge Component Library"
+    description: "Comprehensive set of React components for rendering different types of flow edges with advanced features."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Render flow edges with data/control flow differentiation.",
+        "Render system edges with invocation/trigger styling.",
+        "Support trace overlay visualization with execution path highlighting.",
+        "Provide visual indicators for executed vs. non-executed paths.",
+        "Support critical path highlighting with enhanced styling."
+    ]
+    components: [
+        "FlowEdge: Flow detail edges with data/control flow styling",
+        "SystemEdge: System overview edges with invocation/trigger styling"
+    ]
+    source: "Enhanced implementation with comprehensive edge types"
+}
+
+// --- Integration Design ---
+
+design cfv_designs.EnhancedCascadeFlowVisualizerComponent {
+    title: "Enhanced <CascadeFlowVisualizer /> React Component"
+    description: "Fully enhanced main component with all advanced features integrated."
+    part_of: cfv_designs.CoreArchitecture
+    api_contract_model: cfv_models.CascadeFlowVisualizerProps
+    responsibilities: [
+        "Integrate all enhanced services (Layout, TraceVisualization, TestCase, YamlReconstruction).",
+        "Provide comprehensive IDE-like interface with advanced features.",
+        "Support multiple visualization modes with seamless switching.",
+        "Handle save operations with YAML reconstruction and validation.",
+        "Provide test case management and execution interface.",
+        "Support advanced layout options and automatic positioning.",
+        "Integrate trace visualization with critical path analysis.",
+        "Provide comprehensive error handling and user feedback."
+    ]
+    dependencies: [
+        cfv_designs.EnhancedModuleRegistryService,
+        cfv_designs.EnhancedGraphBuilderService,
+        cfv_designs.LayoutService,
+        cfv_designs.TraceVisualizationService,
+        cfv_designs.YamlReconstructionService,
+        cfv_designs.TestCaseService,
+        cfv_designs.SelectionService,
+        cfv_designs.InspectorStateService,
+        cfv_designs.NavigationStateService,
+        cfv_designs.TraceListService
+    ]
+    enhanced_features: [
+        "Multi-algorithm automatic layout with ELK.js",
+        "Advanced trace visualization with critical path analysis",
+        "Comprehensive test case management and validation",
+        "YAML round-trip editing with save functionality",
+        "Enhanced node and edge components with rich data display",
+        "Professional UI/UX with mode switching and demo controls",
+        "Comprehensive error handling and loading states",
+        "Performance optimizations and efficient graph generation"
+    ]
+    fulfills: [
+        cfv_requirements.UILayout_IdeLikeStructure,
+        cfv_requirements.FR1_ModuleManagement,
+        cfv_requirements.FR2_GraphDataGeneration,
+        cfv_requirements.FR3_GraphRendering_ConsumerProvided,
+        cfv_requirements.FR4_NavigationAndInteraction,
+        cfv_requirements.FR5_InformationDisplay_ConsumerProvided,
+        cfv_requirements.FR6_Layout_ELKjs,
+        cfv_requirements.FR7_Editing_V1Scope,
+        cfv_requirements.FR8_Debugging_TraceVisualization,
+        cfv_requirements.FR9_PropertyTestingInterface,
+        cfv_requirements.FR10_StateSynchronization,
+        cfv_requirements.FR11_ErrorHandlingAndFeedback
+    ]
+    source: "Enhanced implementation with all advanced features integrated"
 }

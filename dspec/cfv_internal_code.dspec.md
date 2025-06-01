@@ -253,3 +253,612 @@ code cfv_internal_code.CascadeFlowVisualizerComponent_Main {
         "cfv_internal_code.NavigationStateService_SharedAtoms.systemViewActiveAtom" // Example atom
     ]
 }
+
+// --- Layout Service Logic (New) ---
+
+code cfv_internal_code.LayoutService_AutomaticLayout {
+    title: "ELK.js Automatic Graph Layout Service"
+    part_of_design: cfv_designs.LayoutService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/layoutService.ts",
+        entry_point_name: "layoutNodes",
+        entry_point_type: "async_function"
+    }
+    signature: "(nodes: Node[], edges: Edge[], options?: cfv_models.LayoutOptions) => Promise<{ nodes: Node[]; edges: Edge[] }>"
+    
+    detailed_behavior: `
+        // Human Review Focus: ELK.js integration, layout algorithm configuration, node sizing.
+        // AI Agent Target: Generate automatic graph layout using ELK.js.
+
+        // 1. Validate inputs and set defaults
+        IF nodes.length IS_ZERO THEN
+            RETURN_VALUE { nodes, edges }
+        END_IF
+        
+        DECLARE layoutOptions = MERGE_OBJECTS(defaultLayoutOptions, options)
+        
+        // 2. Calculate node sizes based on content if enabled
+        IF layoutOptions.nodeSize.calculateFromContent IS_TRUE THEN
+            FOR_EACH node IN nodes
+                DECLARE calculatedSize = CALL calculateNodeSize WITH node
+                ASSIGN node.style = MERGE_OBJECTS(node.style, calculatedSize)
+            END_FOR
+        END_IF
+        
+        // 3. Convert React Flow format to ELK format
+        DECLARE elkNodes = MAP nodes TO elkNode FORMAT
+        DECLARE elkEdges = MAP edges TO elkEdge FORMAT
+        
+        // 4. Configure ELK layout options based on algorithm
+        DECLARE elkLayoutOptions = BUILD_ELK_OPTIONS(layoutOptions)
+        
+        // 5. Execute ELK layout
+        TRY
+            DECLARE layoutedGraph = AWAIT elk.layout WITH elkGraph
+            DECLARE layoutedNodes = APPLY_ELK_POSITIONS_TO_REACT_FLOW_NODES(layoutedGraph, nodes)
+            RETURN_VALUE { nodes: layoutedNodes, edges }
+        CATCH_ERROR error
+            LOG "ELK layout failed, using original positions: ${error}"
+            RETURN_VALUE { nodes, edges }
+        END_TRY
+    `
+    dependencies: [
+        "elkjs/lib/elk.bundled.js",
+        "reactflow.Node",
+        "reactflow.Edge"
+    ]
+}
+
+code cfv_internal_code.LayoutService_ContentBasedSizing {
+    title: "Content-Based Node Sizing Calculation"
+    part_of_design: cfv_designs.LayoutService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/layoutService.ts",
+        entry_point_name: "calculateNodeSize",
+        entry_point_type: "function"
+    }
+    signature: "(node: Node) => { width: number; height: number }"
+    
+    detailed_behavior: `
+        // Calculate node dimensions based on content
+        DECLARE baseWidth = 150
+        DECLARE baseHeight = 80
+        
+        IF node.data?.label IS_DEFINED THEN
+            DECLARE textLength = node.data.label.length
+            DECLARE calculatedWidth = MAX(baseWidth, textLength * 8 + 40)
+            
+            DECLARE calculatedHeight = baseHeight
+            IF node.data?.resolvedComponentFqn THEN calculatedHeight += 20
+            IF node.data?.executionStatus THEN calculatedHeight += 20
+            IF node.data?.error THEN calculatedHeight += 20
+            IF node.data?.invokedFlowFqn THEN calculatedHeight += 20
+            
+            RETURN_VALUE {
+                width: MIN(calculatedWidth, 250),
+                height: MIN(calculatedHeight, 150)
+            }
+        END_IF
+        
+        RETURN_VALUE { width: baseWidth, height: baseHeight }
+    `
+}
+
+// --- Trace Visualization Service Logic (New) ---
+
+code cfv_internal_code.TraceVisualizationService_EnhanceNodes {
+    title: "Enhance Nodes with Trace Data Overlays"
+    part_of_design: cfv_designs.TraceVisualizationService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/traceVisualizationService.ts",
+        entry_point_name: "enhanceNodesWithTrace",
+        entry_point_type: "function"
+    }
+    signature: "(nodes: Node[], traceData: cfv_models.FlowExecutionTrace, options?: cfv_models.TraceVisualizationOptions) => Node<EnhancedNodeData>[]"
+    
+    detailed_behavior: `
+        // Human Review Focus: Trace data correlation, critical path calculation, styling enhancements.
+        // AI Agent Target: Generate trace-enhanced node data.
+
+        // 1. Calculate critical path if requested
+        DECLARE criticalPath = SET<string>()
+        IF options.highlightCriticalPath IS_TRUE THEN
+            ASSIGN criticalPath = CALL calculateCriticalPath WITH traceData
+        END_IF
+        
+        // 2. Enhance each node with trace overlay
+        RETURN_VALUE MAP nodes TO enhancedNode WHERE
+            DECLARE stepTrace = FIND traceData.steps WHERE step.stepId EQUALS node.id
+            
+            IF stepTrace IS_NULL THEN
+                RETURN_VALUE node
+            END_IF
+            
+            DECLARE traceOverlay = BUILD_TRACE_OVERLAY(stepTrace, options, criticalPath)
+            DECLARE enhancedStyle = GET_TRACE_BASED_STYLING(stepTrace, traceOverlay)
+            
+            RETURN_VALUE {
+                ...node,
+                data: { ...node.data, traceOverlay },
+                style: { ...node.style, ...enhancedStyle }
+            }
+        END_MAP
+    `
+    dependencies: [
+        "cfv_models.FlowExecutionTrace",
+        "cfv_models.TraceVisualizationOptions"
+    ]
+}
+
+code cfv_internal_code.TraceVisualizationService_CriticalPath {
+    title: "Calculate Critical Path Through Execution"
+    part_of_design: cfv_designs.TraceVisualizationService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/traceVisualizationService.ts",
+        entry_point_name: "calculateCriticalPath",
+        entry_point_type: "function"
+    }
+    signature: "(traceData: cfv_models.FlowExecutionTrace) => Set<string>"
+    
+    detailed_behavior: `
+        // Find the longest execution path by duration
+        DECLARE stepsByDuration = SORT traceData.steps BY durationMs DESCENDING
+        
+        // Add the top 20% longest-running steps to critical path
+        DECLARE criticalCount = MAX(1, CEIL(stepsByDuration.length * 0.2))
+        DECLARE criticalPath = SET<string>()
+        
+        FOR i FROM 0 TO criticalCount
+            ADD stepsByDuration[i].stepId TO criticalPath
+        END_FOR
+        
+        RETURN_VALUE criticalPath
+    `
+}
+
+// --- YAML Reconstruction Service Logic (New) ---
+
+code cfv_internal_code.YamlReconstructionService_ReconstructModule {
+    title: "Reconstruct YAML Content from DSL Module Representation"
+    part_of_design: cfv_designs.YamlReconstructionService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/yamlReconstructionService.ts",
+        entry_point_name: "reconstructModuleYaml",
+        entry_point_type: "function"
+    }
+    signature: "(moduleRep: cfv_models.DslModuleRepresentation, options?: cfv_models.ReconstructionOptions) => string"
+    
+    detailed_behavior: `
+        // Human Review Focus: YAML structure preservation, configuration merging, error handling.
+        // AI Agent Target: Generate valid YAML from module representation.
+
+        // 1. Validate input
+        IF moduleRep.parsedContent IS_NULL THEN
+            THROW_ERROR "Module has no parsed content to reconstruct from"
+        END_IF
+        
+        // 2. Return original if no modifications
+        IF moduleRep.definitions IS_NULL AND moduleRep.rawContent IS_DEFINED THEN
+            RETURN_VALUE moduleRep.rawContent
+        END_IF
+        
+        // 3. Build YAML structure
+        DECLARE yamlStructure = {
+            dsl_version: moduleRep.parsedContent.dsl_version OR "1.1",
+            namespace: moduleRep.parsedContent.namespace OR moduleRep.fqn
+        }
+        
+        // 4. Add imports if present
+        IF moduleRep.imports AND moduleRep.imports.length > 0 THEN
+            ASSIGN yamlStructure.imports = MAP moduleRep.imports TO importObj
+        END_IF
+        
+        // 5. Add definitions if present
+        IF moduleRep.definitions IS_DEFINED THEN
+            ASSIGN yamlStructure.definitions = BUILD_DEFINITIONS_OBJECT(moduleRep.definitions)
+        END_IF
+        
+        // 6. Add flows if present
+        IF moduleRep.definitions?.flows AND moduleRep.definitions.flows.length > 0 THEN
+            ASSIGN yamlStructure.flows = moduleRep.definitions.flows
+        END_IF
+        
+        // 7. Convert to YAML string
+        TRY
+            RETURN_VALUE yamlStringify(yamlStructure, options)
+        CATCH_ERROR error
+            THROW_ERROR "Failed to reconstruct YAML: ${error.message}"
+        END_TRY
+    `
+    dependencies: [
+        "yaml.stringify",
+        "cfv_models.DslModuleRepresentation",
+        "cfv_models.ReconstructionOptions"
+    ]
+}
+
+code cfv_internal_code.YamlReconstructionService_ApplyConfigChanges {
+    title: "Apply Configuration Changes to Module Representation"
+    part_of_design: cfv_designs.YamlReconstructionService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/yamlReconstructionService.ts",
+        entry_point_name: "applyConfigChanges",
+        entry_point_type: "function"
+    }
+    signature: "(moduleRep: cfv_models.DslModuleRepresentation, pathToConfig: (string | number)[], newConfigValue: any) => cfv_models.DslModuleRepresentation"
+    
+    detailed_behavior: `
+        // Deep clone the module representation
+        DECLARE updatedRep = DEEP_CLONE(moduleRep)
+        
+        // Navigate to the target path and update the value
+        DECLARE current = updatedRep.parsedContent
+        
+        FOR i FROM 0 TO pathToConfig.length - 2
+            DECLARE key = pathToConfig[i]
+            IF current[key] IS_UNDEFINED THEN
+                ASSIGN current[key] = {}
+            END_IF
+            ASSIGN current = current[key]
+        END_FOR
+        
+        DECLARE finalKey = pathToConfig[pathToConfig.length - 1]
+        ASSIGN current[finalKey] = newConfigValue
+        
+        // Also update the definitions if applicable
+        IF updatedRep.definitions IS_DEFINED THEN
+            APPLY_CHANGES_TO_DEFINITIONS(updatedRep.definitions, pathToConfig, newConfigValue)
+        END_IF
+        
+        RETURN_VALUE updatedRep
+    `
+}
+
+// --- Test Case Service Logic (New) ---
+
+code cfv_internal_code.TestCaseService_GenerateTemplates {
+    title: "Generate Test Case Templates for a Flow"
+    part_of_design: cfv_designs.TestCaseService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/testCaseService.ts",
+        entry_point_name: "generateTestCaseTemplates",
+        entry_point_type: "function"
+    }
+    signature: "(flowFqn: string, moduleRegistry: cfv_models.IModuleRegistry) => TestCaseTemplate[]"
+    
+    detailed_behavior: `
+        // Human Review Focus: Test case generation logic, assertion templates, mock configurations.
+        // AI Agent Target: Generate comprehensive test case templates.
+
+        DECLARE flowDefinition = CALL moduleRegistry.getFlowDefinition WITH flowFqn
+        IF flowDefinition IS_NULL THEN
+            RETURN_VALUE []
+        END_IF
+        
+        DECLARE templates = []
+        
+        // 1. Happy path test
+        ADD_TO templates {
+            name: "Happy Path",
+            description: "Test successful execution with valid inputs",
+            triggerInputTemplate: CALL generateTriggerInputTemplate WITH flowDefinition.trigger,
+            commonAssertions: [
+                { targetPath: "status", expectedValue: "COMPLETED", comparison: "equals" }
+            ]
+        }
+        
+        // 2. Error handling test
+        ADD_TO templates {
+            name: "Error Handling",
+            description: "Test error handling with invalid inputs",
+            triggerInputTemplate: CALL generateInvalidInputTemplate WITH flowDefinition.trigger,
+            commonAssertions: [
+                { targetPath: "status", expectedValue: "FAILED", comparison: "equals" }
+            ]
+        }
+        
+        // 3. Performance test (if flow has multiple steps)
+        IF flowDefinition.steps AND flowDefinition.steps.length > 3 THEN
+            ADD_TO templates {
+                name: "Performance",
+                description: "Test execution performance within acceptable limits",
+                triggerInputTemplate: CALL generateTriggerInputTemplate WITH flowDefinition.trigger,
+                commonAssertions: [
+                    { targetPath: "durationMs", expectedValue: 5000, comparison: "lessThan" }
+                ]
+            }
+        END_IF
+        
+        RETURN_VALUE templates
+    `
+    dependencies: [
+        "cfv_models.IModuleRegistry",
+        "cfv_models.FlowTestCase"
+    ]
+}
+
+code cfv_internal_code.TestCaseService_ValidateTestCase {
+    title: "Validate Test Case Definition"
+    part_of_design: cfv_designs.TestCaseService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/testCaseService.ts",
+        entry_point_name: "validateTestCase",
+        entry_point_type: "function"
+    }
+    signature: "(testCase: cfv_models.FlowTestCase, moduleRegistry: cfv_models.IModuleRegistry) => { isValid: boolean; errors: string[] }"
+    
+    detailed_behavior: `
+        DECLARE errors = []
+        
+        // Check if flow exists
+        DECLARE flowDefinition = CALL moduleRegistry.getFlowDefinition WITH testCase.flowFqn
+        IF flowDefinition IS_NULL THEN
+            ADD_TO errors "Flow not found: ${testCase.flowFqn}"
+            RETURN_VALUE { isValid: false, errors }
+        END_IF
+        
+        // Validate trigger input structure
+        IF testCase.triggerInput IS_NULL THEN
+            ADD_TO errors "Trigger input is required"
+        END_IF
+        
+        // Validate assertions
+        IF testCase.assertions IS_NULL OR testCase.assertions.length IS_ZERO THEN
+            ADD_TO errors "At least one assertion is required"
+        ELSE
+            FOR_EACH assertion, index IN testCase.assertions
+                IF assertion.targetPath IS_NULL THEN
+                    ADD_TO errors "Assertion ${index + 1}: targetPath is required"
+                END_IF
+                IF assertion.expectedValue IS_UNDEFINED THEN
+                    ADD_TO errors "Assertion ${index + 1}: expectedValue is required"
+                END_IF
+                IF assertion.comparison IS_NULL THEN
+                    ADD_TO errors "Assertion ${index + 1}: comparison method is required"
+                END_IF
+            END_FOR
+        END_IF
+        
+        // Validate component mocks
+        IF testCase.componentMocks IS_DEFINED THEN
+            FOR_EACH mock, index IN testCase.componentMocks
+                IF mock.stepIdPattern IS_NULL THEN
+                    ADD_TO errors "Mock ${index + 1}: stepIdPattern is required"
+                END_IF
+            END_FOR
+        END_IF
+        
+        RETURN_VALUE {
+            isValid: errors.length IS_ZERO,
+            errors
+        }
+    `
+}
+
+code cfv_internal_code.TestCaseService_EvaluateAssertions {
+    title: "Evaluate Test Assertions Against Results"
+    part_of_design: cfv_designs.TestCaseService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/testCaseService.ts",
+        entry_point_name: "evaluateAssertions",
+        entry_point_type: "function"
+    }
+    signature: "(assertions: cfv_models.TestCaseAssertion[], testResult: any) => cfv_models.AssertionResult[]"
+    
+    detailed_behavior: `
+        RETURN_VALUE MAP assertions TO assertionResult WHERE
+            DECLARE actualValue = CALL getValueAtPath WITH testResult, assertion.targetPath
+            DECLARE passed = CALL evaluateComparison WITH actualValue, assertion.expectedValue, assertion.comparison
+            
+            RETURN_VALUE {
+                ...assertion,
+                actualValue,
+                passed,
+                message: passed ? "Assertion passed" : "Expected ${assertion.expectedValue}, got ${actualValue}"
+            }
+        END_MAP
+    `
+}
+
+// --- Enhanced Graph Builder Service Logic ---
+
+code cfv_internal_code.GraphBuilderService_GenerateFlowDetailGraphData {
+    title: "Generate Flow Detail Graph Data with Enhanced Features"
+    part_of_design: cfv_designs.GraphBuilderService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/graphBuilderService.ts",
+        entry_point_name: "generateFlowDetailGraphData",
+        entry_point_type: "async_function"
+    }
+    signature: "(params: GenerateFlowDetailParams) => Promise<GraphData>"
+    
+    detailed_behavior: `
+        // Human Review Focus: Enhanced node/edge generation, trace integration, layout application.
+        // AI Agent Target: Generate comprehensive flow detail graph with all enhancements.
+
+        DECLARE { flowFqn, mode, moduleRegistry, parseContextVarsFn, componentSchemas, traceData, useAutoLayout } = params
+        
+        DECLARE flowDefinition = CALL moduleRegistry.getFlowDefinition WITH flowFqn
+        IF flowDefinition IS_NULL THEN
+            RETURN_VALUE { nodes: [], edges: [] }
+        END_IF
+        
+        DECLARE nodes = []
+        DECLARE edges = []
+        
+        // 1. Generate trigger node
+        IF flowDefinition.trigger IS_DEFINED THEN
+            DECLARE triggerNodeData = BUILD_TRIGGER_NODE_DATA(flowDefinition.trigger, componentSchemas, parseContextVarsFn)
+            ADD_TO nodes {
+                id: "trigger",
+                type: "triggerNode",
+                position: { x: 0, y: 0 },
+                data: triggerNodeData
+            }
+        END_IF
+        
+        // 2. Generate step nodes with enhanced data
+        IF flowDefinition.steps IS_DEFINED THEN
+            FOR_EACH step, index IN flowDefinition.steps
+                DECLARE stepTrace = FIND traceData?.steps WHERE t.stepId EQUALS step.step_id
+                DECLARE componentInfo = CALL moduleRegistry.resolveComponentTypeInfo WITH step.component_ref, flowFqn
+                
+                DECLARE stepNodeData = BUILD_STEP_NODE_DATA(step, componentInfo, stepTrace, componentSchemas, parseContextVarsFn)
+                
+                // Check if this is a SubFlowInvoker
+                IF componentInfo?.baseType EQUALS "StdLib:SubFlowInvoker" THEN
+                    DECLARE subFlowNodeData = BUILD_SUBFLOW_INVOKER_NODE_DATA(stepNodeData, step.config?.flow_fqn)
+                    ADD_TO nodes {
+                        id: step.step_id,
+                        type: "subFlowInvokerNode",
+                        position: { x: 0, y: (index + 1) * 100 },
+                        data: subFlowNodeData
+                    }
+                ELSE
+                    ADD_TO nodes {
+                        id: step.step_id,
+                        type: "stepNode",
+                        position: { x: 0, y: (index + 1) * 100 },
+                        data: stepNodeData
+                    }
+                END_IF
+            END_FOR
+        END_IF
+        
+        // 3. Generate edges with enhanced data
+        CALL GENERATE_FLOW_EDGES(flowDefinition, traceData, edges)
+        
+        // 4. Apply automatic layout if requested
+        IF useAutoLayout AND nodes.length > 0 THEN
+            TRY
+                DECLARE layouted = AWAIT CALL layoutNodes WITH nodes, edges, layoutPresets.flowDetail
+                
+                // Apply trace enhancements if trace data is available
+                IF traceData IS_DEFINED THEN
+                    DECLARE enhancedNodes = CALL enhanceNodesWithTrace WITH layouted.nodes, traceData
+                    DECLARE enhancedEdges = CALL enhanceEdgesWithTrace WITH layouted.edges, traceData
+                    RETURN_VALUE { nodes: enhancedNodes, edges: enhancedEdges }
+                END_IF
+                
+                RETURN_VALUE layouted
+            CATCH_ERROR error
+                LOG "Auto-layout failed, using manual positions: ${error}"
+            END_TRY
+        END_IF
+        
+        // Apply trace enhancements even without layout if trace data is available
+        IF traceData IS_DEFINED THEN
+            DECLARE enhancedNodes = CALL enhanceNodesWithTrace WITH nodes, traceData
+            DECLARE enhancedEdges = CALL enhanceEdgesWithTrace WITH edges, traceData
+            RETURN_VALUE { nodes: enhancedNodes, edges: enhancedEdges }
+        END_IF
+        
+        RETURN_VALUE { nodes, edges }
+    `
+    dependencies: [
+        "cfv_internal_code.LayoutService_AutomaticLayout",
+        "cfv_internal_code.TraceVisualizationService_EnhanceNodes",
+        "cfv_internal_code.TraceVisualizationService_EnhanceEdges",
+        "cfv_models.IModuleRegistry"
+    ]
+}
+
+code cfv_internal_code.GraphBuilderService_GenerateSystemOverviewGraphData {
+    title: "Generate System Overview Graph Data with Enhanced Features"
+    part_of_design: cfv_designs.GraphBuilderService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/graphBuilderService.ts",
+        entry_point_name: "generateSystemOverviewGraphData",
+        entry_point_type: "async_function"
+    }
+    signature: "(moduleRegistry: cfv_models.IModuleRegistry, parseContextVarsFn: (value: string) => string[], useAutoLayout?: boolean) => Promise<GraphData>"
+    
+    detailed_behavior: `
+        DECLARE nodes = []
+        DECLARE edges = []
+        
+        DECLARE allModules = CALL moduleRegistry.getAllLoadedModules
+        
+        // Generate flow nodes and trigger nodes
+        FOR_EACH module IN allModules
+            IF module.definitions?.flows IS_DEFINED THEN
+                FOR_EACH flow IN module.definitions.flows
+                    DECLARE flowFqn = "${module.fqn}.${flow.name}"
+                    
+                    // Add flow node
+                    DECLARE flowNodeData = BUILD_SYSTEM_FLOW_NODE_DATA(flow, flowFqn, parseContextVarsFn)
+                    ADD_TO nodes {
+                        id: flowFqn,
+                        type: "systemFlowNode",
+                        position: { x: 0, y: 0 },
+                        data: flowNodeData
+                    }
+                    
+                    // Add trigger node and edge if present
+                    IF flow.trigger IS_DEFINED THEN
+                        DECLARE triggerNodeId = "trigger-${flowFqn}"
+                        DECLARE triggerNodeData = BUILD_SYSTEM_TRIGGER_NODE_DATA(flow.trigger, triggerNodeId, parseContextVarsFn)
+                        
+                        ADD_TO nodes {
+                            id: triggerNodeId,
+                            type: "systemTriggerNode",
+                            position: { x: 0, y: 0 },
+                            data: triggerNodeData
+                        }
+                        
+                        ADD_TO edges {
+                            id: "${triggerNodeId}-${flowFqn}",
+                            source: triggerNodeId,
+                            target: flowFqn,
+                            type: "systemEdge",
+                            data: { type: "triggerLinkEdge" }
+                        }
+                    END_IF
+                    
+                    // Generate invocation edges for SubFlowInvoker steps
+                    IF flow.steps IS_DEFINED THEN
+                        FOR_EACH step IN flow.steps
+                            DECLARE componentInfo = CALL moduleRegistry.resolveComponentTypeInfo WITH step.component_ref, module.fqn
+                            IF componentInfo?.baseType EQUALS "StdLib:SubFlowInvoker" AND step.config?.flow_fqn IS_DEFINED THEN
+                                ADD_TO edges {
+                                    id: "${flowFqn}-${step.config.flow_fqn}",
+                                    source: flowFqn,
+                                    target: step.config.flow_fqn,
+                                    type: "systemEdge",
+                                    data: { type: "invocationEdge" }
+                                }
+                            END_IF
+                        END_FOR
+                    END_IF
+                END_FOR
+            END_IF
+        END_FOR
+        
+        // Apply automatic layout if requested
+        IF useAutoLayout AND nodes.length > 0 THEN
+            TRY
+                DECLARE layouted = AWAIT CALL layoutNodes WITH nodes, edges, layoutPresets.systemOverview
+                RETURN_VALUE layouted
+            CATCH_ERROR error
+                LOG "Auto-layout failed, using manual positions: ${error}"
+            END_TRY
+        END_IF
+        
+        RETURN_VALUE { nodes, edges }
+    `
+    dependencies: [
+        "cfv_internal_code.LayoutService_AutomaticLayout",
+        "cfv_models.IModuleRegistry"
+    ]
+}
