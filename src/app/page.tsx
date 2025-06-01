@@ -15,8 +15,13 @@ import {
   ComponentSchema,
   SelectedElement,
   InspectorPropertiesActions,
-  IModuleRegistry
+  IModuleRegistry,
+  FlowExecutionTrace,
+  SaveModulePayload,
+  FlowTestCase,
+  TestRunResult
 } from '@/models/cfv_models_generated';
+import { generateTestCaseTemplates, createTestCaseFromTemplate } from '@/services/testCaseService';
 
 // Sample DSL module data
 const sampleModules: DslModuleInput[] = [
@@ -120,6 +125,62 @@ const sampleComponentSchemas: Record<string, ComponentSchema> = {
   }
 };
 
+// Sample trace data for demonstration
+const sampleTraceData: FlowExecutionTrace = {
+  traceId: 'trace-123',
+  flowFqn: 'com.example.demo.SampleFlow',
+  instanceId: 'instance-456',
+  status: 'COMPLETED',
+  startTime: '2024-01-15T10:00:00Z',
+  endTime: '2024-01-15T10:00:05Z',
+  durationMs: 5000,
+  triggerData: {
+    method: 'POST',
+    path: '/api/process',
+    body: { input: 'test data' }
+  },
+  initialContext: {},
+  finalContext: { result: 'processed' },
+  steps: [
+    {
+      stepId: 'fetch_data',
+      status: 'SUCCESS',
+      startTime: '2024-01-15T10:00:00Z',
+      endTime: '2024-01-15T10:00:02Z',
+      durationMs: 2000,
+      inputData: { url: 'https://api.example.com/data' },
+      outputData: { response: { data: 'fetched data' }, statusCode: 200 }
+    },
+    {
+      stepId: 'process_data',
+      status: 'SUCCESS',
+      startTime: '2024-01-15T10:00:02Z',
+      endTime: '2024-01-15T10:00:03Z',
+      durationMs: 1000,
+      inputData: { input: 'fetched data' },
+      outputData: { result: 'FETCHED DATA' }
+    },
+    {
+      stepId: 'invoke_subflow',
+      status: 'SUCCESS',
+      startTime: '2024-01-15T10:00:03Z',
+      endTime: '2024-01-15T10:00:04Z',
+      durationMs: 1000,
+      inputData: { data: 'FETCHED DATA' },
+      outputData: { result: 'processed by subflow' }
+    },
+    {
+      stepId: 'save_result',
+      status: 'SUCCESS',
+      startTime: '2024-01-15T10:00:04Z',
+      endTime: '2024-01-15T10:00:05Z',
+      durationMs: 1000,
+      inputData: { data: 'processed by subflow', path: '/tmp/result.json' },
+      outputData: { success: true, bytesWritten: 256 }
+    }
+  ]
+};
+
 // Custom node types
 const nodeTypes = {
   stepNode: StepNode,
@@ -190,6 +251,9 @@ const renderInspectorSourceTab = (
 };
 
 export default function HomePage() {
+  const [currentMode, setCurrentMode] = React.useState<'design' | 'trace' | 'test_result'>('design');
+  const [isEditingEnabled, setIsEditingEnabled] = React.useState(true);
+
   const handleRequestModule = async (fqn: string) => {
     console.log('Requesting module:', fqn);
     // In a real app, this would fetch from an API
@@ -198,6 +262,38 @@ export default function HomePage() {
 
   const handleModuleLoadError = (fqn: string, error: Error) => {
     console.error('Module load error:', fqn, error);
+  };
+
+  const handleSaveModule = async (payload: SaveModulePayload): Promise<void | boolean> => {
+    console.log('Save module requested:', payload);
+    // Simulate save operation
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log('Module saved successfully');
+    return true;
+  };
+
+  const handleRunTestCase = async (testCase: FlowTestCase): Promise<TestRunResult | null> => {
+    console.log('Running test case:', testCase);
+    
+    // Simulate test execution
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Return mock test result
+    return {
+      testCase,
+      passed: true,
+      trace: sampleTraceData,
+      assertionResults: [
+        {
+          targetPath: 'status',
+          expectedValue: 'COMPLETED',
+          comparison: 'equals',
+          actualValue: 'COMPLETED',
+          passed: true,
+          message: 'Assertion passed'
+        }
+      ]
+    };
   };
 
   const parseContextVariables = (value: string): string[] => {
@@ -221,12 +317,20 @@ export default function HomePage() {
     onModuleLoadError: handleModuleLoadError,
     parseContextVariables,
 
+    // Editing
+    isEditingEnabled,
+    onSaveModule: handleSaveModule,
+
     // Mode & Data
-    mode: 'design',
+    mode: currentMode,
     designData: {
       initialViewMode: 'flowDetail',
       initialFlowFqn: 'com.example.demo.SampleFlow'
     },
+    traceData: currentMode === 'trace' ? sampleTraceData : undefined,
+
+    // Testing
+    onRunTestCase: handleRunTestCase,
 
     // Callbacks
     onViewChange: handleViewChange,
@@ -244,6 +348,42 @@ export default function HomePage() {
 
   return (
     <div>
+      {/* Demo Controls */}
+      <div style={{ 
+        position: 'fixed', 
+        top: '10px', 
+        right: '10px', 
+        zIndex: 1000,
+        backgroundColor: 'white',
+        padding: '12px',
+        borderRadius: '8px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'center'
+      }}>
+        <label style={{ fontSize: '12px', fontWeight: '500' }}>Mode:</label>
+        <select 
+          value={currentMode} 
+          onChange={(e) => setCurrentMode(e.target.value as any)}
+          style={{ padding: '4px 8px', fontSize: '12px' }}
+        >
+          <option value="design">Design</option>
+          <option value="trace">Trace</option>
+          <option value="test_result">Test Result</option>
+        </select>
+        
+        <label style={{ fontSize: '12px', marginLeft: '12px' }}>
+          <input 
+            type="checkbox" 
+            checked={isEditingEnabled}
+            onChange={(e) => setIsEditingEnabled(e.target.checked)}
+            style={{ marginRight: '4px' }}
+          />
+          Editing
+        </label>
+      </div>
+
       <CascadeFlowVisualizer {...props} />
     </div>
   );

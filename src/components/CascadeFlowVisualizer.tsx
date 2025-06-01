@@ -36,6 +36,7 @@ import {
   GraphData 
 } from '@/services/graphBuilderService';
 import { createModuleRegistryInterface } from '@/services/moduleRegistryService';
+import { applyConfigChanges, createSavePayload } from '@/services/yamlReconstructionService';
 
 import 'reactflow/dist/style.css';
 
@@ -209,11 +210,52 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
 
   // Inspector actions
   const inspectorActions = useMemo(() => ({
-    requestSave: (newConfigValue: any, pathToConfig: (string | number)[]) => {
-      // TODO: Implement save logic
-      console.log('Save requested:', { newConfigValue, pathToConfig });
+    requestSave: async (newConfigValue: any, pathToConfig: (string | number)[]) => {
+      if (!selectedElement || !props.onSaveModule) {
+        console.log('Save requested but no save handler or selected element:', { newConfigValue, pathToConfig });
+        return;
+      }
+
+      try {
+        // Find the module that contains the selected element
+        const moduleFqn = selectedElement.moduleFqn || 
+          (currentFlowFqn ? currentFlowFqn.split('.').slice(0, -1).join('.') : null);
+        
+        if (!moduleFqn) {
+          console.error('Cannot determine module FQN for save operation');
+          return;
+        }
+
+        const moduleRep = dslModuleRepresentations[moduleFqn];
+        if (!moduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);
+          return;
+        }
+
+        // Apply the configuration changes
+        const updatedModuleRep = applyConfigChanges(moduleRep, pathToConfig, newConfigValue);
+        
+        // Create save payload
+        const savePayload = createSavePayload(updatedModuleRep);
+        
+        // Call the save handler
+        const result = await props.onSaveModule(savePayload);
+        
+        if (result !== false) {
+          console.log('Save successful for module:', moduleFqn);
+          // Optionally update the local state with the new module representation
+          // This would require updating the atom, but we'll let the consumer handle reloading
+        } else {
+          console.error('Save was rejected by the handler');
+        }
+      } catch (error) {
+        console.error('Save operation failed:', error);
+        if (props.onModuleLoadError) {
+          props.onModuleLoadError(selectedElement.moduleFqn || 'unknown', error as Error);
+        }
+      }
     }
-  }), []);
+  }), [selectedElement, props.onSaveModule, props.onModuleLoadError, dslModuleRepresentations, currentFlowFqn]);
 
   return (
     <div className={props.className} style={props.style}>

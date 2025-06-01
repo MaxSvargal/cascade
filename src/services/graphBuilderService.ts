@@ -14,7 +14,8 @@ import {
   FlowExecutionTrace,
   VisualizerModeEnum
 } from '@/models/cfv_models_generated';
-import { layoutNodes } from './layoutService';
+import { layoutNodes, layoutPresets } from './layoutService';
+import { enhanceNodesWithTrace, enhanceEdgesWithTrace } from './traceVisualizationService';
 
 export interface GraphData {
   nodes: Node[];
@@ -186,11 +187,36 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
   // Apply automatic layout if requested
   if (useAutoLayout && nodes.length > 0) {
     try {
-      const layouted = await layoutNodes(nodes, edges, { direction: 'DOWN' });
+      const layouted = await layoutNodes(nodes, edges, layoutPresets.flowDetail);
+      
+      // Apply trace enhancements if trace data is available
+      if (traceData) {
+        const enhancedNodes = enhanceNodesWithTrace(layouted.nodes, traceData, {
+          showTimings: true,
+          showDataFlow: true,
+          highlightCriticalPath: true,
+          showErrorDetails: true
+        });
+        
+        const enhancedEdges = enhanceEdgesWithTrace(layouted.edges, traceData, {
+          showDataFlow: true,
+          highlightCriticalPath: true
+        });
+        
+        return { nodes: enhancedNodes, edges: enhancedEdges };
+      }
+      
       return layouted;
     } catch (error) {
       console.warn('Auto-layout failed, using manual positions:', error);
     }
+  }
+
+  // Apply trace enhancements even without layout if trace data is available
+  if (traceData) {
+    const enhancedNodes = enhanceNodesWithTrace(nodes, traceData);
+    const enhancedEdges = enhanceEdgesWithTrace(edges, traceData);
+    return { nodes: enhancedNodes, edges: enhancedEdges };
   }
 
   return { nodes, edges };
@@ -287,10 +313,7 @@ export async function generateSystemOverviewGraphData(
   // Apply automatic layout if requested
   if (useAutoLayout && nodes.length > 0) {
     try {
-      const layouted = await layoutNodes(nodes, edges, { 
-        direction: 'RIGHT',
-        spacing: { nodeNode: 80, edgeNode: 20 }
-      });
+      const layouted = await layoutNodes(nodes, edges, layoutPresets.systemOverview);
       return layouted;
     } catch (error) {
       console.warn('Auto-layout failed, using manual positions:', error);
