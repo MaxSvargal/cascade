@@ -198,7 +198,252 @@ export const layoutPresets = {
     nodeSize: {
       width: 150,
       height: 70,
-      calculateFromContent: false
+      calculateFromContent: true
     }
   }
-}; 
+};
+
+/**
+ * Simple and Clean System Overview Layout
+ * - Flows arranged horizontally from left to right
+ * - Triggers positioned directly above their connected flow
+ * - Connected flows (via SubFlowInvoker) positioned next to each other and waterfalled down
+ */
+export async function layoutSystemOverview(
+  nodes: Node[],
+  edges: Edge[],
+  options: LayoutOptions = {}
+): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  if (nodes.length === 0) {
+    return { nodes, edges };
+  }
+
+  // Separate different types of nodes
+  const triggerNodes = nodes.filter(node => node.type === 'systemTriggerNode');
+  const flowNodes = nodes.filter(node => node.type === 'systemFlowNode');
+  
+  // Build flow connections map (which flows invoke which)
+  const flowConnections = new Map<string, string[]>(); // sourceFlow -> [targetFlows]
+  const flowIncomingConnections = new Map<string, string[]>(); // targetFlow -> [sourceFlows]
+  
+  edges.forEach(edge => {
+    if (edge.data?.type === 'invocationEdge') {
+      const sourceFlow = edge.source;
+      const targetFlow = edge.target;
+      
+      if (!flowConnections.has(sourceFlow)) {
+        flowConnections.set(sourceFlow, []);
+      }
+      flowConnections.get(sourceFlow)!.push(targetFlow);
+      
+      if (!flowIncomingConnections.has(targetFlow)) {
+        flowIncomingConnections.set(targetFlow, []);
+      }
+      flowIncomingConnections.get(targetFlow)!.push(sourceFlow);
+    }
+  });
+
+  // Find root flows (flows with no incoming connections)
+  const rootFlows = flowNodes.filter(node => 
+    !flowIncomingConnections.has(node.id) || flowIncomingConnections.get(node.id)!.length === 0
+  );
+
+  // Improved layout parameters to prevent overlaps
+  const flowSpacing = 300; // Increased horizontal spacing between flows
+  const triggerOffset = 120; // Vertical offset for triggers above flows
+  const waterfallOffset = 100; // Increased vertical offset for connected flows
+  const waterfallLeftOffset = 50; // Left offset for waterfalled flows
+  const nodeHeight = 120; // Estimated node height for spacing calculations
+  
+  const positionedFlowNodes: Node[] = [];
+  const positionedTriggerNodes: Node[] = [];
+  const processedFlows = new Set<string>();
+  
+  // Position root flows horizontally with proper spacing
+  let currentX = 0;
+  const baseY = 200; // Start flows lower to leave space for triggers
+  
+  rootFlows.forEach((flowNode, index) => {
+    const x = currentX;
+    const y = baseY;
+    
+    positionedFlowNodes.push({
+      ...flowNode,
+      position: { x, y }
+    });
+    processedFlows.add(flowNode.id);
+    
+    // Position trigger above this flow if it exists
+    const triggerEdge = edges.find(edge => 
+      edge.target === flowNode.id && edge.data?.type === 'triggerLinkEdge'
+    );
+    
+    if (triggerEdge) {
+      const triggerNode = triggerNodes.find(node => node.id === triggerEdge.source);
+      if (triggerNode) {
+        positionedTriggerNodes.push({
+          ...triggerNode,
+          position: { 
+            x: x, // Same X as flow
+            y: y - triggerOffset // Above the flow
+          }
+        });
+      }
+    }
+    
+    // Position connected flows (waterfalled down and to the right with left offset)
+    const connectedFlows = flowConnections.get(flowNode.id) || [];
+    let waterfallY = y;
+    
+    connectedFlows.forEach((connectedFlowId, connectedIndex) => {
+      const connectedFlowNode = flowNodes.find(node => node.id === connectedFlowId);
+      if (connectedFlowNode && !processedFlows.has(connectedFlowId)) {
+        waterfallY += waterfallOffset;
+        
+        positionedFlowNodes.push({
+          ...connectedFlowNode,
+          position: { 
+            x: x + flowSpacing + waterfallLeftOffset, // To the right of parent flow with left offset
+            y: waterfallY // Waterfalled down
+          }
+        });
+        processedFlows.add(connectedFlowId);
+        
+        // Position trigger for connected flow
+        const connectedTriggerEdge = edges.find(edge => 
+          edge.target === connectedFlowId && edge.data?.type === 'triggerLinkEdge'
+        );
+        
+        if (connectedTriggerEdge) {
+          const connectedTriggerNode = triggerNodes.find(node => node.id === connectedTriggerEdge.source);
+          if (connectedTriggerNode) {
+            positionedTriggerNodes.push({
+              ...connectedTriggerNode,
+              position: { 
+                x: x + flowSpacing + waterfallLeftOffset, // Same X as connected flow
+                y: waterfallY - triggerOffset // Above the connected flow
+              }
+            });
+          }
+        }
+      }
+    });
+    
+    currentX += flowSpacing;
+  });
+  
+  // Handle any remaining unprocessed flows (place them to the right with proper spacing)
+  const remainingFlows = flowNodes.filter(node => !processedFlows.has(node.id));
+  let remainingY = baseY;
+  
+  remainingFlows.forEach((flowNode, index) => {
+    const x = currentX;
+    const y = remainingY;
+    
+    positionedFlowNodes.push({
+      ...flowNode,
+      position: { x, y }
+    });
+    
+    // Position trigger for remaining flow
+    const triggerEdge = edges.find(edge => 
+      edge.target === flowNode.id && edge.data?.type === 'triggerLinkEdge'
+    );
+    
+    if (triggerEdge) {
+      const triggerNode = triggerNodes.find(node => node.id === triggerEdge.source);
+      if (triggerNode) {
+        positionedTriggerNodes.push({
+          ...triggerNode,
+          position: { 
+            x: x,
+            y: y - triggerOffset
+          }
+        });
+      }
+    }
+    
+    remainingY += waterfallOffset; // Stack remaining flows vertically
+    if (index % 3 === 2) { // Move to next column every 3 flows
+      currentX += flowSpacing;
+      remainingY = baseY;
+    }
+  });
+
+  // Handle orphaned triggers (triggers without flows)
+  const handledTriggerIds = new Set(positionedTriggerNodes.map(node => node.id));
+  const orphanedTriggers = triggerNodes.filter(node => !handledTriggerIds.has(node.id));
+  
+  orphanedTriggers.forEach((triggerNode, index) => {
+    positionedTriggerNodes.push({
+      ...triggerNode,
+      position: { 
+        x: currentX + (index * 150),
+        y: baseY - triggerOffset
+      }
+    });
+  });
+
+  return {
+    nodes: [...positionedFlowNodes, ...positionedTriggerNodes],
+    edges
+  };
+}
+
+/**
+ * Enhanced System Overview Layout with Better Edge Routing
+ * Alternative implementation using custom positioning algorithm
+ */
+export async function layoutSystemOverviewCustom(
+  nodes: Node[],
+  edges: Edge[],
+  options: LayoutOptions = {}
+): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  if (nodes.length === 0) {
+    return { nodes, edges };
+  }
+
+  // Use the main system overview layout
+  const result = await layoutSystemOverview(nodes, edges, options);
+  
+  // Apply additional edge routing optimizations
+  const optimizedEdges = optimizeEdgeRouting(result.edges, result.nodes);
+  
+  return {
+    nodes: result.nodes,
+    edges: optimizedEdges
+  };
+}
+
+/**
+ * Optimize edge routing for better visual clarity
+ */
+function optimizeEdgeRouting(edges: Edge[], nodes: Node[]): Edge[] {
+  const nodePositions = new Map(nodes.map(node => [node.id, node.position]));
+  
+  return edges.map(edge => {
+    const sourcePos = nodePositions.get(edge.source);
+    const targetPos = nodePositions.get(edge.target);
+    
+    if (!sourcePos || !targetPos) return edge;
+    
+    // Add custom edge styling based on edge type and positions
+    const edgeStyle: any = { ...edge.style };
+    
+    if (edge.data?.type === 'triggerLinkEdge') {
+      // Trigger to flow edges - straight down
+      edgeStyle.stroke = '#4CAF50';
+      edgeStyle.strokeWidth = 2;
+    } else if (edge.data?.type === 'invocationEdge') {
+      // Flow to flow invocation edges - curved
+      edgeStyle.stroke = '#2196F3';
+      edgeStyle.strokeWidth = 2;
+      edgeStyle.strokeDasharray = '5,5';
+    }
+    
+    return {
+      ...edge,
+      style: edgeStyle
+    };
+  });
+} 

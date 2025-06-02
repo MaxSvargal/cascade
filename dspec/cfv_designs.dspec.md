@@ -407,3 +407,129 @@ design cfv_designs.EnhancedCascadeFlowVisualizerComponent {
     ]
     source: "Enhanced implementation with all advanced features integrated"
 }
+
+design cfv_designs.EnhancedSystemOverviewLayoutService {
+    title: "Enhanced System Overview Layout Service"
+    description: "Advanced layout service specifically optimized for system overview with trigger positioning and cascade flow arrangement."
+    part_of: cfv_designs.CoreArchitecture
+    responsibilities: [
+        "Position trigger nodes above their corresponding flow nodes",
+        "Arrange flows horizontally from left to right",
+        "Implement cascade positioning for connected flows (top to bottom)",
+        "Optimize spacing for trigger-to-flow and flow-to-flow relationships",
+        "Support hierarchical layout for complex flow dependencies"
+    ]
+    dependencies: [
+        cfv_designs.LayoutService,
+        cfv_designs.GraphBuilderService
+    ]
+    exposes_interface: {
+        layoutSystemOverview: "async (nodes: Node[], edges: Edge[], options?: SystemOverviewLayoutOptions) => Promise<{ nodes: Node[]; edges: Edge[] }>",
+        calculateTriggerPositions: "(flowNodes: Node[], triggerNodes: Node[]) => { [triggerId: string]: Position }",
+        arrangeCascadeFlows: "(flowNodes: Node[], invocationEdges: Edge[]) => Node[]"
+    }
+    source: "Enhanced implementation for system overview layout optimization"
+}
+
+design cfv_designs.ComponentEditDialogService {
+    title: "Component Configuration Edit Dialog Service"
+    description: "Service for managing component configuration edit dialogs with form generation and validation."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Generate dynamic forms based on component schemas",
+        "Handle component configuration editing workflows",
+        "Validate configuration changes against schemas",
+        "Integrate with save operations for configuration updates",
+        "Provide modal dialog management for edit operations"
+    ]
+    dependencies: [
+        cfv_designs.ModuleRegistryService,
+        cfv_designs.YamlReconstructionService,
+        "react-hook-form",
+        "@rjsf/core"
+    ]
+    exposes_interface: {
+        openEditDialog: "(stepId: string, componentConfig: any, componentSchema: ComponentSchema) => void",
+        closeEditDialog: "() => void",
+        saveConfiguration: "(stepId: string, newConfig: any) => Promise<boolean>",
+        validateConfiguration: "(config: any, schema: ComponentSchema) => { isValid: boolean; errors: string[] }"
+    }
+    source: "New implementation for component configuration editing"
+}
+
+design cfv_designs.DebuggingInterfaceService {
+    title: "Debugging Interface Service"
+    description: "Comprehensive debugging interface for trace visualization, execution analysis, and performance monitoring."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Provide debugging mode UI with trace visualization",
+        "Display step-by-step execution details with timing information",
+        "Highlight critical paths and performance bottlenecks",
+        "Show error details and stack traces for failed executions",
+        "Enable data inspection for inputs and outputs at each step",
+        "Integrate with trace data overlays on graph visualization"
+    ]
+    dependencies: [
+        cfv_designs.TraceVisualizationService,
+        cfv_designs.GraphBuilderService,
+        "props.traceData"
+    ]
+    exposes_interface: {
+        enableDebuggingMode: "(traceData: FlowExecutionTrace) => void",
+        showStepDetails: "(stepId: string) => void",
+        highlightCriticalPath: "(traceData: FlowExecutionTrace) => void",
+        inspectStepData: "(stepId: string, dataType: 'input' | 'output') => void"
+    }
+    source: "New implementation for comprehensive debugging interface"
+}
+
+design cfv_designs.PropertyTestingInterfaceService {
+    title: "Property Testing Interface Service"
+    description: "Comprehensive property testing interface with test case generation, execution monitoring, and result validation."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Generate default test cases for flows (happy path, error handling, performance)",
+        "Provide test case editor with input templates and assertion builders",
+        "Execute test cases with step-by-step monitoring",
+        "Display test results with expected vs actual comparisons",
+        "Integrate with standard library APIs for tracing and monitoring",
+        "Support test case templates and customization"
+    ]
+    dependencies: [
+        cfv_designs.TestCaseService,
+        cfv_designs.ModuleRegistryService,
+        "props.onRunTestCase"
+    ]
+    exposes_interface: {
+        generateTestCases: "(flowFqn: string) => TestCaseTemplate[]",
+        createTestCase: "(template: TestCaseTemplate, customizations?: Partial<FlowTestCase>) => FlowTestCase",
+        executeTestCase: "(testCase: FlowTestCase) => Promise<TestRunResult>",
+        showTestResults: "(testResult: TestRunResult) => void",
+        compareResults: "(expected: any, actual: any) => ComparisonResult"
+    }
+    source: "New implementation for comprehensive property testing interface"
+}
+
+design cfv_designs.CollapsibleModuleListService {
+    title: "Collapsible Module List Service"
+    description: "Enhanced module list component with collapsible sections and improved status indicators."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Manage module list expansion/collapse state",
+        "Show only essential status information (errors only)",
+        "Provide hierarchical view of modules and their flows",
+        "Support search and filtering of modules and flows",
+        "Optimize space usage in left sidebar"
+    ]
+    dependencies: [
+        cfv_designs.ModuleRegistryService,
+        cfv_designs.NavigationStateService
+    ]
+    exposes_interface: {
+        toggleModuleExpansion: "(moduleFqn: string) => void",
+        expandAllModules: "() => void",
+        collapseAllModules: "() => void",
+        filterModules: "(searchTerm: string) => void"
+    }
+    source: "Enhanced implementation for improved module list UI"
+}

@@ -17,12 +17,12 @@ const SystemFlowNode: React.FC<NodeProps<SystemGraphNodeData>> = ({ data, select
       onClick={handleClick}
       style={{
         padding: '12px',
-        border: `2px solid ${selected ? '#1976D2' : '#FF9800'}`,
-        borderRadius: '12px',
-        backgroundColor: '#FFF3E0',
+        border: `2px solid ${selected ? '#1976D2' : '#666'}`,
+        borderRadius: '8px',
+        backgroundColor: 'white',
         minWidth: '160px',
         maxWidth: '280px',
-        boxShadow: '0 3px 6px rgba(0,0,0,0.15)',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
         cursor: data.navigatable ? 'pointer' : 'default',
         transition: 'all 0.2s ease',
         boxSizing: 'border-box',
@@ -34,22 +34,24 @@ const SystemFlowNode: React.FC<NodeProps<SystemGraphNodeData>> = ({ data, select
       onMouseEnter={(e) => {
         if (data.navigatable) {
           e.currentTarget.style.transform = 'scale(1.02)';
-          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+          e.currentTarget.style.borderColor = '#1976D2';
         }
       }}
       onMouseLeave={(e) => {
         if (data.navigatable) {
           e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 3px 6px rgba(0,0,0,0.15)';
+          e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)';
+          e.currentTarget.style.borderColor = selected ? '#1976D2' : '#666';
         }
       }}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Top} />
       
       <div style={{ 
         fontWeight: 'bold', 
         marginBottom: '6px', 
-        color: '#E65100', 
+        color: '#333', 
         fontSize: '14px',
         textAlign: 'center',
         wordWrap: 'break-word'

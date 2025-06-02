@@ -1,7 +1,7 @@
 // Main CascadeFlowVisualizer React Component
 // From cfv_internal_code.CascadeFlowVisualizerComponent_Main
 
-import React, { useEffect, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atom } from 'jotai';
 import ReactFlow, { 
@@ -82,6 +82,24 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   const [nodes, setNodes] = React.useState<Node[]>([]);
   const [edges, setEdges] = React.useState<Edge[]>([]);
   const [isGeneratingGraph, setIsGeneratingGraph] = React.useState(false);
+  const [expandedModules, setExpandedModules] = React.useState<Set<string>>(new Set());
+  const [activeInspectorTab, setActiveInspectorTab] = React.useState<'properties' | 'source' | 'dataio' | 'debugging' | 'testing'>('properties');
+
+  // Add ref to prevent infinite loops in onViewChange
+  const isCallingOnViewChange = useRef(false);
+
+  // Toggle module expansion
+  const toggleModuleExpansion = useCallback((moduleFqn: string) => {
+    setExpandedModules(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(moduleFqn)) {
+        newSet.delete(moduleFqn);
+      } else {
+        newSet.add(moduleFqn);
+      }
+      return newSet;
+    });
+  }, []);
 
   // Generate graph data when dependencies change
   useEffect(() => {
@@ -105,7 +123,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         let graphData: GraphData = { nodes: [], edges: [] };
 
         if (systemViewActive) {
-          graphData = await generateSystemOverviewGraphData(moduleRegistry, parseContextVars);
+          graphData = await generateSystemOverviewGraphData(moduleRegistry, parseContextVars, true, handleFlowNavigation);
         } else if (currentFlowFqn) {
           graphData = await generateFlowDetailGraphData({
             flowFqn: currentFlowFqn,
@@ -145,12 +163,17 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
 
   // Effect for props.onViewChange
   useEffect(() => {
-    if (props.onViewChange) {
+    if (props.onViewChange && !isCallingOnViewChange.current) {
+      isCallingOnViewChange.current = true;
       props.onViewChange({
         mode: props.mode,
         currentFlowFqn: currentFlowFqn || undefined,
         systemViewActive
       });
+      // Reset the flag after the call
+      setTimeout(() => {
+        isCallingOnViewChange.current = false;
+      }, 0);
     }
   }, [props.mode, currentFlowFqn, systemViewActive, props.onViewChange]);
 
@@ -163,6 +186,25 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
 
   // Node click handler
   const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    // Prevent default navigation for step nodes - they should open edit dialog instead
+    if (node.type === 'stepNode' || node.type === 'triggerNode') {
+      const newSelectedElement: SelectedElement = {
+        sourceType: 'flowNode',
+        id: node.id,
+        data: node.data,
+        moduleFqn: currentFlowFqn?.split('.').slice(0, -1).join('.')
+      };
+      setSelectedElement(newSelectedElement);
+      return;
+    }
+
+    // Handle system flow node navigation
+    if (node.type === 'systemFlowNode' && node.data?.navigatable && node.data?.onFlowNodeClick) {
+      node.data.onFlowNodeClick(node.data.targetFlowFqn);
+      return;
+    }
+
+    // Default selection behavior for other node types
     const newSelectedElement: SelectedElement = {
       sourceType: node.type === 'systemFlowNode' ? 'systemFlowNode' : 'flowNode',
       id: node.id,
@@ -289,31 +331,71 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
           {/* Modules List */}
           <div style={{ marginBottom: '24px' }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#333' }}>Modules</h3>
-            {Object.values(dslModuleRepresentations).map(module => (
-              <div 
-                key={module.fqn} 
-                style={{ 
-                  padding: '8px', 
-                  marginBottom: '4px',
-                  backgroundColor: 'white',
-                  border: '1px solid #e0e0e0',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                <div style={{ fontWeight: '500', fontSize: '13px' }}>{module.fqn}</div>
-                {module.status === 'error' && (
-                  <div style={{ color: '#d32f2f', fontSize: '11px', marginTop: '2px' }}>
-                    ⚠ {module.errors?.[0]?.message}
+            {Object.values(dslModuleRepresentations).map(module => {
+              const isExpanded = expandedModules.has(module.fqn);
+              const hasFlows = module.definitions?.flows && module.definitions.flows.length > 0;
+              
+              return (
+                <div key={module.fqn} style={{ marginBottom: '4px' }}>
+                  <div 
+                    style={{ 
+                      padding: '8px', 
+                      backgroundColor: 'white',
+                      border: '1px solid #e0e0e0',
+                      borderRadius: '4px',
+                      cursor: hasFlows ? 'pointer' : 'default',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                    onClick={() => hasFlows && toggleModuleExpansion(module.fqn)}
+                  >
+                    <div>
+                      <div style={{ fontWeight: '500', fontSize: '13px' }}>{module.fqn}</div>
+                      {module.status === 'error' && (
+                        <div style={{ color: '#d32f2f', fontSize: '11px', marginTop: '2px' }}>
+                          ⚠ {module.errors?.[0]?.message}
+                        </div>
+                      )}
+                    </div>
+                    {hasFlows && (
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        {isExpanded ? '▼' : '▶'}
+                      </div>
+                    )}
                   </div>
-                )}
-                {module.status === 'loaded' && (
-                  <div style={{ color: '#388e3c', fontSize: '11px', marginTop: '2px' }}>
-                    ✓ Loaded
-                  </div>
-                )}
-              </div>
-            ))}
+                  
+                  {/* Expanded flows list */}
+                  {isExpanded && hasFlows && module.definitions && (
+                    <div style={{ marginLeft: '16px', marginTop: '4px' }}>
+                      {module.definitions.flows.map((flow: any) => {
+                        const flowFqn = `${module.fqn}.${flow.name}`;
+                        return (
+                          <div 
+                            key={flowFqn}
+                            style={{ 
+                              padding: '6px 8px', 
+                              marginBottom: '2px',
+                              cursor: 'pointer',
+                              backgroundColor: currentFlowFqn === flowFqn ? '#e3f2fd' : '#f9f9f9',
+                              border: `1px solid ${currentFlowFqn === flowFqn ? '#1976D2' : '#e0e0e0'}`,
+                              borderRadius: '4px',
+                              fontSize: '12px'
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFlowNavigation(flowFqn);
+                            }}
+                          >
+                            📋 {flow.name}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Flows List */}
@@ -406,6 +488,35 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
           overflowY: 'auto'
         }}>
           <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#333' }}>Inspector</h3>
+          
+          {/* Tab Navigation */}
+          <div style={{ 
+            display: 'flex', 
+            marginBottom: '16px',
+            borderBottom: '1px solid #e0e0e0',
+            flexWrap: 'wrap'
+          }}>
+            {['properties', 'source', 'dataio', 'debugging', 'testing'].map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveInspectorTab(tab as any)}
+                style={{
+                  padding: '8px 12px',
+                  border: 'none',
+                  backgroundColor: activeInspectorTab === tab ? '#1976D2' : 'transparent',
+                  color: activeInspectorTab === tab ? 'white' : '#666',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  borderRadius: '4px 4px 0 0',
+                  marginRight: '4px',
+                  textTransform: 'capitalize'
+                }}
+              >
+                {tab === 'dataio' ? 'Data I/O' : tab}
+              </button>
+            ))}
+          </div>
+
           {selectedElement ? (
             <div>
               <div style={{ 
@@ -420,7 +531,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
               </div>
               
               {/* Properties Tab */}
-              {props.renderInspectorPropertiesTab && (
+              {activeInspectorTab === 'properties' && props.renderInspectorPropertiesTab && (
                 <div style={{ marginBottom: '16px' }}>
                   <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Properties</h4>
                   <div style={{ 
@@ -435,7 +546,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
               )}
 
               {/* Source Tab */}
-              {props.renderInspectorSourceTab && (
+              {activeInspectorTab === 'source' && props.renderInspectorSourceTab && (
                 <div style={{ marginBottom: '16px' }}>
                   <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Source</h4>
                   <div style={{ 
@@ -449,8 +560,8 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                 </div>
               )}
 
-              {/* Data I/O Tab (for trace mode) */}
-              {props.renderInspectorDataIOTab && props.mode === 'trace' && (
+              {/* Data I/O Tab */}
+              {activeInspectorTab === 'dataio' && props.renderInspectorDataIOTab && (
                 <div style={{ marginBottom: '16px' }}>
                   <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Data I/O</h4>
                   <div style={{ 
@@ -460,6 +571,190 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                     padding: '12px'
                   }}>
                     {props.renderInspectorDataIOTab(null, moduleRegistry)}
+                  </div>
+                </div>
+              )}
+
+              {/* Debugging Tab */}
+              {activeInspectorTab === 'debugging' && (
+                <div style={{ marginBottom: '16px' }}>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Debugging</h4>
+                  <div style={{ 
+                    backgroundColor: 'white', 
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '4px',
+                    padding: '12px'
+                  }}>
+                    {props.traceData ? (
+                      <div>
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{ fontWeight: '500', marginBottom: '4px' }}>Execution Trace</div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            Status: <span style={{ color: props.traceData.status === 'COMPLETED' ? '#4CAF50' : '#F44336' }}>
+                              {props.traceData.status}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            Duration: {props.traceData.durationMs}ms
+                          </div>
+                        </div>
+                        
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{ fontWeight: '500', marginBottom: '4px' }}>Step Details</div>
+                          {props.traceData.steps.map(step => (
+                            <div key={step.stepId} style={{ 
+                              padding: '8px', 
+                              marginBottom: '4px',
+                              backgroundColor: step.status === 'SUCCESS' ? '#E8F5E8' : '#FFEBEE',
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '4px',
+                              fontSize: '12px'
+                            }}>
+                              <div style={{ fontWeight: '500' }}>{step.stepId}</div>
+                              <div>Status: {step.status}</div>
+                              <div>Duration: {step.durationMs}ms</div>
+                              {step.inputData && (
+                                <details style={{ marginTop: '4px' }}>
+                                  <summary style={{ cursor: 'pointer' }}>Input Data</summary>
+                                  <pre style={{ fontSize: '10px', margin: '4px 0', overflow: 'auto' }}>
+                                    {JSON.stringify(step.inputData, null, 2)}
+                                  </pre>
+                                </details>
+                              )}
+                              {step.outputData && (
+                                <details style={{ marginTop: '4px' }}>
+                                  <summary style={{ cursor: 'pointer' }}>Output Data</summary>
+                                  <pre style={{ fontSize: '10px', margin: '4px 0', overflow: 'auto' }}>
+                                    {JSON.stringify(step.outputData, null, 2)}
+                                  </pre>
+                                </details>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+                        No trace data available. Run a flow to see debugging information.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Property Testing Tab */}
+              {activeInspectorTab === 'testing' && (
+                <div style={{ marginBottom: '16px' }}>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Property Testing</h4>
+                  <div style={{ 
+                    backgroundColor: 'white', 
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '4px',
+                    padding: '12px'
+                  }}>
+                    {currentFlowFqn ? (
+                      <div>
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{ fontWeight: '500', marginBottom: '8px' }}>Test Cases for {currentFlowFqn}</div>
+                          <button
+                            style={{
+                              width: '100%',
+                              padding: '8px',
+                              backgroundColor: '#4CAF50',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              marginBottom: '8px'
+                            }}
+                            onClick={() => {
+                              // Generate default test cases
+                              console.log('Generating test cases for:', currentFlowFqn);
+                            }}
+                          >
+                            Generate Default Test Cases
+                          </button>
+                        </div>
+                        
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{ fontWeight: '500', marginBottom: '4px' }}>Default Test Templates</div>
+                          {['Happy Path', 'Error Handling', 'Performance'].map(testType => (
+                            <div key={testType} style={{ 
+                              padding: '8px', 
+                              marginBottom: '4px',
+                              backgroundColor: '#f5f5f5',
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => {
+                              console.log('Creating test case:', testType, 'for', currentFlowFqn);
+                            }}
+                            >
+                              <div style={{ fontWeight: '500' }}>{testType} Test</div>
+                              <div style={{ color: '#666' }}>
+                                {testType === 'Happy Path' && 'Tests normal execution flow with valid inputs'}
+                                {testType === 'Error Handling' && 'Tests error scenarios and edge cases'}
+                                {testType === 'Performance' && 'Tests execution timing and resource usage'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{ fontWeight: '500', marginBottom: '4px' }}>Test Execution</div>
+                          <button
+                            style={{
+                              width: '100%',
+                              padding: '8px',
+                              backgroundColor: '#2196F3',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                            onClick={() => {
+                              if (props.onRunTestCase) {
+                                // Create a sample test case
+                                const testCase = {
+                                  testCaseId: 'test-' + Date.now(),
+                                  flowFqn: currentFlowFqn,
+                                  description: 'Sample test case',
+                                  triggerInput: {},
+                                  inputData: {},
+                                  expectedOutputs: {},
+                                  assertions: []
+                                };
+                                props.onRunTestCase(testCase);
+                              }
+                            }}
+                          >
+                            Run Test Cases
+                          </button>
+                        </div>
+                        
+                        <div>
+                          <div style={{ fontWeight: '500', marginBottom: '4px' }}>Test Results</div>
+                          <div style={{ 
+                            padding: '8px',
+                            backgroundColor: '#f9f9f9',
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            color: '#666'
+                          }}>
+                            No test results yet. Run tests to see results here.
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+                        Select a flow to create and run test cases.
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

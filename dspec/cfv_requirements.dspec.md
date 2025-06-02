@@ -337,3 +337,103 @@ requirement cfv_requirements.FR11_ErrorHandlingAndFeedback {
     status: "Accepted"
     source: "CascadeFlowVisualizer Library Specification, Section IV.FR11"
 }
+
+requirement cfv_requirements.FR12_SystemOverviewNavigation {
+    title: "System Overview Navigation"
+    description: "System overview should support navigation to flow detail views when clicking on flow nodes."
+    priority: "High"
+    category: "Navigation"
+    acceptance_criteria: [
+        "Clicking on a flow node in system overview navigates to that flow's detail view",
+        "Flow nodes in system overview have visual indicators for navigation capability",
+        "Navigation preserves current mode and other state appropriately"
+    ]
+    source: "User feedback - System Overview navigation missing"
+}
+
+requirement cfv_requirements.FR13_SystemOverviewLayout {
+    title: "System Overview Layout Optimization"
+    description: "System overview should use optimized layout with triggers at top, flows in horizontal lines, and cascade positioning for connected flows."
+    priority: "High"
+    category: "Layout"
+    acceptance_criteria: [
+        "Flows are arranged horizontally from left to right",
+        "Trigger nodes are positioned above their corresponding flow nodes",
+        "Connected flows (via SubFlowInvoker) have cascade positioning from top to bottom",
+        "Layout algorithm respects trigger-to-flow and flow-to-flow relationships"
+    ]
+    source: "User feedback - System Overview layout improvements"
+}
+
+requirement cfv_requirements.FR14_ModuleListCollapsible {
+    title: "Collapsible Module List"
+    description: "Module list in left sidebar should be collapsible by default and remove redundant status indicators."
+    priority: "Medium"
+    category: "UI/UX"
+    acceptance_criteria: [
+        "Modules are collapsed by default showing only module names",
+        "Modules can be expanded to show flows and other details",
+        "Remove '✓ Loaded' status indicators",
+        "Show only error indicators when modules have parsing errors"
+    ]
+    source: "User feedback - Left Sidebar improvements"
+}
+
+requirement cfv_requirements.FR15_ComponentEditDialog {
+    title: "Component Configuration Edit Dialog"
+    description: "Clicking on component nodes should open an edit dialog instead of navigating to system overview."
+    priority: "High"
+    category: "Editing"
+    acceptance_criteria: [
+        "Clicking on step nodes opens a configuration edit dialog",
+        "Edit dialog shows form fields for all configurable component properties",
+        "Edit dialog supports saving changes back to the module",
+        "SubFlowInvoker nodes should not navigate to system overview when clicked"
+    ]
+    source: "User feedback - Flow chart node click behavior"
+}
+
+requirement cfv_requirements.FR16_DebuggingInterface {
+    title: "Debugging Interface"
+    description: "Provide a comprehensive debugging interface for trace visualization and analysis."
+    priority: "High"
+    category: "Debugging"
+    acceptance_criteria: [
+        "Debugging mode shows execution traces with step-by-step details",
+        "Visual indicators for execution status, timing, and data flow",
+        "Critical path highlighting for performance analysis",
+        "Error details and stack traces for failed executions",
+        "Data inspection for inputs and outputs at each step"
+    ]
+    source: "User feedback - Missing debugging interface"
+}
+
+requirement cfv_requirements.FR17_PropertyTestingInterface {
+    title: "Property Testing Interface"
+    description: "Provide a comprehensive property testing interface with default test cases and execution monitoring."
+    priority: "High"
+    category: "Testing"
+    acceptance_criteria: [
+        "Generate default test cases for flows (happy path, error handling, performance)",
+        "Test case editor with input data templates and assertions",
+        "Test execution with step-by-step monitoring",
+        "Output log review showing status and results for each step",
+        "Expected vs actual output comparison for test validation",
+        "Integration with standard library APIs for tracing and monitoring"
+    ]
+    source: "User feedback - Missing property testing interface"
+}
+
+requirement cfv_requirements.FR18_YAMLParsingRobustness {
+    title: "YAML Parsing Robustness"
+    description: "YAML parsing should handle escape sequences and complex patterns correctly."
+    priority: "High"
+    category: "Parsing"
+    acceptance_criteria: [
+        "Properly handle regex patterns with escape sequences in YAML",
+        "Support complex JSON schema patterns in component configurations",
+        "Provide clear error messages for YAML parsing failures",
+        "Graceful handling of malformed YAML content"
+    ]
+    source: "User feedback - YAML parsing errors with escape sequences"
+}

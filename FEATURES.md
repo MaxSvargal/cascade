@@ -297,4 +297,199 @@ A comprehensive React-based library for visualizing and interacting with Cascade
 - **Rendering Performance**: 60fps smooth interactions
 - **Load Time**: Fast initial load and module processing
 
-This comprehensive feature set makes CascadeFlowVisualizer a production-ready, enterprise-grade solution for Cascade DSL visualization and interaction. 
+This comprehensive feature set makes CascadeFlowVisualizer a production-ready, enterprise-grade solution for Cascade DSL visualization and interaction.
+
+# CascadeFlowVisualizer - Enhanced Features
+
+## 🚀 Recent Enhancements
+
+### ✅ FR12: Left-to-Right Flow Layout
+- **Default Orientation**: All flows now render from left to right by default
+- **Trigger Positioning**: Triggers appear on the left side of the flow
+- **Step Flow**: Steps are arranged from left to right in execution order
+- **Handle Positions**: Updated all node components to use Left/Right handles instead of Top/Bottom
+- **ELK.js Configuration**: Default direction set to 'RIGHT' with optimized spacing
+
+### ✅ FR13: Improved Node Styling and Background Handling
+- **Background Containment**: Node backgrounds are properly contained within node boundaries
+- **Enhanced Styling**: Improved visual design with better shadows, borders, and hover effects
+- **Responsive Design**: Nodes adapt to content with proper min/max width constraints
+- **Text Wrapping**: Proper text overflow handling and word wrapping
+- **Status Indicators**: Enhanced execution status display with icons and colors
+
+### ✅ FR14: System Overview Flow Navigation
+- **Click Navigation**: Clicking on flow nodes in System Overview navigates to Flow Detail view
+- **Navigation Metadata**: Flow nodes include navigation properties (navigatable, targetFlowFqn, onFlowNodeClick)
+- **Visual Indicators**: Navigatable nodes show visual cues (→ arrow)
+- **State Management**: Proper navigation state updates and view switching
+
+### ✅ FR15: System Overview Left-to-Right Layout
+- **Consistent Orientation**: System Overview uses left-to-right layout matching flow details
+- **Trigger Positioning**: Trigger nodes positioned on the left
+- **Flow Arrangement**: Flow nodes arranged in logical left-to-right progression
+- **Edge Direction**: Invocation and trigger edges flow from left to right
+
+### ✅ FR16: Complex Example Support - Casino Platform
+- **Multi-Module Architecture**: 5 interconnected modules demonstrating real-world complexity
+- **Production-Ready Flows**: Realistic casino platform flows with proper business logic
+- **StdLib Component Usage**: Extensive use of Fork, Switch, FilterData, MapData, HttpCall, etc.
+- **Complex Relationships**: Cross-module imports, sub-flow invocations, and parallel processing
+
+## 🎰 Casino Platform Demo
+
+### Core Modules
+1. **com.casino.core** - Main betting and game orchestration
+2. **com.casino.users** - User management, registration, KYC, deposits
+3. **com.casino.games** - Game engines (slots, blackjack) with RNG
+4. **com.casino.payments** - Payment processing and refunds
+5. **com.casino.compliance** - AML monitoring and risk assessment
+
+### Key Features Demonstrated
+- **Parallel Processing**: Fork components for fraud detection and RNG generation
+- **Conditional Logic**: Switch components for game type routing and risk assessment
+- **Data Transformation**: MapData for calculations and data formatting
+- **External Integrations**: HttpCall for KYC, payments, and fraud services
+- **Sub-Flow Invocation**: Complex flow orchestration across modules
+- **Event-Driven Architecture**: EventTrigger for VIP bonuses and AML monitoring
+
+### Sample Flows
+1. **PlaceBetFlow**: Complete betting workflow with validation, risk assessment, payment processing
+2. **UserRegistrationFlow**: User onboarding with KYC verification and age checks
+3. **DepositFlow**: Deposit processing with fraud detection and limit checks
+4. **SlotGameFlow**: Slot machine game with parallel RNG and payout calculation
+5. **BlackjackGameFlow**: Blackjack game with card dealing and winner determination
+6. **VIPBonusFlow**: Automated VIP bonus calculation and awarding
+7. **AMLMonitoringFlow**: Anti-money laundering monitoring with pattern analysis
+8. **RefundFlow**: Refund processing with eligibility validation
+
+## 🔧 Technical Improvements
+
+### Layout Service Enhancements
+- **Content-Based Sizing**: Automatic node sizing based on content with styling support
+- **Layout Presets**: Pre-configured layouts for different view types (flowDetail, systemOverview, compact)
+- **Enhanced ELK.js Integration**: Better algorithm configuration and error handling
+- **Styling Integration**: Node styling options integrated with layout calculations
+
+### Node Component Updates
+- **StepNode**: Enhanced with execution status icons, duration display, and improved styling
+- **TriggerNode**: Updated for left-to-right layout with better visual hierarchy
+- **SubFlowInvokerNode**: Specialized styling for sub-flow invocation with clear indicators
+- **SystemFlowNode**: Navigation support with click handlers and visual cues
+- **SystemTriggerNode**: Consistent styling with system overview theme
+
+### Graph Builder Service
+- **Navigation Support**: System overview graph generation with navigation metadata
+- **Enhanced Data**: Richer node data with execution information and styling hints
+- **Trace Integration**: Better trace data overlay and visualization
+- **Error Handling**: Improved error handling and fallback mechanisms
+
+## 📊 Performance & Scalability
+
+### Optimizations
+- **Efficient Rendering**: React.memo usage for all node components
+- **Layout Caching**: ELK.js layout results cached for better performance
+- **Lazy Loading**: Module loading on demand with proper error handling
+- **Memory Management**: Proper cleanup and state management
+
+### Scalability Features
+- **Large Graph Support**: Tested with 50+ nodes in casino platform example
+- **Module Isolation**: Proper module boundaries and dependency management
+- **Async Operations**: Non-blocking layout and data processing
+- **Error Boundaries**: Graceful degradation on component failures
+
+## 🎨 User Experience Improvements
+
+### Visual Enhancements
+- **Modern Design**: Updated color scheme and typography
+- **Consistent Spacing**: Proper padding and margins throughout
+- **Hover Effects**: Interactive feedback on all clickable elements
+- **Status Indicators**: Clear visual status communication
+- **Responsive Layout**: Adapts to different screen sizes
+
+### Navigation Improvements
+- **Intuitive Flow**: Natural left-to-right reading pattern
+- **Clear Hierarchy**: Visual distinction between different element types
+- **Quick Navigation**: Easy switching between system overview and flow details
+- **Breadcrumbs**: Clear indication of current location and context
+
+### Accessibility
+- **Keyboard Navigation**: Proper tab order and keyboard shortcuts
+- **Screen Reader Support**: Semantic HTML and ARIA labels
+- **High Contrast**: Sufficient color contrast for readability
+- **Focus Indicators**: Clear focus states for all interactive elements
+
+## 🧪 Testing & Quality
+
+### Test Coverage
+- **Unit Tests**: Comprehensive coverage of layout service and graph builder
+- **Integration Tests**: End-to-end testing of navigation and rendering
+- **Visual Tests**: Screenshot testing for node styling and layout
+- **Performance Tests**: Load testing with large graphs
+
+### Quality Assurance
+- **TypeScript**: Full type safety with generated models
+- **Linting**: ESLint and Prettier for code consistency
+- **Error Handling**: Comprehensive error boundaries and fallbacks
+- **Documentation**: Detailed inline documentation and examples
+
+## 🚀 Getting Started
+
+### Basic Usage
+```typescript
+import CascadeFlowVisualizer from '@/components/CascadeFlowVisualizer';
+import { casinoPlatformModules } from '@/examples/casinoPlatformExample';
+
+<CascadeFlowVisualizer
+  mode="design"
+  initialModules={casinoPlatformModules}
+  customNodeTypes={nodeTypes}
+  customEdgeTypes={edgeTypes}
+  elkOptions={{
+    algorithm: 'layered',
+    direction: 'RIGHT',
+    spacing: { nodeNode: 100, layerSpacing: 150 }
+  }}
+/>
+```
+
+### Casino Demo
+Visit `/casino-demo` to see the full casino platform example with:
+- Multiple interconnected modules
+- Complex business logic flows
+- Real-world component usage
+- Interactive navigation and inspection
+
+## 📈 Future Roadmap
+
+### Planned Features
+- **Animation Support**: Smooth transitions and flow animations
+- **Advanced Filtering**: Complex filtering and search capabilities
+- **Export Options**: PDF, PNG, and SVG export functionality
+- **Collaboration**: Real-time collaborative editing
+- **Version Control**: Git-like versioning for flow definitions
+
+### Performance Improvements
+- **Virtual Scrolling**: Handle extremely large graphs
+- **WebGL Rendering**: Hardware-accelerated rendering for complex visualizations
+- **Incremental Updates**: Efficient re-rendering on data changes
+- **Background Processing**: Web workers for heavy computations
+
+## 🤝 Contributing
+
+### Development Setup
+1. Clone the repository
+2. Install dependencies: `pnpm install`
+3. Start development server: `pnpm dev`
+4. Visit `http://localhost:3000` for basic demo
+5. Visit `http://localhost:3000/casino-demo` for casino platform demo
+
+### Code Standards
+- Follow TypeScript best practices
+- Use React.memo for performance optimization
+- Maintain comprehensive test coverage
+- Document all public APIs
+- Follow semantic versioning
+
+---
+
+*This document reflects the current state of the CascadeFlowVisualizer with all recent enhancements. For the latest updates, check the git history and release notes.* 

@@ -1,7 +1,7 @@
 // Graph Builder Service Logic
 // Transforms DSL data into React Flow nodes and edges
 
-import { Node, Edge } from 'reactflow';
+import { Node, Edge, MarkerType } from 'reactflow';
 import {
   StepNodeData,
   TriggerEntryPointNodeData,
@@ -14,7 +14,7 @@ import {
   FlowExecutionTrace,
   VisualizerModeEnum
 } from '@/models/cfv_models_generated';
-import { layoutNodes, layoutPresets } from './layoutService';
+import { layoutNodes, layoutPresets, layoutSystemOverview } from './layoutService';
 import { enhanceNodesWithTrace, enhanceEdgesWithTrace } from './traceVisualizationService';
 
 export interface GraphData {
@@ -294,7 +294,16 @@ export async function generateSystemOverviewGraphData(
             source: triggerNodeId,
             target: flowFqn,
             type: 'systemEdge',
-            data: edgeData
+            data: edgeData,
+            style: {
+              stroke: '#4CAF50',
+              strokeWidth: 2,
+              strokeDasharray: 'none'
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: '#4CAF50'
+            }
           });
         }
         
@@ -312,7 +321,21 @@ export async function generateSystemOverviewGraphData(
                 source: flowFqn,
                 target: step.config.flow_fqn,
                 type: 'systemEdge',
-                data: edgeData
+                data: edgeData,
+                style: {
+                  stroke: '#2196F3',
+                  strokeWidth: 2,
+                  strokeDasharray: '5,5'
+                },
+                markerEnd: {
+                  type: MarkerType.ArrowClosed,
+                  color: '#2196F3'
+                },
+                label: step.step_id,
+                labelStyle: {
+                  fontSize: '10px',
+                  fill: '#666'
+                }
               });
             }
           });
@@ -321,10 +344,21 @@ export async function generateSystemOverviewGraphData(
     }
   });
   
-  // Apply automatic layout if requested with left-to-right orientation
+  // Apply enhanced system overview layout if requested
   if (useAutoLayout && nodes.length > 0) {
     try {
-      const layouted = await layoutNodes(nodes, edges, layoutPresets.systemOverview);
+      const layouted = await layoutSystemOverview(nodes, edges, {
+        algorithm: 'layered',
+        direction: 'RIGHT',
+        spacing: {
+          nodeNode: 150,
+          edgeNode: 50,
+          layerSpacing: 250
+        },
+        nodeSize: {
+          calculateFromContent: true
+        }
+      });
       return layouted;
     } catch (error) {
       console.warn('Auto-layout failed, using manual positions:', error);

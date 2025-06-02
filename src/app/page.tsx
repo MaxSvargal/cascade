@@ -22,161 +22,115 @@ import {
   TestRunResult
 } from '@/models/cfv_models_generated';
 import { generateTestCaseTemplates, createTestCaseFromTemplate } from '@/services/testCaseService';
+import { casinoPlatformModules, casinoPlatformComponentSchemas } from '@/examples/casinoPlatformExample';
 
-// Sample DSL module data
-const sampleModules: DslModuleInput[] = [
-  {
-    fqn: 'com.example.demo',
-    content: `
-dsl_version: "1.1"
-namespace: com.example.demo
+// Sample DSL module data - Using Casino Platform Example
+const sampleModules: DslModuleInput[] = casinoPlatformModules;
 
-definitions:
-  components:
-    - name: HttpProcessor
-      type: StdLib:HttpCall
-      description: "Processes HTTP requests"
+// Sample component schemas - Using Casino Platform Schemas
+const sampleComponentSchemas: Record<string, ComponentSchema> = casinoPlatformComponentSchemas;
 
-flows:
-  - name: SampleFlow
-    trigger:
-      type: HttpTrigger
-      config:
-        path: "/api/process"
-    steps:
-      - step_id: fetch_data
-        component_ref: HttpProcessor
-        config:
-          url: "https://api.example.com/data"
-          method: GET
-        run_after: []
-      - step_id: process_data
-        component_ref: StdLib:DataTransform
-        config:
-          transformation: "uppercase"
-        inputs_map:
-          input: "steps.fetch_data.outputs.response"
-        run_after: ["fetch_data"]
-      - step_id: invoke_subflow
-        component_ref: StdLib:SubFlowInvoker
-        config:
-          flow_fqn: "com.example.demo.HelperFlow"
-        inputs_map:
-          data: "steps.process_data.outputs.result"
-        run_after: ["process_data"]
-      - step_id: save_result
-        component_ref: StdLib:FileWrite
-        config:
-          path: "/tmp/result.json"
-        inputs_map:
-          data: "steps.invoke_subflow.outputs.result"
-        run_after: ["invoke_subflow"]
-  - name: HelperFlow
-    trigger:
-      type: ManualTrigger
-    steps:
-      - step_id: helper_step
-        component_ref: StdLib:DataTransform
-        config:
-          transformation: "lowercase"
-        run_after: []
-    `
-  }
-];
-
-// Sample component schemas
-const sampleComponentSchemas: Record<string, ComponentSchema> = {
-  'StdLib:HttpCall': {
-    fqn: 'StdLib:HttpCall',
-    configSchema: {
-      type: 'object',
-      properties: {
-        url: { type: 'string' },
-        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE'] }
-      }
-    }
-  },
-  'StdLib:DataTransform': {
-    fqn: 'StdLib:DataTransform',
-    configSchema: {
-      type: 'object',
-      properties: {
-        transformation: { type: 'string' }
-      }
-    }
-  },
-  'StdLib:FileWrite': {
-    fqn: 'StdLib:FileWrite',
-    configSchema: {
-      type: 'object',
-      properties: {
-        path: { type: 'string' }
-      }
-    }
-  },
-  'StdLib:SubFlowInvoker': {
-    fqn: 'StdLib:SubFlowInvoker',
-    configSchema: {
-      type: 'object',
-      properties: {
-        flow_fqn: { type: 'string' }
-      }
-    }
-  }
-};
-
-// Sample trace data for demonstration
+// Sample trace data for demonstration - Casino Platform Flow
 const sampleTraceData: FlowExecutionTrace = {
-  traceId: 'trace-123',
-  flowFqn: 'com.example.demo.SampleFlow',
-  instanceId: 'instance-456',
+  traceId: 'trace-casino-123',
+  flowFqn: 'com.casino.core.UserOnboardingFlow',
+  instanceId: 'instance-casino-456',
   status: 'COMPLETED',
   startTime: '2024-01-15T10:00:00Z',
-  endTime: '2024-01-15T10:00:05Z',
-  durationMs: 5000,
+  endTime: '2024-01-15T10:00:15Z',
+  durationMs: 15000,
   triggerData: {
     method: 'POST',
-    path: '/api/process',
-    body: { input: 'test data' }
+    path: '/api/users/onboard',
+    body: { 
+      email: 'user@example.com',
+      firstName: 'John',
+      lastName: 'Doe',
+      dateOfBirth: '1990-01-01',
+      country: 'US'
+    }
   },
   initialContext: {},
-  finalContext: { result: 'processed' },
+  finalContext: { userId: 'user-123', kycStatus: 'verified' },
   steps: [
     {
-      stepId: 'fetch_data',
+      stepId: 'validate-registration-data',
       status: 'SUCCESS',
       startTime: '2024-01-15T10:00:00Z',
       endTime: '2024-01-15T10:00:02Z',
       durationMs: 2000,
-      inputData: { url: 'https://api.example.com/data' },
-      outputData: { response: { data: 'fetched data' }, statusCode: 200 }
+      inputData: { 
+        email: 'user@example.com',
+        firstName: 'John',
+        lastName: 'Doe'
+      },
+      outputData: { validData: { email: 'user@example.com', firstName: 'John', lastName: 'Doe' } }
     },
     {
-      stepId: 'process_data',
+      stepId: 'geo-compliance-check',
       status: 'SUCCESS',
       startTime: '2024-01-15T10:00:02Z',
-      endTime: '2024-01-15T10:00:03Z',
-      durationMs: 1000,
-      inputData: { input: 'fetched data' },
-      outputData: { result: 'FETCHED DATA' }
-    },
-    {
-      stepId: 'invoke_subflow',
-      status: 'SUCCESS',
-      startTime: '2024-01-15T10:00:03Z',
-      endTime: '2024-01-15T10:00:04Z',
-      durationMs: 1000,
-      inputData: { data: 'FETCHED DATA' },
-      outputData: { result: 'processed by subflow' }
-    },
-    {
-      stepId: 'save_result',
-      status: 'SUCCESS',
-      startTime: '2024-01-15T10:00:04Z',
       endTime: '2024-01-15T10:00:05Z',
+      durationMs: 3000,
+      inputData: { userData: { country: 'US' } },
+      outputData: { 
+        'jurisdiction-check': { allowed: true },
+        'sanctions-check': { flagged: false },
+        'age-verification': { isEligible: true, age: 34 }
+      }
+    },
+    {
+      stepId: 'evaluate-compliance-results',
+      status: 'SUCCESS',
+      startTime: '2024-01-15T10:00:05Z',
+      endTime: '2024-01-15T10:00:06Z',
       durationMs: 1000,
-      inputData: { data: 'processed by subflow', path: '/tmp/result.json' },
-      outputData: { success: true, bytesWritten: 256 }
+      inputData: { jurisdictionAllowed: true, onSanctionsList: false, ageEligible: true },
+      outputData: { 
+        canProceed: true,
+        complianceFlags: { jurisdiction: true, sanctions: true, age: true },
+        riskLevel: 'low'
+      }
+    },
+    {
+      stepId: 'initiate-kyc-process',
+      status: 'SUCCESS',
+      startTime: '2024-01-15T10:00:06Z',
+      endTime: '2024-01-15T10:00:10Z',
+      durationMs: 4000,
+      inputData: { userData: { email: 'user@example.com' }, complianceData: { riskLevel: 'low' } },
+      outputData: { status: 'verified', sessionId: 'kyc-session-123' }
+    },
+    {
+      stepId: 'create-user-account',
+      status: 'SUCCESS',
+      startTime: '2024-01-15T10:00:10Z',
+      endTime: '2024-01-15T10:00:12Z',
+      durationMs: 2000,
+      inputData: { userData: { email: 'user@example.com' }, kycStatus: 'verified' },
+      outputData: { userId: 'user-123', accountCreated: true }
+    },
+    {
+      stepId: 'setup-responsible-gambling',
+      status: 'SUCCESS',
+      startTime: '2024-01-15T10:00:12Z',
+      endTime: '2024-01-15T10:00:14Z',
+      durationMs: 2000,
+      inputData: { userId: 'user-123', userTier: 'standard' },
+      outputData: { limitsConfigured: true, dailyLimit: 1000 }
+    },
+    {
+      stepId: 'send-welcome-communication',
+      status: 'SUCCESS',
+      startTime: '2024-01-15T10:00:14Z',
+      endTime: '2024-01-15T10:00:15Z',
+      durationMs: 1000,
+      inputData: { userData: { userId: 'user-123', email: 'user@example.com' } },
+      outputData: { 
+        'welcome-email': { sent: true, messageId: 'email-123' },
+        'welcome-sms': { sent: true, messageId: 'sms-123' },
+        'analytics-event': { tracked: true, eventId: 'event-123' }
+      }
     }
   ]
 };
@@ -251,12 +205,10 @@ const renderInspectorSourceTab = (
 };
 
 export default function HomePage() {
-  const [currentMode, setCurrentMode] = React.useState<'design' | 'trace' | 'test_result'>('design');
-  const [isEditingEnabled, setIsEditingEnabled] = React.useState(true);
+  const [mode, setMode] = React.useState<'design' | 'trace' | 'test_result'>('design');
 
   const handleRequestModule = async (fqn: string) => {
     console.log('Requesting module:', fqn);
-    // In a real app, this would fetch from an API
     return null;
   };
 
@@ -265,40 +217,41 @@ export default function HomePage() {
   };
 
   const handleSaveModule = async (payload: SaveModulePayload): Promise<void | boolean> => {
-    console.log('Save module requested:', payload);
+    console.log('Saving module:', payload);
     // Simulate save operation
     await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log('Module saved successfully');
     return true;
   };
 
   const handleRunTestCase = async (testCase: FlowTestCase): Promise<TestRunResult | null> => {
     console.log('Running test case:', testCase);
     
-    // Simulate test execution
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Generate test templates for the flow
+    const templates = generateTestCaseTemplates(testCase.flowFqn, {
+      getFlowDefinition: () => null,
+      getAllLoadedModules: () => [],
+      getLoadedModule: () => null,
+      resolveComponentTypeInfo: () => null,
+      getComponentSchema: () => null,
+      getNamedComponentDefinition: () => null,
+      getContextDefinition: () => null
+    });
     
-    // Return mock test result
+    // Mock test result
     return {
       testCase,
       passed: true,
-      trace: sampleTraceData,
-      assertionResults: [
-        {
-          targetPath: 'status',
-          expectedValue: 'COMPLETED',
-          comparison: 'equals',
-          actualValue: 'COMPLETED',
-          passed: true,
-          message: 'Assertion passed'
-        }
-      ]
+      assertionResults: testCase.assertions.map(assertion => ({
+        ...assertion,
+        actualValue: assertion.expectedValue,
+        passed: true,
+        message: 'Test passed successfully'
+      }))
     };
   };
 
   const parseContextVariables = (value: string): string[] => {
-    const matches = value.match(/\$\{([^}]+)\}/g);
-    return matches ? matches.map(match => match.slice(2, -1)) : [];
+    return [];
   };
 
   const handleViewChange = (view: any) => {
@@ -309,82 +262,101 @@ export default function HomePage() {
     console.log('Element selected:', element);
   };
 
-  const props: CascadeFlowVisualizerProps = {
-    // Core Data & Loading
-    initialModules: sampleModules,
-    requestModule: handleRequestModule,
-    componentSchemas: sampleComponentSchemas,
-    onModuleLoadError: handleModuleLoadError,
-    parseContextVariables,
-
-    // Editing
-    isEditingEnabled,
-    onSaveModule: handleSaveModule,
-
-    // Mode & Data
-    mode: currentMode,
-    designData: {
-      initialViewMode: 'flowDetail',
-      initialFlowFqn: 'com.example.demo.SampleFlow'
-    },
-    traceData: currentMode === 'trace' ? sampleTraceData : undefined,
-
-    // Testing
-    onRunTestCase: handleRunTestCase,
-
-    // Callbacks
-    onViewChange: handleViewChange,
-    onElementSelect: handleElementSelect,
-
-    // Customization
-    customNodeTypes: nodeTypes,
-    customEdgeTypes: edgeTypes,
-    renderInspectorPropertiesTab,
-    renderInspectorSourceTab,
-
-    // Styling
-    style: { width: '100vw', height: '100vh' }
-  };
-
   return (
-    <div>
-      {/* Demo Controls */}
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Navigation Header */}
       <div style={{ 
-        position: 'fixed', 
-        top: '10px', 
-        right: '10px', 
-        zIndex: 1000,
-        backgroundColor: 'white',
-        padding: '12px',
-        borderRadius: '8px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        display: 'flex',
-        gap: '8px',
-        alignItems: 'center'
+        backgroundColor: '#1976D2', 
+        color: 'white', 
+        padding: '16px 24px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
       }}>
-        <label style={{ fontSize: '12px', fontWeight: '500' }}>Mode:</label>
-        <select 
-          value={currentMode} 
-          onChange={(e) => setCurrentMode(e.target.value as any)}
-          style={{ padding: '4px 8px', fontSize: '12px' }}
-        >
-          <option value="design">Design</option>
-          <option value="trace">Trace</option>
-          <option value="test_result">Test Result</option>
-        </select>
-        
-        <label style={{ fontSize: '12px', marginLeft: '12px' }}>
-          <input 
-            type="checkbox" 
-            checked={isEditingEnabled}
-            onChange={(e) => setIsEditingEnabled(e.target.checked)}
-            style={{ marginRight: '4px' }}
-          />
-          Editing
-        </label>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>
+            Cascade Flow Visualizer
+          </h1>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <a 
+              href="/casino-demo" 
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none',
+                padding: '8px 16px',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.3)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
+            >
+              🎰 Casino Platform Demo
+            </a>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setMode('design')}
+                style={{
+                  padding: '6px 12px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  backgroundColor: mode === 'design' ? 'white' : 'rgba(255,255,255,0.2)',
+                  color: mode === 'design' ? '#1976D2' : 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Design
+              </button>
+              <button
+                onClick={() => setMode('trace')}
+                style={{
+                  padding: '6px 12px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  backgroundColor: mode === 'trace' ? 'white' : 'rgba(255,255,255,0.2)',
+                  color: mode === 'trace' ? '#1976D2' : 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Trace
+              </button>
+            </div>
+          </div>
+        </div>
+        <p style={{ margin: '8px 0 0 0', fontSize: '16px', opacity: 0.9 }}>
+          Enhanced with left-to-right layout, improved node styling, and system overview navigation
+        </p>
       </div>
 
-      <CascadeFlowVisualizer {...props} />
+      {/* Main Content */}
+      <div style={{ flex: 1 }}>
+        <CascadeFlowVisualizer
+          initialModules={sampleModules}
+          componentSchemas={sampleComponentSchemas}
+          mode="trace"
+          traceData={sampleTraceData}
+          designData={{
+            initialFlowFqn: 'com.casino.core.UserOnboardingFlow',
+            initialViewMode: 'flowDetail'
+          }}
+          requestModule={handleRequestModule}
+          onModuleLoadError={handleModuleLoadError}
+          onSaveModule={handleSaveModule}
+          onRunTestCase={handleRunTestCase}
+          parseContextVariables={parseContextVariables}
+          onViewChange={handleViewChange}
+          onElementSelect={handleElementSelect}
+          customNodeTypes={nodeTypes}
+          customEdgeTypes={edgeTypes}
+          renderInspectorPropertiesTab={renderInspectorPropertiesTab}
+          renderInspectorSourceTab={renderInspectorSourceTab}
+          isEditingEnabled={true}
+          elkOptions={{
+            algorithm: 'layered',
+            direction: 'RIGHT'
+          }}
+        />
+      </div>
     </div>
   );
 } 
