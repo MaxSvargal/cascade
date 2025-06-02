@@ -82,62 +82,106 @@ directive cfv_consumer_directives.InspectorTabImplementation {
         moduleRegistry: "Use `moduleRegistry: cfv_models.IModuleRegistry` for synchronous lookups: `getLoadedModule`, `getComponentSchema`, `resolveComponentTypeInfo` etc. Do not attempt to modify registry state directly."
     }
 
-    properties_tab_guidance: {
-        // For renderInspectorPropertiesTab - Component-level configuration editor
-        purpose: "Interactive form-based editor for component configurations, with live YAML preview.",
-        actions_usage: "Use `actions: cfv_models.InspectorPropertiesActions` to trigger saves. Call `actions.requestSave(newConfigValue, pathToConfig)`.",
-        form_generation: "Consider using libraries like `@rjsf/core` with `selectedElement.data.componentSchema.configSchema` to dynamically generate forms for `config` blocks.",
-        state_management: "Manage local form state within your tab component. Only call `requestSave` on explicit user action (e.g., Save button click).",
-        yaml_preview: "Show live YAML preview of changes before saving. Use split-pane layout with form on left, YAML preview on right.",
-        context_variables: "Display and allow editing of context variable usages found in `selectedElement.data.contextVarUsages`.",
-        validation: "Validate form inputs against `componentSchema.configSchema` and show validation errors inline."
+    tab_priority_and_defaults: {
+        default_tab: "Source tab should be the default active tab when an element is selected.",
+        tab_order: "Tabs should appear in order: Source, Properties, Debug & Test",
+        visibility_rules: "Source tab always visible when element selected. Properties tab visible for component nodes. Debug & Test tab visible when trace data available or in test mode."
     }
 
     source_tab_guidance: {
-        // For renderInspectorSourceTab - Full module YAML source viewer
-        purpose: "Read-only viewer showing full module YAML context, not just selected element.",
+        // For renderInspectorSourceTab - Full module YAML source viewer with syntax highlighting
+        purpose: "Primary tab showing full module YAML context with syntax highlighting and selected element highlighting.",
         content_scope: "Display the complete module YAML that contains the selected element, with the selected element highlighted.",
-        highlighting: "Highlight the selected element's section within the full module YAML for context.",
+        syntax_highlighting: "Use highlight.js with YAML syntax highlighting for professional code display.",
+        highlighting: "Highlight the selected element's section within the full module YAML for context using highlight.js line highlighting or custom CSS.",
         navigation: "Provide navigation within the YAML (line numbers, search, folding) for large modules.",
         diff_view: "When in editing mode, show diff between original and modified YAML.",
-        export_options: "Provide options to copy YAML sections or export the full module."
+        export_options: "Provide options to copy YAML sections or export the full module.",
+        implementation_libraries: "Use highlight.js for syntax highlighting, react-highlight for React integration.",
+        styling: "Use professional code editor styling with proper indentation, line numbers, and syntax colors."
     }
 
-    data_flow_tab_guidance: {
-        // For renderInspectorDataFlowTab - Flow-level data analysis and debugging
-        purpose: "Flow-level data analysis, execution debugging, and performance monitoring.",
-        data_props: "Receives `currentFlowFqn: string | null`, `traceData: FlowExecutionTrace | null`, and `actions: FlowDataAnalysisActions`.",
-        execution_overview: "Show flow execution summary: status, duration, step count, success/failure rates.",
-        step_timeline: "Display step execution timeline with start/end times and durations.",
-        data_lineage: "Visualize data flow between steps, showing how data transforms through the flow.",
-        performance_analysis: "Show critical path analysis, bottlenecks, and performance metrics.",
-        error_analysis: "Display detailed error information for failed executions with stack traces.",
-        comparison_tools: "Use `actions.compareExecutions` to compare multiple trace executions.",
-        data_inspection: "Show input/output data for each step with JSON/YAML formatting and search.",
-        execution_replay: "Provide step-by-step execution replay with data state at each step."
+    properties_tab_guidance: {
+        // For renderInspectorPropertiesTab - Component-level configuration editor with proper form generation
+        purpose: "Interactive form-based editor for component configurations using schema-driven form generation.",
+        form_generation_libraries: "Use @rjsf/core (React JSON Schema Form) with @rjsf/validator-ajv8 for form generation from component schemas.",
+        validation_libraries: "Use Zod for runtime validation and type safety of form data.",
+        schema_integration: "Use `selectedElement.data.componentSchema.configSchema` to generate forms dynamically for component `config` blocks.",
+        form_structure: "Generate forms with proper field types (text, number, boolean, select, object, array) based on JSON schema.",
+        default_values: "Pre-populate form with current configuration values from `selectedElement.data.dslObject.config`.",
+        validation: "Validate form inputs against component schema using Zod schemas derived from JSON schema. Show validation errors inline.",
+        state_management: "Manage local form state within tab component. Use React Hook Form for form state management.",
+        save_workflow: "Only call `actions.requestSave(newConfigValue, pathToConfig)` on explicit user action (Save button click).",
+        yaml_preview: "Show live YAML preview of changes in a collapsible section. Use yaml library to stringify form data.",
+        context_variables: "Display and allow editing of context variable usages found in `selectedElement.data.contextVarUsages`.",
+        ui_layout: "Use clean form layout with proper spacing, labels, help text, and error display.",
+        implementation_libraries: "Use @rjsf/core, @rjsf/validator-ajv8, zod, react-hook-form, yaml for implementation."
     }
 
-    testing_tab_guidance: {
-        // For renderInspectorTestingTab - Property testing interface
-        purpose: "Comprehensive property testing interface for flow validation and quality assurance.",
-        test_case_management: "Create, edit, and manage test cases for the current flow.",
-        template_generation: "Generate test case templates for common scenarios (happy path, error handling, performance).",
-        test_execution: "Use `actions.runTestCase(testCase: cfv_models.FlowTestCase)` to trigger test execution via `props.onRunTestCase`.",
-        assertion_builder: "Provide UI for building test assertions with JMESPath selectors and comparison operators.",
-        mock_configuration: "Allow configuration of component mocks for isolated testing.",
-        test_results: "Display test execution results with pass/fail status and detailed assertion outcomes.",
-        coverage_analysis: "Show test coverage metrics for flow paths and component configurations.",
-        regression_testing: "Support regression testing by comparing results across test runs."
+    debug_test_tab_guidance: {
+        // For renderInspectorDebugTestTab - Enhanced unified debugging and testing interface
+        purpose: "Comprehensive debugging and testing interface with schema-based input forms, execution capabilities, and detailed results analysis.",
+        
+        debug_section: {
+            schema_based_input_interface: "Provide input forms based on component input schemas with proper data type handling and validation.",
+            contextual_input_display: "Display input forms based on selected element - trigger schema for triggers, component input schema for steps.",
+            input_data_resolution: "Resolve input data from previous step outputs using component output schemas and inputs_map configuration.",
+            schema_driven_defaults: "Use component schema default values when previous step data is unavailable or incomplete.",
+            data_lineage_visualization: "Show data flow path from trigger through all previous steps to the selected component.",
+            input_validation: "Validate input data against component input schema before execution with clear error messages.",
+            random_data_generation: "Generate realistic test data based on schema constraints (types, min/max, patterns, enums) rather than random values.",
+            execution_from_selection: "Execute flow from selected step or trigger with schema-validated input data and execution options.",
+            execution_overview: "Show flow execution summary: status, duration, step count, success/failure rates when trace data available.",
+            step_details: "Display detailed step execution information: input/output data, timing, status, errors.",
+            data_inspection: "Provide JSON/YAML formatted display of step data with search and filtering capabilities.",
+            error_analysis: "Show detailed error information for failed executions with stack traces and context.",
+            performance_metrics: "Display execution timing, critical path analysis, and performance bottlenecks.",
+            execution_timeline: "Visual timeline of step execution with duration bars and status indicators.",
+            results_display: "Show comprehensive execution results including logs, final output, and system triggers."
+        },
+        
+        test_section: {
+            test_case_management: "Interface for creating, editing, and managing test cases for the current flow.",
+            schema_based_templates: "Generate test case templates based on component schemas for realistic test scenarios.",
+            test_execution: "Execute test cases using `actions.runTestCase(testCase: cfv_models.FlowTestCase)` and display results.",
+            assertion_builder: "UI for building test assertions with JMESPath selectors and comparison operators.",
+            mock_configuration: "Interface for configuring component mocks for isolated testing.",
+            test_results_display: "Show test execution results with pass/fail status, assertion outcomes, and detailed logs.",
+            coverage_analysis: "Display test coverage metrics for flow paths and component configurations."
+        },
+        
+        enhanced_schema_features: {
+            input_structure_generation: "Generate input structure templates from component input schemas with proper data types.",
+            schema_validation: "Validate input data against component schemas with detailed error reporting.",
+            data_type_conversion: "Handle data type conversion based on schema types (string, number, boolean, object, array).",
+            nested_object_support: "Support complex nested objects and arrays based on JSON schema structure.",
+            required_field_handling: "Distinguish between required and optional fields based on schema definitions.",
+            default_value_resolution: "Use schema default values and resolve from previous step outputs intelligently.",
+            constraint_based_generation: "Generate test data that respects schema constraints (min/max values, string patterns, enum values).",
+            context_variable_resolution: "Resolve context variables in input data with proper type handling."
+        },
+        
+        integration_requirements: {
+            trace_data_dependency: "Debug section requires `traceData: FlowExecutionTrace | null` to be available.",
+            test_execution_dependency: "Test section requires `actions.runTestCase` callback to be implemented.",
+            flow_context_dependency: "Both sections require `currentFlowFqn: string | null` for flow context.",
+            module_registry_dependency: "Use `moduleRegistry: IModuleRegistry` for flow definition and schema lookups.",
+            enhanced_actions_dependency: "Requires `actions: UnifiedDebugTestActions` with schema-based input resolution capabilities.",
+            component_schema_dependency: "Requires access to component schemas for input/output structure resolution."
+        },
+        
+        ui_layout: "Use tabbed layout to separate debug and test sections. Provide schema-driven input forms, execution controls, and comprehensive results display.",
+        implementation_libraries: "Use react-json-view for data inspection, monaco-editor for JSON input, recharts for timeline visualization, ajv for schema validation, @rjsf/core for schema-based forms."
     }
 
     migration_guidance: {
         // For migrating from old tab structure
         deprecated_tabs: "The following tabs are deprecated: DataIOTab, ContextVarsTab, TestDefinitionTab, AssertionResultsTab.",
         migration_path: {
-            DataIOTab: "Functionality moved to DataFlowTab with enhanced flow-level analysis.",
-            ContextVarsTab: "Context variables now shown in PropertiesTab alongside component configuration.",
-            TestDefinitionTab: "Functionality consolidated into TestingTab with enhanced test management.",
-            AssertionResultsTab: "Assertion results now shown in TestingTab alongside test definitions."
+            DataIOTab: "Functionality moved to Debug & Test tab debug section with enhanced data inspection.",
+            ContextVarsTab: "Context variables now shown in Properties tab alongside component configuration.",
+            TestDefinitionTab: "Functionality consolidated into Debug & Test tab test section with enhanced test management.",
+            AssertionResultsTab: "Assertion results now shown in Debug & Test tab test section alongside test definitions."
         },
         backward_compatibility: "Legacy tab renderers are still supported but deprecated. Plan migration to new consolidated tabs.",
         feature_parity: "New tabs provide all functionality of deprecated tabs plus enhanced features."
@@ -149,7 +193,8 @@ directive cfv_consumer_directives.InspectorTabImplementation {
         consistent_styling: "Maintain consistent styling with the main visualizer component.",
         keyboard_navigation: "Support keyboard navigation for accessibility.",
         loading_states: "Show appropriate loading states for async operations (save, test execution).",
-        error_handling: "Display clear error messages and recovery options for failed operations."
+        error_handling: "Display clear error messages and recovery options for failed operations.",
+        professional_appearance: "Use professional code editor styling, proper typography, and clean layouts."
     }
 }
 

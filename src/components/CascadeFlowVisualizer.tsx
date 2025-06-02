@@ -316,30 +316,76 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
 
   // Unified debug/test actions for the new DebugTest tab
   const unifiedDebugTestActions = useMemo(() => ({
-    runDebugExecution: async (targetId: string, config?: any) => {
-      console.log('Debug execution requested for:', targetId, config);
+    runDebugExecution: async (targetId: string, inputData: any, executionOptions?: any) => {
+      console.log('Debug execution requested for:', targetId, inputData, executionOptions);
       
-      // Mock execution result
+      const startTime = new Date().toISOString();
+      const executionId = `exec-${Date.now()}`;
+      
+      // Simulate execution delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const endTime = new Date().toISOString();
+      const durationMs = 1000;
+      
+      // Mock execution result with comprehensive data
       return {
-        executionId: `exec-${Date.now()}`,
+        executionId,
         status: 'SUCCESS' as const,
+        startTime,
+        endTime,
+        durationMs,
         logs: [
           {
             stepId: targetId,
-            timestamp: new Date().toISOString(),
+            timestamp: startTime,
             level: 'info',
             message: 'Debug execution started',
-            data: config
+            data: { inputData, executionOptions }
           },
           {
             stepId: targetId,
-            timestamp: new Date().toISOString(),
+            timestamp: new Date(Date.now() + 500).toISOString(),
+            level: 'debug',
+            message: 'Processing input data',
+            data: inputData
+          },
+          {
+            stepId: targetId,
+            timestamp: endTime,
             level: 'info',
             message: 'Debug execution completed successfully'
+          }
+        ],
+        finalOutput: {
+          result: 'success',
+          processedData: inputData,
+          timestamp: endTime
+        },
+        systemTriggers: [
+          {
+            triggerId: `trigger-${Date.now()}`,
+            triggerType: 'notification',
+            targetSystem: 'notification-service',
+            payload: { message: 'Execution completed', stepId: targetId },
+            timestamp: endTime,
+            sourceStepId: targetId
+          }
+        ],
+        dataTransformations: [
+          {
+            fromStepId: 'input',
+            toStepId: targetId,
+            inputPath: 'data',
+            outputPath: 'processedData',
+            originalValue: inputData,
+            transformedValue: inputData,
+            transformationRule: 'passthrough'
           }
         ]
       };
     },
+    
     runTestCase: async (testCase: any) => {
       if (props.onRunTestCase) {
         const result = await props.onRunTestCase(testCase);
@@ -357,6 +403,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         error: 'No test runner available'
       };
     },
+    
     generateTestCase: (flowFqn: string, testType: 'happy_path' | 'error_handling' | 'performance') => {
       return {
         flowFqn,
@@ -367,24 +414,489 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         assertions: []
       };
     },
+    
+    generateSchemaBasedInputData: (targetId: string, dataType: 'happy_path' | 'fork_paths' | 'error_cases', inputSchema?: any, outputSchemas?: Record<string, any>) => {
+      console.log('Generating schema-based input data for:', targetId, dataType, inputSchema);
+      
+      // Handle both cases: direct schema or schema object with inputSchema property
+      let actualSchema = null;
+      if (inputSchema?.inputSchema) {
+        // Schema object with inputSchema property
+        actualSchema = inputSchema.inputSchema;
+      } else if (inputSchema?.type || inputSchema?.properties) {
+        // Direct JSON schema
+        actualSchema = inputSchema;
+      }
+      
+      // If we have an input schema, generate data based on it
+      if (actualSchema) {
+        return generateDataFromSchema(actualSchema, dataType);
+      }
+      
+      // Fallback to basic data generation
+      const baseData = {
+        id: Math.random().toString(36).substr(2, 9),
+        timestamp: new Date().toISOString(),
+        targetId
+      };
+      
+      switch (dataType) {
+        case 'happy_path':
+          return {
+            ...baseData,
+            status: 'active',
+            value: 100,
+            message: 'Happy path test data'
+          };
+        case 'fork_paths':
+          return {
+            ...baseData,
+            status: Math.random() > 0.5 ? 'active' : 'inactive',
+            value: Math.floor(Math.random() * 200),
+            condition: Math.random() > 0.5 ? 'A' : 'B'
+          };
+        case 'error_cases':
+          return {
+            ...baseData,
+            status: 'error',
+            value: -1,
+            error: 'Simulated error condition'
+          };
+        default:
+          return baseData;
+      }
+    },
+    
+    generateInputStructureFromSchema: (inputSchema: any, useDefaults?: boolean) => {
+      console.log('Generating input structure from schema:', inputSchema, useDefaults);
+      
+      // Handle both cases: direct schema or schema object with inputSchema property
+      let actualSchema = null;
+      if (inputSchema?.inputSchema) {
+        // Schema object with inputSchema property
+        actualSchema = inputSchema.inputSchema;
+      } else if (inputSchema?.type || inputSchema?.properties) {
+        // Direct JSON schema
+        actualSchema = inputSchema;
+      }
+      
+      if (!actualSchema) {
+        return {};
+      }
+      
+      return generateDataFromSchema(actualSchema, 'happy_path', useDefaults);
+    },
+    
+    validateInputAgainstSchema: (inputData: any, inputSchema: any) => {
+      console.log('Validating input against schema:', inputData, inputSchema);
+      
+      const errors: any[] = [];
+      const warnings: any[] = [];
+      
+      // Handle both cases: direct schema or schema object with inputSchema property
+      let actualSchema = null;
+      if (inputSchema?.inputSchema) {
+        // Schema object with inputSchema property
+        actualSchema = inputSchema.inputSchema;
+      } else if (inputSchema?.type || inputSchema?.properties) {
+        // Direct JSON schema
+        actualSchema = inputSchema;
+      }
+      
+      if (!actualSchema) {
+        return {
+          isValid: true,
+          errors,
+          warnings,
+          normalizedData: inputData
+        };
+      }
+      
+      // Basic validation - in a real implementation, use ajv or similar
+      if (actualSchema.type === 'object' && actualSchema.properties) {
+        Object.entries(actualSchema.properties).forEach(([key, propSchema]: [string, any]) => {
+          if (actualSchema.required?.includes(key) && !(key in inputData)) {
+            errors.push({
+              fieldPath: key,
+              message: `Required field '${key}' is missing`,
+              expectedType: propSchema.type,
+              actualValue: undefined,
+              schemaRule: 'required'
+            });
+          }
+        });
+      }
+      
+      return {
+        isValid: errors.length === 0,
+        errors,
+        warnings,
+        normalizedData: inputData
+      };
+    },
+    
+    resolveStepInputData: async (stepId: string, flowFqn: string) => {
+      console.log('Resolving input data for step:', stepId, 'in flow:', flowFqn);
+      
+      // Get the flow definition and step information
+      const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
+      if (!flowDef) {
+        throw new Error(`Flow not found: ${flowFqn}`);
+      }
+      
+      // Find the step in the flow - use step_id property
+      const step = flowDef.steps?.find((s: any) => s.step_id === stepId);
+      if (!step) {
+        throw new Error(`Step not found: ${stepId} in flow ${flowFqn}`);
+      }
+      
+      // Get component schema for the step
+      const moduleFqn = flowFqn.split('.').slice(0, -1).join('.');
+      const componentInfo = moduleRegistry.resolveComponentTypeInfo(step.component_ref, moduleFqn);
+      const componentSchema = componentInfo ? moduleRegistry.getComponentSchema(componentInfo.baseType) : null;
+      
+      // Generate input structure from schema with proper defaults
+      let resolvedInputData: Record<string, any> = {};
+      if (componentSchema?.inputSchema) {
+        resolvedInputData = generateDataFromSchema(componentSchema.inputSchema, 'happy_path', true);
+      } else {
+        // Fallback: generate basic input structure based on inputs_map
+        if (step.inputs_map) {
+          Object.keys(step.inputs_map).forEach(key => {
+            resolvedInputData[key] = `resolved_${key}_value`;
+          });
+        }
+      }
+      
+      // Analyze inputs_map to determine data sources
+      const inputSources: any[] = [];
+      const inputMappings: any[] = [];
+      
+      if (step.inputs_map) {
+        Object.entries(step.inputs_map).forEach(([targetField, sourceExpression]: [string, any]) => {
+          if (typeof sourceExpression === 'string') {
+            // Parse source expressions like "trigger.body", "steps.validate-data.outputs.result"
+            if (sourceExpression.startsWith('trigger.')) {
+              inputSources.push({
+                sourceType: 'triggerData' as const,
+                sourceId: 'trigger',
+                dataPath: sourceExpression.replace('trigger.', ''),
+                transformedValue: `trigger_${targetField}_value`
+              });
+              inputMappings.push({
+                targetInputField: targetField,
+                sourceType: 'triggerData' as const,
+                sourceStepId: 'trigger',
+                sourceOutputField: sourceExpression.replace('trigger.', ''),
+                defaultValue: null,
+                transformationRule: 'direct',
+                isRequired: true
+              });
+            } else if (sourceExpression.startsWith('steps.')) {
+              // Extract step ID from expression like "steps.validate-data.outputs.result"
+              const match = sourceExpression.match(/^steps\.([^.]+)\.(.+)$/);
+              if (match) {
+                const sourceStepId = match[1];
+                const outputPath = match[2];
+                inputSources.push({
+                  sourceType: 'previousStep' as const,
+                  sourceId: sourceStepId,
+                  dataPath: outputPath,
+                  transformedValue: `step_${sourceStepId}_${targetField}`
+                });
+                inputMappings.push({
+                  targetInputField: targetField,
+                  sourceType: 'previousStep' as const,
+                  sourceStepId: sourceStepId,
+                  sourceOutputField: outputPath,
+                  defaultValue: null,
+                  transformationRule: 'direct',
+                  isRequired: true
+                });
+              }
+            } else if (sourceExpression.startsWith('context.')) {
+              const contextVar = sourceExpression.replace('context.', '');
+              inputSources.push({
+                sourceType: 'contextVariable' as const,
+                sourceId: contextVar,
+                dataPath: 'value',
+                transformedValue: `context_${contextVar}_value`
+              });
+              inputMappings.push({
+                targetInputField: targetField,
+                sourceType: 'contextVariable' as const,
+                contextVariableName: contextVar,
+                defaultValue: null,
+                transformationRule: 'direct',
+                isRequired: false
+              });
+            }
+          }
+        });
+      }
+      
+      // If no inputs_map, create default mappings
+      if (inputSources.length === 0) {
+        inputSources.push({
+          sourceType: 'triggerData' as const,
+          sourceId: 'trigger',
+          dataPath: 'body',
+          transformedValue: { data: 'trigger input data' }
+        });
+        inputMappings.push({
+          targetInputField: 'data',
+          sourceType: 'triggerData' as const,
+          sourceStepId: 'trigger',
+          sourceOutputField: 'body',
+          defaultValue: {},
+          transformationRule: 'direct',
+          isRequired: true
+        });
+      }
+      
+      return {
+        stepId,
+        resolvedInputData,
+        inputSources,
+        availableContext: {
+          user_id: 'user123',
+          session_id: 'session456',
+          environment: 'development'
+        },
+        inputSchema: componentSchema || undefined
+      };
+    },
+    
+    resolveDataLineage: async (stepId: string, flowFqn: string) => {
+      console.log('Resolving data lineage for step:', stepId, 'in flow:', flowFqn);
+      
+      // Get the flow definition
+      const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
+      if (!flowDef) {
+        throw new Error(`Flow not found: ${flowFqn}`);
+      }
+      
+      // Find the target step
+      const targetStep = flowDef.steps?.find((s: any) => s.step_id === stepId);
+      if (!targetStep) {
+        throw new Error(`Step not found: ${stepId} in flow ${flowFqn}`);
+      }
+      
+      // Build data lineage by analyzing the flow structure
+      const dataPath: any[] = [];
+      const inputMappings: any[] = [];
+      
+      // Add trigger as the starting point
+      if (flowDef.trigger) {
+        dataPath.push({
+          stepId: 'trigger',
+          stepType: 'trigger',
+          componentFqn: flowDef.trigger.type,
+          outputSchema: undefined,
+          outputData: { 
+            // Generate sample trigger data based on trigger type
+            ...(flowDef.trigger.type === 'StdLib:HttpTrigger' ? {
+              method: flowDef.trigger.config?.method || 'POST',
+              path: flowDef.trigger.config?.path || '/api/endpoint',
+              body: { userId: 'user123', requestId: 'req456' }
+            } : {
+              eventType: 'sample-event',
+              data: { userId: 'user123', timestamp: new Date().toISOString() }
+            })
+          },
+          executionOrder: 0
+        });
+      }
+      
+      // Analyze steps that come before the target step
+      if (flowDef.steps) {
+        const targetStepIndex = flowDef.steps.findIndex((s: any) => s.step_id === stepId);
+        const precedingSteps = flowDef.steps.slice(0, targetStepIndex);
+        
+        precedingSteps.forEach((step: any, index: number) => {
+          const moduleFqn = flowFqn.split('.').slice(0, -1).join('.');
+          const componentInfo = moduleRegistry.resolveComponentTypeInfo(step.component_ref, moduleFqn);
+          const componentSchema = componentInfo ? moduleRegistry.getComponentSchema(componentInfo.baseType) : null;
+          
+          dataPath.push({
+            stepId: step.step_id,
+            stepType: 'component',
+            componentFqn: componentInfo?.baseType || step.component_ref,
+            outputSchema: componentSchema,
+            outputData: componentSchema?.outputSchema ? 
+              generateDataFromSchema(componentSchema.outputSchema, 'happy_path', true) :
+              { result: `output_from_${step.step_id}`, status: 'success' },
+            executionOrder: index + 1
+          });
+        });
+      }
+      
+      // Analyze target step's inputs_map to create input mappings
+      if (targetStep.inputs_map) {
+        Object.entries(targetStep.inputs_map).forEach(([targetField, sourceExpression]: [string, any]) => {
+          if (typeof sourceExpression === 'string') {
+            if (sourceExpression.startsWith('trigger.')) {
+              inputMappings.push({
+                targetInputField: targetField,
+                sourceType: 'triggerData' as const,
+                sourceStepId: 'trigger',
+                sourceOutputField: sourceExpression.replace('trigger.', ''),
+                defaultValue: null,
+                transformationRule: 'direct',
+                isRequired: true
+              });
+            } else if (sourceExpression.startsWith('steps.')) {
+              const match = sourceExpression.match(/^steps\.([^.]+)\.(.+)$/);
+              if (match) {
+                const sourceStepId = match[1];
+                const outputPath = match[2];
+                inputMappings.push({
+                  targetInputField: targetField,
+                  sourceType: 'previousStep' as const,
+                  sourceStepId: sourceStepId,
+                  sourceOutputField: outputPath,
+                  defaultValue: null,
+                  transformationRule: 'direct',
+                  isRequired: true
+                });
+              }
+            } else if (sourceExpression.startsWith('context.')) {
+              const contextVar = sourceExpression.replace('context.', '');
+              inputMappings.push({
+                targetInputField: targetField,
+                sourceType: 'contextVariable' as const,
+                contextVariableName: contextVar,
+                defaultValue: null,
+                transformationRule: 'direct',
+                isRequired: false
+              });
+            }
+          }
+        });
+      }
+      
+      // Generate available inputs based on data lineage
+      const availableInputs: Record<string, any> = {};
+      dataPath.forEach(pathStep => {
+        if (pathStep.outputData) {
+          Object.entries(pathStep.outputData).forEach(([key, value]) => {
+            availableInputs[`${pathStep.stepId}.${key}`] = value;
+          });
+        }
+      });
+      
+      return {
+        targetStepId: stepId,
+        flowFqn,
+        dataPath,
+        availableInputs,
+        contextVariables: {
+          user_id: 'user123',
+          session_id: 'session456',
+          environment: 'development'
+        },
+        inputMappings
+      };
+    },
+    
     collectStepLogs: async (executionId: string) => {
-      // Mock step logs
+      // Mock step logs with more detail
       return [
         {
           stepId: 'step1',
           timestamp: new Date().toISOString(),
           level: 'info',
-          message: 'Step execution started'
+          message: 'Step execution started',
+          data: { executionId }
+        },
+        {
+          stepId: 'step1',
+          timestamp: new Date().toISOString(),
+          level: 'debug',
+          message: 'Processing input data',
+          data: { inputSize: 1024 }
         },
         {
           stepId: 'step1',
           timestamp: new Date().toISOString(),
           level: 'info',
-          message: 'Step execution completed'
+          message: 'Step execution completed',
+          data: { outputSize: 2048, duration: 500 }
         }
       ];
+    },
+    
+    exportExecutionResults: (executionResult: any, format: 'json' | 'yaml' | 'csv') => {
+      switch (format) {
+        case 'json':
+          return JSON.stringify(executionResult, null, 2);
+        case 'yaml':
+          // Simple YAML-like format
+          return Object.entries(executionResult)
+            .map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`)
+            .join('\n');
+        case 'csv':
+          // Simple CSV format for logs
+          if (executionResult.logs) {
+            const headers = 'stepId,timestamp,level,message';
+            const rows = executionResult.logs.map((log: any) => 
+              `${log.stepId},${log.timestamp},${log.level},"${log.message}"`
+            ).join('\n');
+            return `${headers}\n${rows}`;
+          }
+          return 'No log data available';
+        default:
+          return JSON.stringify(executionResult, null, 2);
+      }
     }
-  }), [props.onRunTestCase]);
+  }), [props.onRunTestCase, moduleRegistry]);
+
+  // Helper function to generate data from JSON schema
+  const generateDataFromSchema = (schema: any, dataType: string, useDefaults?: boolean): any => {
+    if (!schema) return {};
+    
+    switch (schema.type) {
+      case 'object':
+        const obj: any = {};
+        if (schema.properties) {
+          Object.entries(schema.properties).forEach(([key, propSchema]: [string, any]) => {
+            if (useDefaults && propSchema.default !== undefined) {
+              obj[key] = propSchema.default;
+            } else {
+              obj[key] = generateDataFromSchema(propSchema, dataType, useDefaults);
+            }
+          });
+        }
+        return obj;
+        
+      case 'array':
+        if (schema.items) {
+          return [generateDataFromSchema(schema.items, dataType, useDefaults)];
+        }
+        return [];
+        
+      case 'string':
+        if (useDefaults && schema.default) return schema.default;
+        if (schema.enum) return schema.enum[0];
+        if (dataType === 'error_cases') return '';
+        return schema.example || 'test-string';
+        
+      case 'number':
+      case 'integer':
+        if (useDefaults && schema.default !== undefined) return schema.default;
+        if (dataType === 'error_cases') return schema.minimum ? schema.minimum - 1 : -1;
+        if (schema.minimum !== undefined) return schema.minimum;
+        if (schema.maximum !== undefined) return Math.floor(schema.maximum / 2);
+        return 42;
+        
+      case 'boolean':
+        if (useDefaults && schema.default !== undefined) return schema.default;
+        return dataType !== 'error_cases';
+        
+      default:
+        return useDefaults && schema.default !== undefined ? schema.default : null;
+    }
+  };
 
   return (
     <div className={props.className} style={props.style}>

@@ -11,27 +11,35 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "14.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "jotai": "^2.6.0",
-    "reactflow": "^11.10.0",
-    "@reactflow/core": "^11.10.0",
-    "@reactflow/controls": "^11.2.0",
     "@reactflow/background": "^11.3.0",
+    "@reactflow/controls": "^11.2.0",
+    "@reactflow/core": "^11.10.0",
     "@reactflow/minimap": "^11.7.0",
-    "elkjs": "^0.9.0",
-    "yaml": "^2.3.4",
+    "@rjsf/core": "6.0.0-beta.10",
+    "@rjsf/utils": "6.0.0-beta.10",
+    "@rjsf/validator-ajv8": "6.0.0-beta.10",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "typescript": "^5.0.0"
+    "elkjs": "^0.9.0",
+    "highlight.js": "^11.11.1",
+    "jotai": "^2.6.0",
+    "next": "14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-highlight": "^0.15.0",
+    "react-hook-form": "^7.57.0",
+    "react-json-view": "^1.21.3",
+    "reactflow": "^11.10.0",
+    "typescript": "^5.0.0",
+    "yaml": "^2.3.4",
+    "zod": "^3.25.48"
   },
   "devDependencies": {
-    "eslint": "^8.0.0",
-    "eslint-config-next": "14.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-next": "14.0.0",
     "prettier": "^3.0.0"
   }
-} 
+}

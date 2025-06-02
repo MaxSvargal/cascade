@@ -2119,6 +2119,14 @@ export const casinoPlatformComponentSchemas = {
         retries: { type: 'number' }
       },
       required: ['url', 'method']
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { type: 'object', description: 'Request payload data' },
+        headers: { type: 'object', description: 'Additional request headers' },
+        params: { type: 'object', description: 'URL parameters' }
+      }
     }
   },
   'StdLib:FilterData': {
@@ -2131,6 +2139,13 @@ export const casinoPlatformComponentSchemas = {
         noMatchOutput: { type: 'string' }
       },
       required: ['expression']
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { type: 'object', description: 'Data to filter' }
+      },
+      required: ['data']
     }
   },
   'StdLib:MapData': {
@@ -2141,6 +2156,13 @@ export const casinoPlatformComponentSchemas = {
         expression: { type: 'string' }
       },
       required: ['expression']
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { type: 'object', description: 'Data to transform' }
+      },
+      required: ['data']
     }
   },
   'StdLib:Switch': {
@@ -2161,6 +2183,13 @@ export const casinoPlatformComponentSchemas = {
         defaultOutputName: { type: 'string' }
       },
       required: ['cases']
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { type: 'object', description: 'Data to evaluate conditions against' }
+      },
+      required: ['data']
     }
   },
   'StdLib:Fork': {
@@ -2181,6 +2210,13 @@ export const casinoPlatformComponentSchemas = {
         }
       },
       required: ['branches']
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { type: 'object', description: 'Data to pass to all branches' }
+      },
+      required: ['data']
     }
   },
   'StdLib:SubFlowInvoker': {
@@ -2191,6 +2227,13 @@ export const casinoPlatformComponentSchemas = {
         flow_fqn: { type: 'string' }
       },
       required: ['flow_fqn']
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { type: 'object', description: 'Data to pass to the sub-flow' }
+      },
+      required: ['data']
     }
   },
   'StdLib:JsonSchemaValidator': {
@@ -2201,6 +2244,13 @@ export const casinoPlatformComponentSchemas = {
         schema: { type: 'object' }
       },
       required: ['schema']
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { type: 'object', description: 'Data to validate against the schema' }
+      },
+      required: ['data']
     }
   }
 }; 

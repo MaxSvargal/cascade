@@ -570,14 +570,14 @@ model cfv_models.CascadeFlowVisualizerProps {
     customEdgeTypes: cfv_models.Any { required: true; description: "React Flow EdgeTypes object." }
     
     // Consolidated Inspector Tab Renderers (New Architecture)
-    renderInspectorPropertiesTab?: cfv_models.Function {
-        description: "Component-level configuration FORM editor with debug execution. Signature: (selectedElement: SelectedElement | null, actions: InspectorPropertiesActions, moduleRegistry: IModuleRegistry) => React.ReactNode";
-    }
     renderInspectorSourceTab?: cfv_models.Function {
-        description: "Full flow DSL source viewer with selected step highlighting. Signature: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode";
+        description: "PRIMARY TAB: Full module YAML source viewer with syntax highlighting and selected element highlighting. Signature: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode";
+    }
+    renderInspectorPropertiesTab?: cfv_models.Function {
+        description: "Component-level configuration FORM editor with schema-driven form generation using @rjsf/core and Zod validation. Signature: (selectedElement: SelectedElement | null, actions: InspectorPropertiesActions, moduleRegistry: IModuleRegistry) => React.ReactNode";
     }
     renderInspectorDebugTestTab?: cfv_models.Function {
-        description: "Unified debugging and testing interface. Combines step logs, test execution, and results. Signature: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, actions: UnifiedDebugTestActions, moduleRegistry: IModuleRegistry) => React.ReactNode";
+        description: "Unified debugging and testing interface combining execution analysis and test case management. Signature: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, traceData: FlowExecutionTrace | null, actions: UnifiedDebugTestActions, moduleRegistry: IModuleRegistry) => React.ReactNode";
     }
     
     // Removed/Deprecated Tab Renderers
@@ -640,13 +640,13 @@ model cfv_models.Function {
     type: "Function"
 }
 
-// Updated Inspector Tab Models with Unified Architecture
+// Updated Inspector Tab Models with Enhanced Debug & Test Architecture
 
 model cfv_models.UnifiedDebugTestActions {
-    description: "Actions available for the unified debug/test interface."
+    description: "Actions available for the enhanced unified debug/test interface with schema-based input resolution."
     runDebugExecution: cfv_models.Function {
         required: true;
-        description: "Execute flow/step for debugging with current configuration. Signature: (targetId: string, config?: any) => Promise<ExecutionResult>";
+        description: "Execute flow/step for debugging with current configuration. Signature: (targetId: string, inputData: any, executionOptions?: ExecutionOptions) => Promise<ExecutionResult>";
     }
     runTestCase: cfv_models.Function {
         required: true;
@@ -656,10 +656,133 @@ model cfv_models.UnifiedDebugTestActions {
         required: true;
         description: "Generate default test case from current flow. Signature: (flowFqn: string, testType: 'happy_path' | 'error_handling' | 'performance') => FlowTestCase";
     }
+    generateSchemaBasedInputData: cfv_models.Function {
+        required: true;
+        description: "Generate input data based on component schema and data type. Signature: (targetId: string, dataType: 'happy_path' | 'fork_paths' | 'error_cases', inputSchema?: ComponentSchema, outputSchemas?: Record<string, ComponentSchema>) => any";
+    }
+    resolveStepInputData: cfv_models.Function {
+        required: true;
+        description: "Resolve input data for a step based on component input schema and previous step outputs. Signature: (stepId: string, flowFqn: string) => Promise<ResolvedStepInput>";
+    }
+    generateInputStructureFromSchema: cfv_models.Function {
+        required: true;
+        description: "Generate input structure template from component input schema. Signature: (inputSchema: ComponentSchema, useDefaults?: boolean) => any";
+    }
+    resolveDataLineage: cfv_models.Function {
+        required: true;
+        description: "Resolve data lineage from trigger to selected step. Signature: (stepId: string, flowFqn: string) => Promise<DataLineage>";
+    }
+    validateInputAgainstSchema: cfv_models.Function {
+        required: true;
+        description: "Validate input data against component input schema. Signature: (inputData: any, inputSchema: ComponentSchema) => ValidationResult";
+    }
     collectStepLogs: cfv_models.Function {
         required: true;
         description: "Collect execution logs from each step. Signature: (executionId: string) => Promise<StepLog[]>";
     }
+    exportExecutionResults: cfv_models.Function {
+        required: true;
+        description: "Export execution results for analysis. Signature: (executionResult: ExecutionResult, format: 'json' | 'yaml' | 'csv') => string";
+    }
+}
+
+model cfv_models.ExecutionOptions {
+    description: "Options for flow/step execution."
+    useMocks?: Boolean { description: "Whether to use mocked components instead of real ones." }
+    timeoutMs?: Number { description: "Execution timeout in milliseconds." }
+    mockResponses?: List<cfv_models.MockedComponentResponse> { description: "Specific mock responses to use." }
+    contextOverrides?: Record<String, cfv_models.Any> { description: "Context variable overrides." }
+    startFromStep?: String { description: "Step ID to start execution from (for partial execution)." }
+    stopAtStep?: String { description: "Step ID to stop execution at." }
+}
+
+model cfv_models.ResolvedStepInput {
+    description: "Resolved input data for a step based on flow context and previous outputs."
+    stepId: String { required: true; }
+    resolvedInputData: cfv_models.Any { required: true; description: "Input data resolved from previous step outputs and context." }
+    inputSources: List<cfv_models.InputDataSource> { required: true; description: "Sources of input data (previous steps, context, etc.)." }
+    availableContext: Record<String, cfv_models.Any> { required: true; description: "Context variables available at this step." }
+    inputSchema?: cfv_models.ComponentSchema { description: "Expected input schema for validation." }
+}
+
+model cfv_models.InputDataSource {
+    description: "Source of input data for a step."
+    sourceType: cfv_models.InputSourceTypeEnum { required: true; }
+    sourceId: String { required: true; description: "ID of the source (step ID, context variable name, etc.)." }
+    dataPath: String { required: true; description: "Path to the data within the source (e.g., 'outputs.result')." }
+    transformedValue: cfv_models.Any { description: "The actual value after transformation." }
+}
+    model cfv_models.InputSourceTypeEnum {
+        type: String
+        constraints: "enum:['previousStep', 'contextVariable', 'triggerData', 'constant']"
+    }
+
+model cfv_models.ExecutionResult {
+    description: "Enhanced result of debug execution with comprehensive details."
+    executionId: String { required: true; }
+    status: cfv_models.ExecutionStatusEnum { required: true; }
+    startTime: String { required: true; description: "ISO timestamp of execution start." }
+    endTime?: String { description: "ISO timestamp of execution completion." }
+    durationMs?: Number { description: "Total execution duration." }
+    trace?: cfv_models.FlowExecutionTrace { description: "Full execution trace if available." }
+    stepTrace?: cfv_models.StepExecutionTrace { description: "Single step trace for step-level execution." }
+    logs: List<cfv_models.StepLog> { required: true; description: "Execution logs from all steps." }
+    finalOutput?: cfv_models.Any { description: "Output from the last executed step." }
+    systemTriggers: List<cfv_models.SystemTrigger> { required: true; description: "System triggers sent during execution." }
+    dataTransformations: List<cfv_models.DataTransformation> { required: true; description: "Data transformations between steps." }
+    error?: String { description: "Error message if execution failed." }
+    errorDetails?: cfv_models.ExecutionError { description: "Detailed error information." }
+}
+
+model cfv_models.SystemTrigger {
+    description: "System trigger sent during flow execution."
+    triggerId: String { required: true; }
+    triggerType: String { required: true; }
+    targetSystem: String { required: true; description: "Target system or service." }
+    payload: cfv_models.Any { required: true; description: "Trigger payload data." }
+    timestamp: String { required: true; description: "When the trigger was sent." }
+    sourceStepId: String { required: true; description: "Step that generated this trigger." }
+}
+
+model cfv_models.DataTransformation {
+    description: "Data transformation between steps."
+    fromStepId: String { required: true; }
+    toStepId: String { required: true; }
+    inputPath: String { required: true; description: "Path in the source step output." }
+    outputPath: String { required: true; description: "Path in the target step input." }
+    originalValue: cfv_models.Any { description: "Original value before transformation." }
+    transformedValue: cfv_models.Any { description: "Value after transformation." }
+    transformationRule?: String { description: "Transformation rule or expression used." }
+}
+
+model cfv_models.ExecutionError {
+    description: "Detailed execution error information."
+    errorType: String { required: true; description: "Type of error (e.g., 'ValidationError', 'TimeoutError')." }
+    message: String { required: true; }
+    stepId?: String { description: "Step where the error occurred." }
+    stackTrace?: String { description: "Error stack trace." }
+    context?: cfv_models.Any { description: "Additional error context." }
+    timestamp: String { required: true; }
+}
+
+model cfv_models.RandomDataGenerationOptions {
+    description: "Options for random test data generation."
+    dataType: cfv_models.RandomDataTypeEnum { required: true; }
+    schema?: cfv_models.ComponentSchema { description: "Schema to generate data against." }
+    customRules?: List<cfv_models.DataGenerationRule> { description: "Custom generation rules." }
+    seedValue?: String { description: "Seed for reproducible random generation." }
+}
+    model cfv_models.RandomDataTypeEnum {
+        type: String
+        constraints: "enum:['happy_path', 'fork_paths', 'error_cases', 'boundary_values', 'performance_test']"
+    }
+
+model cfv_models.DataGenerationRule {
+    description: "Custom rule for data generation."
+    fieldPath: String { required: true; description: "JSON path to the field." }
+    generationType: String { required: true; description: "Type of generation (e.g., 'random', 'sequence', 'pattern')." }
+    parameters?: cfv_models.Any { description: "Parameters for the generation type." }
+    constraints?: cfv_models.Any { description: "Constraints for generated values." }
 }
 
 model cfv_models.StepLog {
@@ -671,12 +794,58 @@ model cfv_models.StepLog {
     data?: cfv_models.Any { description: "Additional log data" }
 }
 
-model cfv_models.ExecutionResult {
-    description: "Result of debug execution."
-    executionId: String { required: true; }
-    status: cfv_models.ExecutionStatusEnum { required: true; }
-    trace?: cfv_models.FlowExecutionTrace
-    stepTrace?: cfv_models.StepExecutionTrace
-    logs: List<cfv_models.StepLog> { required: true; }
-    error?: String
+model cfv_models.DataLineage {
+    description: "Data lineage from trigger to a specific step showing how data flows through the flow."
+    targetStepId: String { required: true; }
+    flowFqn: String { required: true; }
+    dataPath: List<cfv_models.DataLineageStep> { required: true; description: "Ordered list of steps from trigger to target." }
+    availableInputs: Record<String, cfv_models.Any> { required: true; description: "All available input data at the target step." }
+    contextVariables: Record<String, cfv_models.Any> { required: true; description: "Context variables available at the target step." }
+    inputMappings: List<cfv_models.InputMapping> { required: true; description: "How inputs are mapped from previous steps." }
+}
+
+model cfv_models.DataLineageStep {
+    description: "A step in the data lineage path."
+    stepId: String { required: true; }
+    stepType: String { required: true; description: "Type of step (trigger, component, subflow)." }
+    componentFqn?: String { description: "Component FQN if this is a component step." }
+    outputSchema?: cfv_models.ComponentSchema { description: "Output schema of this step." }
+    outputData?: cfv_models.Any { description: "Actual or example output data from this step." }
+    executionOrder: Number { required: true; description: "Order of execution in the flow." }
+}
+
+model cfv_models.InputMapping {
+    description: "Mapping of how input data is resolved for a step."
+    targetInputField: String { required: true; description: "Field name in the target step's input." }
+    sourceType: cfv_models.InputSourceTypeEnum { required: true; }
+    sourceStepId?: String { description: "Source step ID if sourceType is 'previousStep'." }
+    sourceOutputField?: String { description: "Field name in the source step's output." }
+    contextVariableName?: String { description: "Context variable name if sourceType is 'contextVariable'." }
+    defaultValue?: cfv_models.Any { description: "Default value if no source is available." }
+    transformationRule?: String { description: "Transformation rule applied to the source data." }
+    isRequired: Boolean { required: true; description: "Whether this input field is required by the component schema." }
+}
+
+model cfv_models.ValidationResult {
+    description: "Result of validating input data against a schema."
+    isValid: Boolean { required: true; }
+    errors: List<cfv_models.ValidationError> { required: true; description: "List of validation errors if any." }
+    warnings: List<cfv_models.ValidationWarning> { required: true; description: "List of validation warnings if any." }
+    normalizedData?: cfv_models.Any { description: "Data after type coercion and normalization." }
+}
+
+model cfv_models.ValidationError {
+    description: "A validation error."
+    fieldPath: String { required: true; description: "JSON path to the field with error." }
+    message: String { required: true; description: "Error message." }
+    expectedType?: String { description: "Expected data type." }
+    actualValue?: cfv_models.Any { description: "Actual value that caused the error." }
+    schemaRule?: String { description: "Schema rule that was violated." }
+}
+
+model cfv_models.ValidationWarning {
+    description: "A validation warning."
+    fieldPath: String { required: true; description: "JSON path to the field with warning." }
+    message: String { required: true; description: "Warning message." }
+    suggestion?: String { description: "Suggested fix for the warning." }
 }

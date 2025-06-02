@@ -55,14 +55,152 @@ export interface InspectorPropertiesActions {
 }
 
 export interface UnifiedDebugTestActions {
-  /** Execute flow/step for debugging with current configuration. Signature: (targetId: string, config?: any) => Promise<ExecutionResult> */
-  runDebugExecution: (targetId: string, config?: any) => Promise<ExecutionResult>;
+  /** Execute flow/step for debugging with current configuration. Signature: (targetId: string, inputData: any, executionOptions?: ExecutionOptions) => Promise<ExecutionResult> */
+  runDebugExecution: (targetId: string, inputData: any, executionOptions?: ExecutionOptions) => Promise<ExecutionResult>;
   /** Execute a test case and return results. Signature: (testCase: FlowTestCase) => Promise<TestRunResult> */
   runTestCase: (testCase: FlowTestCase) => Promise<TestRunResult>;
   /** Generate default test case from current flow. Signature: (flowFqn: string, testType: 'happy_path' | 'error_handling' | 'performance') => FlowTestCase */
   generateTestCase: (flowFqn: string, testType: 'happy_path' | 'error_handling' | 'performance') => FlowTestCase;
+  /** Generate input data based on component schema and data type. Signature: (targetId: string, dataType: 'happy_path' | 'fork_paths' | 'error_cases', inputSchema?: ComponentSchema, outputSchemas?: Record<string, ComponentSchema>) => any */
+  generateSchemaBasedInputData: (targetId: string, dataType: 'happy_path' | 'fork_paths' | 'error_cases', inputSchema?: ComponentSchema, outputSchemas?: Record<string, ComponentSchema>) => any;
+  /** Resolve input data for a step based on component input schema and previous step outputs. Signature: (stepId: string, flowFqn: string) => Promise<ResolvedStepInput> */
+  resolveStepInputData: (stepId: string, flowFqn: string) => Promise<ResolvedStepInput>;
+  /** Generate input structure template from component input schema. Signature: (inputSchema: ComponentSchema, useDefaults?: boolean) => any */
+  generateInputStructureFromSchema: (inputSchema: ComponentSchema, useDefaults?: boolean) => any;
+  /** Resolve data lineage from trigger to selected step. Signature: (stepId: string, flowFqn: string) => Promise<DataLineage> */
+  resolveDataLineage: (stepId: string, flowFqn: string) => Promise<DataLineage>;
+  /** Validate input data against component input schema. Signature: (inputData: any, inputSchema: ComponentSchema) => ValidationResult */
+  validateInputAgainstSchema: (inputData: any, inputSchema: ComponentSchema) => ValidationResult;
   /** Collect execution logs from each step. Signature: (executionId: string) => Promise<StepLog[]> */
   collectStepLogs: (executionId: string) => Promise<StepLog[]>;
+  /** Export execution results for analysis. Signature: (executionResult: ExecutionResult, format: 'json' | 'yaml' | 'csv') => string */
+  exportExecutionResults: (executionResult: ExecutionResult, format: 'json' | 'yaml' | 'csv') => string;
+}
+
+export interface ExecutionOptions {
+  /** Whether to use mocked components instead of real ones. */
+  useMocks?: boolean;
+  /** Execution timeout in milliseconds. */
+  timeoutMs?: number;
+  /** Specific mock responses to use. */
+  mockResponses?: MockedComponentResponse[];
+  /** Context variable overrides. */
+  contextOverrides?: Record<string, any>;
+  /** Step ID to start execution from (for partial execution). */
+  startFromStep?: string;
+  /** Step ID to stop execution at. */
+  stopAtStep?: string;
+}
+
+export interface ResolvedStepInput {
+  stepId: string;
+  /** Input data resolved from previous step outputs and context. */
+  resolvedInputData: any;
+  /** Sources of input data (previous steps, context, etc.). */
+  inputSources: InputDataSource[];
+  /** Context variables available at this step. */
+  availableContext: Record<string, any>;
+  /** Expected input schema for validation. */
+  inputSchema?: ComponentSchema;
+}
+
+export interface InputDataSource {
+  sourceType: 'previousStep' | 'contextVariable' | 'triggerData' | 'constant';
+  /** ID of the source (step ID, context variable name, etc.). */
+  sourceId: string;
+  /** Path to the data within the source (e.g., 'outputs.result'). */
+  dataPath: string;
+  /** The actual value after transformation. */
+  transformedValue?: any;
+}
+
+export interface ExecutionResult {
+  executionId: string;
+  status: 'SUCCESS' | 'FAILURE' | 'SKIPPED' | 'RUNNING';
+  /** ISO timestamp of execution start. */
+  startTime: string;
+  /** ISO timestamp of execution completion. */
+  endTime?: string;
+  /** Total execution duration. */
+  durationMs?: number;
+  /** Full execution trace if available. */
+  trace?: FlowExecutionTrace;
+  /** Single step trace for step-level execution. */
+  stepTrace?: StepExecutionTrace;
+  /** Execution logs from all steps. */
+  logs: StepLog[];
+  /** Output from the last executed step. */
+  finalOutput?: any;
+  /** System triggers sent during execution. */
+  systemTriggers: SystemTrigger[];
+  /** Data transformations between steps. */
+  dataTransformations: DataTransformation[];
+  /** Error message if execution failed. */
+  error?: string;
+  /** Detailed error information. */
+  errorDetails?: ExecutionError;
+}
+
+export interface SystemTrigger {
+  triggerId: string;
+  triggerType: string;
+  /** Target system or service. */
+  targetSystem: string;
+  /** Trigger payload data. */
+  payload: any;
+  /** When the trigger was sent. */
+  timestamp: string;
+  /** Step that generated this trigger. */
+  sourceStepId: string;
+}
+
+export interface DataTransformation {
+  fromStepId: string;
+  toStepId: string;
+  /** Path in the source step output. */
+  inputPath: string;
+  /** Path in the target step input. */
+  outputPath: string;
+  /** Original value before transformation. */
+  originalValue?: any;
+  /** Value after transformation. */
+  transformedValue?: any;
+  /** Transformation rule or expression used. */
+  transformationRule?: string;
+}
+
+export interface ExecutionError {
+  /** Type of error (e.g., 'ValidationError', 'TimeoutError'). */
+  errorType: string;
+  message: string;
+  /** Step where the error occurred. */
+  stepId?: string;
+  /** Error stack trace. */
+  stackTrace?: string;
+  /** Additional error context. */
+  context?: any;
+  timestamp: string;
+}
+
+export interface RandomDataGenerationOptions {
+  dataType: 'happy_path' | 'fork_paths' | 'error_cases' | 'boundary_values' | 'performance_test';
+  /** Schema to generate data against. */
+  schema?: ComponentSchema;
+  /** Custom generation rules. */
+  customRules?: DataGenerationRule[];
+  /** Seed for reproducible random generation. */
+  seedValue?: string;
+}
+
+export interface DataGenerationRule {
+  /** JSON path to the field. */
+  fieldPath: string;
+  /** Type of generation (e.g., 'random', 'sequence', 'pattern'). */
+  generationType: string;
+  /** Parameters for the generation type. */
+  parameters?: any;
+  /** Constraints for generated values. */
+  constraints?: any;
 }
 
 export interface StepLog {
@@ -73,15 +211,6 @@ export interface StepLog {
   message: string;
   /** Additional log data */
   data?: any;
-}
-
-export interface ExecutionResult {
-  executionId: string;
-  status: ExecutionStatusEnum;
-  trace?: FlowExecutionTrace;
-  stepTrace?: StepExecutionTrace;
-  logs: StepLog[];
-  error?: string;
 }
 
 export interface FlowDataAnalysisActions {
@@ -486,4 +615,81 @@ export interface ConfigEditActionMsg {
   newConfigValue: any;
   /** Path to the configuration property being edited. */
   pathToConfig: StringOrNumber[];
+}
+
+export interface DataLineage {
+  targetStepId: string;
+  flowFqn: string;
+  /** Ordered list of steps from trigger to target. */
+  dataPath: DataLineageStep[];
+  /** All available input data at the target step. */
+  availableInputs: Record<string, any>;
+  /** Context variables available at the target step. */
+  contextVariables: Record<string, any>;
+  /** How inputs are mapped from previous steps. */
+  inputMappings: InputMapping[];
+}
+
+export interface DataLineageStep {
+  stepId: string;
+  /** Type of step (trigger, component, subflow). */
+  stepType: string;
+  /** Component FQN if this is a component step. */
+  componentFqn?: string;
+  /** Output schema of this step. */
+  outputSchema?: ComponentSchema;
+  /** Actual or example output data from this step. */
+  outputData?: any;
+  /** Order of execution in the flow. */
+  executionOrder: number;
+}
+
+export interface InputMapping {
+  /** Field name in the target step's input. */
+  targetInputField: string;
+  sourceType: 'previousStep' | 'contextVariable' | 'triggerData' | 'constant';
+  /** Source step ID if sourceType is 'previousStep'. */
+  sourceStepId?: string;
+  /** Field name in the source step's output. */
+  sourceOutputField?: string;
+  /** Context variable name if sourceType is 'contextVariable'. */
+  contextVariableName?: string;
+  /** Default value if no source is available. */
+  defaultValue?: any;
+  /** Transformation rule applied to the source data. */
+  transformationRule?: string;
+  /** Whether this input field is required by the component schema. */
+  isRequired: boolean;
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  /** List of validation errors if any. */
+  errors: ValidationError[];
+  /** List of validation warnings if any. */
+  warnings: ValidationWarning[];
+  /** Data after type coercion and normalization. */
+  normalizedData?: any;
+}
+
+export interface ValidationError {
+  /** JSON path to the field with error. */
+  fieldPath: string;
+  /** Error message. */
+  message: string;
+  /** Expected data type. */
+  expectedType?: string;
+  /** Actual value that caused the error. */
+  actualValue?: any;
+  /** Schema rule that was violated. */
+  schemaRule?: string;
+}
+
+export interface ValidationWarning {
+  /** JSON path to the field with warning. */
+  fieldPath: string;
+  /** Warning message. */
+  message: string;
+  /** Suggested fix for the warning. */
+  suggestion?: string;
 } 

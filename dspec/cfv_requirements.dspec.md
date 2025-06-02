@@ -545,3 +545,180 @@ requirement cfv_requirements.FR20_LegacyTabDeprecation {
         "renderInspectorAssertionResultsTab - functionality moved to Testing tab"
     ]
 }
+
+requirement cfv_requirements.FR21_ImprovedInspectorArchitecture {
+    title: "FR21: Improved Inspector Tab Architecture"
+    description: "Implement improved inspector tab architecture with Source as default, Properties with schema-driven forms, and unified Debug & Test functionality."
+    priority: "High"
+    status: "Accepted"
+    source: "User Requirements - Inspector improvements"
+    
+    sub_requirements: [
+        cfv_requirements.FR21_1_SourceTabAsDefault,
+        cfv_requirements.FR21_2_SyntaxHighlightedYAML,
+        cfv_requirements.FR21_3_SchemaBasedForms,
+        cfv_requirements.FR21_4_UnifiedDebugTest
+    ]
+}
+    requirement cfv_requirements.FR21_1_SourceTabAsDefault {
+        title: "FR21.1: Source Tab as Default Active Tab"
+        part_of: cfv_requirements.FR21_ImprovedInspectorArchitecture
+        description: "Source tab should be the default active tab when an element is selected, showing full module YAML context."
+        priority: "High"; status: "Accepted"; source: "Inspector tab improvements";
+        acceptance_criteria: [
+            "Source tab is automatically selected when an element is clicked",
+            "Source tab shows complete module YAML content",
+            "Selected element is highlighted within the full YAML context",
+            "Tab order is: Source, Properties, Debug & Test"
+        ]
+    }
+    requirement cfv_requirements.FR21_2_SyntaxHighlightedYAML {
+        title: "FR21.2: Syntax Highlighted YAML Display"
+        part_of: cfv_requirements.FR21_ImprovedInspectorArchitecture
+        description: "Source tab should use highlight.js for professional YAML syntax highlighting with line numbers and proper styling."
+        priority: "High"; status: "Accepted"; source: "Inspector tab improvements";
+        acceptance_criteria: [
+            "YAML content is syntax highlighted using highlight.js",
+            "Line numbers are displayed for navigation",
+            "Selected element section is visually highlighted",
+            "Professional code editor styling is applied",
+            "Copy and export functionality is available"
+        ]
+    }
+    requirement cfv_requirements.FR21_3_SchemaBasedForms {
+        title: "FR21.3: Schema-Based Form Generation for Properties"
+        part_of: cfv_requirements.FR21_ImprovedInspectorArchitecture
+        description: "Properties tab should generate forms dynamically from component schemas using @rjsf/core and validate with Zod."
+        priority: "High"; status: "Accepted"; source: "Inspector tab improvements";
+        acceptance_criteria: [
+            "Forms are generated from component schema configSchema",
+            "Form fields match JSON schema types (text, number, boolean, select, etc.)",
+            "Current configuration values are pre-populated",
+            "Validation is performed using Zod schemas",
+            "Inline validation errors are displayed",
+            "Live YAML preview shows configuration changes",
+            "Save button triggers requestSave action"
+        ]
+    }
+    requirement cfv_requirements.FR21_4_UnifiedDebugTest {
+        title: "FR21.4: Unified Debug & Test Tab"
+        part_of: cfv_requirements.FR21_ImprovedInspectorArchitecture
+        description: "Debug & Test tab should combine execution debugging and test case management in a unified interface."
+        priority: "Medium"; status: "Accepted"; source: "Inspector tab improvements";
+        acceptance_criteria: [
+            "Debug section shows execution traces and step details",
+            "Test section provides test case creation and execution",
+            "Visual timeline of step execution with performance metrics",
+            "JSON/YAML formatted data inspection",
+            "Test case templates for common scenarios",
+            "Assertion builder with JMESPath selectors",
+            "Test execution results with pass/fail status"
+        ]
+    }
+
+requirement cfv_requirements.FR22_EnhancedDebugTestInterface {
+    title: "FR22: Enhanced Debug & Test Interface with Input Forms and Execution"
+    description: "Provide comprehensive debug and test interface with input forms, random data generation, and execution from selected steps."
+    priority: "High"
+    status: "Accepted"
+    source: "User Requirements - Enhanced Debug & Test Interface"
+    
+    sub_requirements: [
+        cfv_requirements.FR22_1_InputFormInterface,
+        cfv_requirements.FR22_2_ContextualInputDisplay,
+        cfv_requirements.FR22_3_RandomDataGeneration,
+        cfv_requirements.FR22_4_ExecutionFromSelectedStep,
+        cfv_requirements.FR22_5_ComprehensiveResultsDisplay,
+        cfv_requirements.FR22_6_SchemaBasedInputResolution
+    ]
+}
+    requirement cfv_requirements.FR22_1_InputFormInterface {
+        title: "FR22.1: JSON Input Form Interface"
+        part_of: cfv_requirements.FR22_EnhancedDebugTestInterface
+        description: "Provide JSON textarea input forms for flow and component testing with validation and formatting."
+        priority: "High"; status: "Accepted"; source: "Enhanced Debug & Test Interface";
+        acceptance_criteria: [
+            "JSON textarea for input data entry with syntax highlighting",
+            "Input validation against component/trigger schemas",
+            "Auto-formatting and pretty-printing of JSON input",
+            "Error highlighting for invalid JSON or schema violations",
+            "Template generation for valid input structures"
+        ]
+    }
+    requirement cfv_requirements.FR22_2_ContextualInputDisplay {
+        title: "FR22.2: Schema-Based Contextual Input Display"
+        part_of: cfv_requirements.FR22_EnhancedDebugTestInterface
+        description: "Display schema-driven input forms based on selected element with proper data resolution from flow structure."
+        priority: "High"; status: "Accepted"; source: "Enhanced Debug & Test Interface";
+        acceptance_criteria: [
+            "When trigger is selected, show input form based on trigger schema with default values",
+            "When component step is selected, show input form based on component input schema",
+            "Resolve default input values from previous step outputs using component output schemas",
+            "Use component schema default values when previous step outputs are unavailable",
+            "Display input data lineage showing how data flows to selected component",
+            "Show context variables available at selected step with their resolved values",
+            "Provide input override capabilities for testing scenarios",
+            "Generate input structure from component input schema (inputSchema property)",
+            "Validate input data against component input schema before execution",
+            "Support nested object and array inputs based on JSON schema structure"
+        ]
+    }
+    requirement cfv_requirements.FR22_3_RandomDataGeneration {
+        title: "FR22.3: Random Test Data Generation"
+        part_of: cfv_requirements.FR22_EnhancedDebugTestInterface
+        description: "Generate random test data for different testing scenarios."
+        priority: "Medium"; status: "Accepted"; source: "Enhanced Debug & Test Interface";
+        acceptance_criteria: [
+            "Generate happy path test data based on component schemas",
+            "Generate fork path test data for conditional logic testing",
+            "Generate error case test data for failure scenario testing",
+            "Support custom data generation rules and constraints",
+            "Provide data generation templates for common patterns"
+        ]
+    }
+    requirement cfv_requirements.FR22_4_ExecutionFromSelectedStep {
+        title: "FR22.4: Execution from Selected Step or Trigger"
+        part_of: cfv_requirements.FR22_EnhancedDebugTestInterface
+        description: "Execute flow starting from selected step or trigger with provided input data."
+        priority: "High"; status: "Accepted"; source: "Enhanced Debug & Test Interface";
+        acceptance_criteria: [
+            "Run button to execute flow from selected trigger with input data",
+            "Run button to execute flow from selected step with resolved input",
+            "Support partial flow execution from any step in the flow",
+            "Handle step dependencies and context resolution for partial execution",
+            "Provide execution options (mock vs real components, timeout settings)"
+        ]
+    }
+    requirement cfv_requirements.FR22_5_ComprehensiveResultsDisplay {
+        title: "FR22.5: Comprehensive Execution Results Display"
+        part_of: cfv_requirements.FR22_EnhancedDebugTestInterface
+        description: "Display comprehensive execution results including logs, outputs, and system triggers."
+        priority: "High"; status: "Accepted"; source: "Enhanced Debug & Test Interface";
+        acceptance_criteria: [
+            "Show execution logs for each step with timestamps and levels",
+            "Display output data from the last executed node",
+            "Show any system triggers that the flow sends during execution",
+            "Provide execution timeline with step durations and status",
+            "Display error details and stack traces for failed executions",
+            "Show data transformations between steps",
+            "Export execution results for analysis and reporting"
+        ]
+    }
+    requirement cfv_requirements.FR22_6_SchemaBasedInputResolution {
+        title: "FR22.6: Schema-Based Input Data Resolution"
+        part_of: cfv_requirements.FR22_EnhancedDebugTestInterface
+        description: "Resolve input data for components based on their input schemas and flow data lineage."
+        priority: "High"; status: "Accepted"; source: "Enhanced Debug & Test Interface";
+        acceptance_criteria: [
+            "Use component inputSchema to determine expected input structure",
+            "Resolve input values from previous step outputSchema when available",
+            "Map output fields to input fields using inputs_map configuration",
+            "Use schema default values when no previous step data is available",
+            "Support complex data types (objects, arrays, primitives) from schemas",
+            "Handle optional vs required fields based on schema definitions",
+            "Provide data type conversion based on schema types",
+            "Show data flow path from trigger through all previous steps",
+            "Support context variable resolution in input data",
+            "Generate realistic test data based on schema constraints (min/max, patterns, enums)"
+        ]
+    }
