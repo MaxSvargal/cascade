@@ -793,201 +793,426 @@ code cfv_internal_code.TestCaseService_EvaluateAssertions {
     `
 }
 
-// --- Enhanced Graph Builder Service Logic ---
+// --- Flow Simulation Service Logic (New) ---
 
-code cfv_internal_code.GraphBuilderService_GenerateFlowDetailGraphData {
-    title: "Generate Flow Detail Graph Data with Enhanced Features"
-    part_of_design: cfv_designs.GraphBuilderService
+code cfv_internal_code.FlowSimulationService_SimulateFlowExecution {
+    title: "Simulate Complete Flow Execution Up to Target Step"
+    part_of_design: cfv_designs.TestCaseService
     language: "TypeScript"
     implementation_location: {
-        filepath: "services/graphBuilderService.ts",
-        entry_point_name: "generateFlowDetailGraphData",
+        filepath: "services/flowSimulationService.ts",
+        entry_point_name: "simulateFlowExecution",
         entry_point_type: "async_function"
     }
-    signature: "(params: GenerateFlowDetailParams) => Promise<GraphData>"
+    signature: "(flowFqn: string, targetStepId: string, moduleRegistry: cfv_models.IModuleRegistry, triggerData?: any) => Promise<cfv_models.FlowSimulationResult>"
     
     detailed_behavior: `
-        // Human Review Focus: Enhanced node/edge generation, trace integration, layout application.
-        // AI Agent Target: Generate comprehensive flow detail graph with all enhancements.
+        // Human Review Focus: Complete flow simulation with proper data propagation through all steps.
+        // AI Agent Target: Generate realistic flow execution simulation that propagates actual data.
 
-        DECLARE { flowFqn, mode, moduleRegistry, parseContextVarsFn, componentSchemas, traceData, useAutoLayout } = params
-        
-        DECLARE flowDefinition = CALL moduleRegistry.getFlowDefinition WITH flowFqn
-        IF flowDefinition IS_NULL THEN
-            RETURN_VALUE { nodes: [], edges: [] }
+        // 1. Get flow definition and validate inputs
+        DECLARE flowDef = CALL moduleRegistry.getFlowDefinition WITH flowFqn
+        IF flowDef IS_NULL THEN
+            THROW_ERROR "Flow not found: ${flowFqn}"
         END_IF
         
-        DECLARE nodes = []
-        DECLARE edges = []
+        // 2. Generate trigger data if not provided
+        IF triggerData IS_NULL THEN
+            IF flowDef.trigger IS_DEFINED THEN
+                ASSIGN triggerData = CALL generateTriggerData WITH flowDef.trigger, moduleRegistry
+            ELSE
+                ASSIGN triggerData = { timestamp: new Date().toISOString(), data: {} }
+            END_IF
+        END_IF
         
-        // 1. Generate trigger node
-        IF flowDefinition.trigger IS_DEFINED THEN
-            DECLARE triggerNodeData = BUILD_TRIGGER_NODE_DATA(flowDefinition.trigger, componentSchemas, parseContextVarsFn)
-            ADD_TO nodes {
-                id: "trigger",
-                type: "triggerNode",
-                position: { x: 0, y: 0 },
-                data: triggerNodeData
+        // 3. Initialize simulation state
+        DECLARE stepResults = {}
+        DECLARE contextState = CLONE(flowDef.context OR {})
+        DECLARE executionOrder = []
+        DECLARE errors = []
+        
+        // 4. Find target step and determine execution order
+        DECLARE targetStepIndex = -1
+        IF flowDef.steps IS_DEFINED THEN
+            ASSIGN targetStepIndex = FIND_INDEX flowDef.steps WHERE step.step_id EQUALS targetStepId
+            IF targetStepIndex IS_NEGATIVE THEN
+                THROW_ERROR "Target step not found: ${targetStepId}"
+            END_IF
+        END_IF
+        
+        // 5. Simulate trigger execution
+        DECLARE triggerResult = {
+            stepId: 'trigger',
+            componentFqn: flowDef.trigger?.type OR 'trigger',
+            inputData: triggerData,
+            outputData: triggerData,
+            contextChanges: {},
+            executionOrder: 0,
+            simulationSuccess: true
+        }
+        ASSIGN stepResults['trigger'] = triggerResult
+        ADD_TO executionOrder 'trigger'
+        
+        // 6. Simulate each step up to target step
+        IF flowDef.steps IS_DEFINED THEN
+            FOR stepIndex FROM 0 TO targetStepIndex
+                DECLARE step = flowDef.steps[stepIndex]
+                DECLARE stepResult = CALL simulateStepExecution WITH step, stepResults, contextState, moduleRegistry, flowFqn
+                
+                IF stepResult.simulationSuccess IS_FALSE THEN
+                    ADD_TO errors stepResult.error
+                    BREAK
+                END_IF
+                
+                ASSIGN stepResults[step.step_id] = stepResult
+                ADD_TO executionOrder step.step_id
+                
+                // Update context state with step changes
+                MERGE_OBJECTS contextState WITH stepResult.contextChanges
+            END_FOR
+        END_IF
+        
+        // 7. Resolve final input data for target step
+        DECLARE finalInputData = {}
+        IF targetStepId EQUALS 'trigger' THEN
+            ASSIGN finalInputData = triggerData
+        ELSE
+            DECLARE targetStep = flowDef.steps[targetStepIndex]
+            ASSIGN finalInputData = CALL resolveStepInputFromSimulation WITH targetStep, stepResults, contextState
+        END_IF
+        
+        RETURN_VALUE {
+            flowFqn,
+            targetStepId,
+            triggerData,
+            stepResults,
+            finalInputData,
+            executionOrder,
+            contextState,
+            errors
+        }
+    `
+    dependencies: [
+        "cfv_models.IModuleRegistry",
+        "cfv_models.FlowSimulationResult",
+        "cfv_models.StepSimulationResult"
+    ]
+}
+
+code cfv_internal_code.FlowSimulationService_SimulateStepExecution {
+    title: "Simulate Individual Step Execution"
+    part_of_design: cfv_designs.TestCaseService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/flowSimulationService.ts",
+        entry_point_name: "simulateStepExecution",
+        entry_point_type: "function"
+    }
+    signature: "(step: any, previousStepResults: Record<string, cfv_models.StepSimulationResult>, contextState: Record<string, any>, moduleRegistry: cfv_models.IModuleRegistry, flowFqn: string) => cfv_models.StepSimulationResult"
+    
+    detailed_behavior: `
+        // 1. Resolve component information
+        DECLARE moduleFqn = EXTRACT_MODULE_FQN_FROM flowFqn
+        DECLARE componentInfo = CALL moduleRegistry.resolveComponentTypeInfo WITH step.component_ref, moduleFqn
+        IF componentInfo IS_NULL THEN
+            RETURN_VALUE {
+                stepId: step.step_id,
+                componentFqn: step.component_ref,
+                inputData: {},
+                outputData: {},
+                contextChanges: {},
+                executionOrder: Object.keys(previousStepResults).length,
+                simulationSuccess: false,
+                error: "Component not found: ${step.component_ref}"
             }
         END_IF
         
-        // 2. Generate step nodes with enhanced data
-        IF flowDefinition.steps IS_DEFINED THEN
-            FOR_EACH step, index IN flowDefinition.steps
-                DECLARE stepTrace = FIND traceData?.steps WHERE t.stepId EQUALS step.step_id
-                DECLARE componentInfo = CALL moduleRegistry.resolveComponentTypeInfo WITH step.component_ref, flowFqn
-                
-                DECLARE stepNodeData = BUILD_STEP_NODE_DATA(step, componentInfo, stepTrace, componentSchemas, parseContextVarsFn)
-                
-                // Check if this is a SubFlowInvoker
-                IF componentInfo?.baseType EQUALS "StdLib:SubFlowInvoker" THEN
-                    DECLARE subFlowNodeData = BUILD_SUBFLOW_INVOKER_NODE_DATA(stepNodeData, step.config?.flow_fqn)
-                    ADD_TO nodes {
-                        id: step.step_id,
-                        type: "subFlowInvokerNode",
-                        position: { x: 0, y: (index + 1) * 100 },
-                        data: subFlowNodeData
-                    }
-                ELSE
-                    ADD_TO nodes {
-                        id: step.step_id,
-                        type: "stepNode",
-                        position: { x: 0, y: (index + 1) * 100 },
-                        data: stepNodeData
-                    }
+        // 2. Resolve input data from previous steps and context
+        DECLARE inputData = CALL resolveStepInputFromSimulation WITH step, previousStepResults, contextState
+        
+        // 3. Get component schema for output generation
+        DECLARE componentSchema = CALL moduleRegistry.getComponentSchema WITH componentInfo.baseType
+        
+        // 4. Simulate component execution based on type
+        DECLARE outputData = CALL simulateComponentExecution WITH componentInfo.baseType, inputData, step.config, componentSchema
+        
+        // 5. Determine context changes
+        DECLARE contextChanges = {}
+        IF step.outputs_map IS_DEFINED THEN
+            FOR_EACH outputMapping IN step.outputs_map
+                IF outputMapping.target.startsWith('context.') THEN
+                    DECLARE contextVar = outputMapping.target.replace('context.', '')
+                    DECLARE sourceValue = GET_NESTED_VALUE outputData, outputMapping.source
+                    ASSIGN contextChanges[contextVar] = sourceValue
                 END_IF
             END_FOR
         END_IF
         
-        // 3. Generate edges with enhanced data
-        CALL GENERATE_FLOW_EDGES(flowDefinition, traceData, edges)
-        
-        // 4. Apply automatic layout if requested
-        IF useAutoLayout AND nodes.length > 0 THEN
-            TRY
-                DECLARE layouted = AWAIT CALL layoutNodes WITH nodes, edges, layoutPresets.flowDetail
-                
-                // Apply trace enhancements if trace data is available
-                IF traceData IS_DEFINED THEN
-                    DECLARE enhancedNodes = CALL enhanceNodesWithTrace WITH layouted.nodes, traceData
-                    DECLARE enhancedEdges = CALL enhanceEdgesWithTrace WITH layouted.edges, traceData
-                    RETURN_VALUE { nodes: enhancedNodes, edges: enhancedEdges }
-                END_IF
-                
-                RETURN_VALUE layouted
-            CATCH_ERROR error
-                LOG "Auto-layout failed, using manual positions: ${error}"
-            END_TRY
-        END_IF
-        
-        // Apply trace enhancements even without layout if trace data is available
-        IF traceData IS_DEFINED THEN
-            DECLARE enhancedNodes = CALL enhanceNodesWithTrace WITH nodes, traceData
-            DECLARE enhancedEdges = CALL enhanceEdgesWithTrace WITH edges, traceData
-            RETURN_VALUE { nodes: enhancedNodes, edges: enhancedEdges }
-        END_IF
-        
-        RETURN_VALUE { nodes, edges }
+        RETURN_VALUE {
+            stepId: step.step_id,
+            componentFqn: componentInfo.baseType,
+            inputData,
+            outputData,
+            contextChanges,
+            executionOrder: Object.keys(previousStepResults).length,
+            simulationSuccess: true
+        }
     `
-    dependencies: [
-        "cfv_internal_code.LayoutService_AutomaticLayout",
-        "cfv_internal_code.TraceVisualizationService_EnhanceNodes",
-        "cfv_internal_code.TraceVisualizationService_EnhanceEdges",
-        "cfv_models.IModuleRegistry"
-    ]
 }
 
-code cfv_internal_code.GraphBuilderService_GenerateSystemOverviewGraphData {
-    title: "Generate System Overview Graph Data with Enhanced Features and Navigation"
-    part_of_design: cfv_designs.GraphBuilderService
+code cfv_internal_code.FlowSimulationService_ResolveStepInputFromSimulation {
+    title: "Resolve Step Input Data from Simulation Results"
+    part_of_design: cfv_designs.TestCaseService
     language: "TypeScript"
     implementation_location: {
-        filepath: "services/graphBuilderService.ts",
-        entry_point_name: "generateSystemOverviewGraphData",
-        entry_point_type: "async_function"
+        filepath: "services/flowSimulationService.ts",
+        entry_point_name: "resolveStepInputFromSimulation",
+        entry_point_type: "function"
     }
-    signature: "(moduleRegistry: cfv_models.IModuleRegistry, parseContextVarsFn: (value: string) => string[], useAutoLayout?: boolean, onFlowNodeClick?: (flowFqn: string) => void) => Promise<GraphData>"
+    signature: "(step: any, stepResults: Record<string, cfv_models.StepSimulationResult>, contextState: Record<string, any>) => any"
     
     detailed_behavior: `
-        DECLARE nodes = []
-        DECLARE edges = []
+        DECLARE resolvedInput = {}
         
-        DECLARE allModules = CALL moduleRegistry.getAllLoadedModules
-        
-        // Generate flow nodes and trigger nodes with navigation support
-        FOR_EACH module IN allModules
-            IF module.definitions?.flows IS_DEFINED THEN
-                FOR_EACH flow IN module.definitions.flows
-                    DECLARE flowFqn = "${module.fqn}.${flow.name}"
-                    
-                    // Add flow node with click handler for navigation
-                    DECLARE flowNodeData = BUILD_SYSTEM_FLOW_NODE_DATA(flow, flowFqn, parseContextVarsFn)
-                    // Add navigation metadata to node data
-                    ASSIGN flowNodeData.navigatable = true
-                    ASSIGN flowNodeData.targetFlowFqn = flowFqn
-                    ASSIGN flowNodeData.onFlowNodeClick = onFlowNodeClick
-                    
-                    ADD_TO nodes {
-                        id: flowFqn,
-                        type: "systemFlowNode",
-                        position: { x: 0, y: 0 },
-                        data: flowNodeData
-                    }
-                    
-                    // Add trigger node and edge if present
-                    IF flow.trigger IS_DEFINED THEN
-                        DECLARE triggerNodeId = "trigger-${flowFqn}"
-                        DECLARE triggerNodeData = BUILD_SYSTEM_TRIGGER_NODE_DATA(flow.trigger, triggerNodeId, parseContextVarsFn)
-                        
-                        ADD_TO nodes {
-                            id: triggerNodeId,
-                            type: "systemTriggerNode",
-                            position: { x: 0, y: 0 },
-                            data: triggerNodeData
-                        }
-                        
-                        ADD_TO edges {
-                            id: "${triggerNodeId}-${flowFqn}",
-                            source: triggerNodeId,
-                            target: flowFqn,
-                            type: "systemEdge",
-                            data: { type: "triggerLinkEdge" }
-                        }
-                    END_IF
-                    
-                    // Generate invocation edges for SubFlowInvoker steps
-                    IF flow.steps IS_DEFINED THEN
-                        FOR_EACH step IN flow.steps
-                            DECLARE componentInfo = CALL moduleRegistry.resolveComponentTypeInfo WITH step.component_ref, module.fqn
-                            IF componentInfo?.baseType EQUALS "StdLib:SubFlowInvoker" AND step.config?.flow_fqn IS_DEFINED THEN
-                                ADD_TO edges {
-                                    id: "${flowFqn}-${step.config.flow_fqn}",
-                                    source: flowFqn,
-                                    target: step.config.flow_fqn,
-                                    type: "systemEdge",
-                                    data: { type: "invocationEdge" }
-                                }
+        // Process inputs_map to resolve actual data from previous steps
+        IF step.inputs_map IS_DEFINED THEN
+            FOR_EACH inputField, sourceExpression IN step.inputs_map
+                DECLARE resolvedValue = null
+                
+                IF typeof sourceExpression IS 'string' THEN
+                    IF sourceExpression.startsWith('trigger.') THEN
+                        DECLARE triggerResult = stepResults['trigger']
+                        IF triggerResult IS_DEFINED THEN
+                            DECLARE dataPath = sourceExpression.replace('trigger.', '')
+                            ASSIGN resolvedValue = GET_NESTED_VALUE triggerResult.outputData, dataPath
+                        END_IF
+                    ELSE_IF sourceExpression.startsWith('steps.') THEN
+                        // Parse "steps.step-id.outputs.field" format - CRITICAL: must use actual step outputs
+                        DECLARE match = sourceExpression.match(/^steps\.([^.]+)\.outputs\.(.+)$/)
+                        IF match IS_DEFINED THEN
+                            DECLARE sourceStepId = match[1]
+                            DECLARE outputPath = match[2]
+                            DECLARE sourceStepResult = stepResults[sourceStepId]
+                            IF sourceStepResult IS_DEFINED AND sourceStepResult.outputData IS_DEFINED THEN
+                                // CRITICAL: Use actual outputData from previous step simulation
+                                ASSIGN resolvedValue = GET_NESTED_VALUE sourceStepResult.outputData, outputPath
+                            ELSE
+                                LOG "Warning: Source step ${sourceStepId} not found or has no output data"
+                                ASSIGN resolvedValue = null
                             END_IF
-                        END_FOR
+                        ELSE
+                            // Handle legacy format "steps.step-id.field" without explicit "outputs"
+                            DECLARE legacyMatch = sourceExpression.match(/^steps\.([^.]+)\.(.+)$/)
+                            IF legacyMatch IS_DEFINED THEN
+                                DECLARE sourceStepId = legacyMatch[1]
+                                DECLARE outputPath = legacyMatch[2]
+                                DECLARE sourceStepResult = stepResults[sourceStepId]
+                                IF sourceStepResult IS_DEFINED AND sourceStepResult.outputData IS_DEFINED THEN
+                                    ASSIGN resolvedValue = GET_NESTED_VALUE sourceStepResult.outputData, outputPath
+                                END_IF
+                            END_IF
+                        END_IF
+                    ELSE_IF sourceExpression.startsWith('context.') THEN
+                        DECLARE contextVar = sourceExpression.replace('context.', '')
+                        ASSIGN resolvedValue = contextState[contextVar]
+                    ELSE
+                        // Direct value or constant
+                        ASSIGN resolvedValue = sourceExpression
                     END_IF
-                END_FOR
-            END_IF
-        END_FOR
-        
-        // Apply automatic layout if requested with left-to-right orientation
-        IF useAutoLayout AND nodes.length > 0 THEN
-            TRY
-                DECLARE layouted = AWAIT CALL layoutNodes WITH nodes, edges, layoutPresets.systemOverview
-                RETURN_VALUE layouted
-            CATCH_ERROR error
-                LOG "Auto-layout failed, using manual positions: ${error}"
-            END_TRY
+                ELSE
+                    // Non-string values (constants, objects, etc.)
+                    ASSIGN resolvedValue = sourceExpression
+                END_IF
+                
+                // CRITICAL: Only assign if we have a resolved value, otherwise use null/undefined
+                ASSIGN resolvedInput[inputField] = resolvedValue
+            END_FOR
         END_IF
         
-        RETURN_VALUE { nodes, edges }
+        RETURN_VALUE resolvedInput
     `
-    dependencies: [
-        "cfv_internal_code.LayoutService_AutomaticLayout",
-        "cfv_models.IModuleRegistry"
-    ]
+}
+
+code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
+    title: "Simulate Component Execution Based on Type"
+    part_of_design: cfv_designs.TestCaseService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/flowSimulationService.ts",
+        entry_point_name: "simulateComponentExecution",
+        entry_point_type: "function"
+    }
+    signature: "(componentType: string, inputData: any, config: any, componentSchema?: cfv_models.ComponentSchema) => any"
+    
+    detailed_behavior: `
+        // Generate realistic output based on component type and schema - CRITICAL: outputs must be usable by next steps
+        SWITCH componentType
+            CASE 'StdLib:HttpCall'
+                RETURN_VALUE {
+                    status: 200,
+                    body: { success: true, data: inputData, timestamp: new Date().toISOString() },
+                    headers: { 'content-type': 'application/json' }
+                }
+            
+            CASE 'StdLib:DatabaseQuery'
+                RETURN_VALUE {
+                    rows: [{ id: 1, ...inputData, created_at: new Date().toISOString() }],
+                    rowCount: 1,
+                    success: true
+                }
+            
+            CASE 'StdLib:JsonSchemaValidator'
+                // CRITICAL: For validators, return validData that contains the validated input
+                IF inputData?.data IS_DEFINED THEN
+                    RETURN_VALUE {
+                        isValid: true,
+                        validData: inputData.data, // Pass through the validated data
+                        errors: [],
+                        validationResult: 'success'
+                    }
+                ELSE
+                    RETURN_VALUE {
+                        isValid: true,
+                        validData: inputData, // Pass through all input data
+                        errors: [],
+                        validationResult: 'success'
+                    }
+                END_IF
+            
+            CASE 'StdLib:DataTransform'
+            CASE 'StdLib:MapData'
+                // CRITICAL: For data transformation, apply actual transformations or pass through enhanced data
+                DECLARE transformed = CLONE inputData
+                IF config?.expression IS_DEFINED THEN
+                    // Simulate expression evaluation - in real implementation would use actual expression engine
+                    IF config.expression.includes('age') AND inputData?.userData?.dateOfBirth THEN
+                        ASSIGN transformed.age = 25 // Simulated age calculation
+                        ASSIGN transformed.isEligible = true
+                        ASSIGN transformed.jurisdiction = inputData.userData.country OR 'US'
+                    ELSE_IF config.expression.includes('canProceed') THEN
+                        ASSIGN transformed.canProceed = true
+                        ASSIGN transformed.complianceFlags = {
+                            jurisdiction: true,
+                            sanctions: true,
+                            age: true
+                        }
+                        ASSIGN transformed.riskLevel = 'low'
+                    ELSE
+                        // Generic transformation - enhance input data
+                        ASSIGN transformed.result = inputData
+                        ASSIGN transformed.processed = true
+                        ASSIGN transformed.timestamp = new Date().toISOString()
+                    END_IF
+                ELSE
+                    // No expression, pass through with enhancement
+                    ASSIGN transformed.result = inputData
+                    ASSIGN transformed.success = true
+                END_IF
+                RETURN_VALUE transformed
+            
+            CASE 'StdLib:Fork'
+                // CRITICAL: Fork components run multiple branches and return combined results
+                DECLARE forkResults = {}
+                IF config?.branches IS_DEFINED THEN
+                    FOR_EACH branch IN config.branches
+                        IF branch.name EQUALS 'jurisdiction-check' THEN
+                            ASSIGN forkResults['jurisdiction-check'] = { allowed: true, jurisdiction: inputData?.userData?.country OR 'US' }
+                        ELSE_IF branch.name EQUALS 'sanctions-check' THEN
+                            ASSIGN forkResults['sanctions-check'] = { flagged: false, clearanceLevel: 'green' }
+                        ELSE_IF branch.name EQUALS 'age-verification' THEN
+                            ASSIGN forkResults['age-verification'] = { 
+                                age: 25, 
+                                isEligible: true, 
+                                jurisdiction: inputData?.userData?.country OR 'US' 
+                            }
+                        ELSE_IF branch.name EQUALS 'welcome-email' THEN
+                            ASSIGN forkResults['welcome-email'] = { sent: true, messageId: 'email-' + Math.random().toString(36).substr(2, 9) }
+                        ELSE_IF branch.name EQUALS 'welcome-sms' THEN
+                            ASSIGN forkResults['welcome-sms'] = { sent: true, messageId: 'sms-' + Math.random().toString(36).substr(2, 9) }
+                        ELSE_IF branch.name EQUALS 'analytics-event' THEN
+                            ASSIGN forkResults['analytics-event'] = { tracked: true, eventId: 'event-' + Math.random().toString(36).substr(2, 9) }
+                        ELSE
+                            // Generic branch result
+                            ASSIGN forkResults[branch.name] = { success: true, data: inputData }
+                        END_IF
+                    END_FOR
+                END_IF
+                RETURN_VALUE forkResults
+            
+            CASE 'StdLib:FilterData'
+                // CRITICAL: Filter components evaluate conditions and return filtered data
+                DECLARE filterResult = {
+                    matched: true, // Simulate successful filter match
+                    filteredData: inputData,
+                    filterExpression: config?.expression OR 'default'
+                }
+                IF config?.matchOutput IS_DEFINED THEN
+                    ASSIGN filterResult[config.matchOutput] = true
+                END_IF
+                RETURN_VALUE filterResult
+            
+            CASE 'StdLib:Validation'
+                RETURN_VALUE {
+                    isValid: true,
+                    validatedData: inputData,
+                    errors: []
+                }
+            
+            CASE 'StdLib:SubFlowInvoker'
+                RETURN_VALUE {
+                    subFlowResult: { success: true, data: inputData },
+                    executionId: 'sub-exec-' + Math.random().toString(36).substr(2, 9),
+                    status: 'completed'
+                }
+            
+            // CRITICAL: Handle named components (custom components defined in modules)
+            CASE STARTS_WITH 'kyc.'
+                RETURN_VALUE {
+                    status: 'initiated',
+                    kycId: 'kyc-' + Math.random().toString(36).substr(2, 9),
+                    requiredDocuments: ['passport', 'proof_of_address'],
+                    estimatedCompletionTime: '24-48 hours'
+                }
+            
+            CASE STARTS_WITH 'responsible.'
+                RETURN_VALUE {
+                    limitsSet: true,
+                    dailyLimit: 1000,
+                    weeklyLimit: 5000,
+                    monthlyLimit: 20000,
+                    userId: inputData?.userId OR 'user-' + Math.random().toString(36).substr(2, 9)
+                }
+            
+            CASE STARTS_WITH 'bonuses.'
+                RETURN_VALUE {
+                    bonusProcessed: true,
+                    bonusAmount: 50,
+                    bonusType: 'referral',
+                    bonusId: 'bonus-' + Math.random().toString(36).substr(2, 9),
+                    expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                }
+            
+            CASE STARTS_WITH 'analytics.'
+                RETURN_VALUE {
+                    tracked: true,
+                    eventId: 'analytics-' + Math.random().toString(36).substr(2, 9),
+                    timestamp: new Date().toISOString(),
+                    userId: inputData?.userId OR inputData?.userData?.userId OR 'unknown'
+                }
+            
+            DEFAULT
+                // Use schema to generate output if available
+                IF componentSchema?.outputSchema IS_DEFINED THEN
+                    RETURN_VALUE CALL generateDataFromSchema WITH componentSchema.outputSchema, 'happy_path', true
+                ELSE
+                    // CRITICAL: Default fallback should preserve input data for next steps
+                    RETURN_VALUE { 
+                        result: inputData, 
+                        success: true, 
+                        timestamp: new Date().toISOString(),
+                        componentType: componentType
+                    }
+                END_IF
+        END_SWITCH
+    `
 }
