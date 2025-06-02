@@ -83,7 +83,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   const [edges, setEdges] = React.useState<Edge[]>([]);
   const [isGeneratingGraph, setIsGeneratingGraph] = React.useState(false);
   const [expandedModules, setExpandedModules] = React.useState<Set<string>>(new Set());
-  const [activeInspectorTab, setActiveInspectorTab] = React.useState<'properties' | 'source' | 'dataio' | 'debugging' | 'testing'>('properties');
+  const [activeInspectorTab, setActiveInspectorTab] = React.useState<'properties' | 'source' | 'debugtest'>('properties');
 
   // Add ref to prevent infinite loops in onViewChange
   const isCallingOnViewChange = useRef(false);
@@ -296,8 +296,95 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
           props.onModuleLoadError(selectedElement.moduleFqn || 'unknown', error as Error);
         }
       }
+    },
+    runDebugExecution: async (elementId: string, config: any) => {
+      // Placeholder implementation - would need actual debug execution logic
+      console.log('Debug execution requested for:', elementId, config);
+      
+      // Return a mock step trace for now
+      return {
+        stepId: elementId,
+        status: 'SUCCESS' as const,
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        durationMs: 100,
+        inputData: config,
+        outputData: { result: 'debug execution completed' }
+      };
     }
   }), [selectedElement, props.onSaveModule, props.onModuleLoadError, dslModuleRepresentations, currentFlowFqn]);
+
+  // Unified debug/test actions for the new DebugTest tab
+  const unifiedDebugTestActions = useMemo(() => ({
+    runDebugExecution: async (targetId: string, config?: any) => {
+      console.log('Debug execution requested for:', targetId, config);
+      
+      // Mock execution result
+      return {
+        executionId: `exec-${Date.now()}`,
+        status: 'SUCCESS' as const,
+        logs: [
+          {
+            stepId: targetId,
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            message: 'Debug execution started',
+            data: config
+          },
+          {
+            stepId: targetId,
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            message: 'Debug execution completed successfully'
+          }
+        ]
+      };
+    },
+    runTestCase: async (testCase: any) => {
+      if (props.onRunTestCase) {
+        const result = await props.onRunTestCase(testCase);
+        return result || {
+          testCase,
+          passed: false,
+          assertionResults: [],
+          error: 'Test execution failed'
+        };
+      }
+      return {
+        testCase,
+        passed: false,
+        assertionResults: [],
+        error: 'No test runner available'
+      };
+    },
+    generateTestCase: (flowFqn: string, testType: 'happy_path' | 'error_handling' | 'performance') => {
+      return {
+        flowFqn,
+        description: `${testType.replace('_', ' ')} test case for ${flowFqn}`,
+        triggerInput: {},
+        contextOverrides: {},
+        componentMocks: [],
+        assertions: []
+      };
+    },
+    collectStepLogs: async (executionId: string) => {
+      // Mock step logs
+      return [
+        {
+          stepId: 'step1',
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: 'Step execution started'
+        },
+        {
+          stepId: 'step1',
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: 'Step execution completed'
+        }
+      ];
+    }
+  }), [props.onRunTestCase]);
 
   return (
     <div className={props.className} style={props.style}>
@@ -496,7 +583,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
             borderBottom: '1px solid #e0e0e0',
             flexWrap: 'wrap'
           }}>
-            {['properties', 'source', 'dataio', 'debugging', 'testing'].map(tab => (
+            {['properties', 'source', 'debugtest'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveInspectorTab(tab as any)}
@@ -512,7 +599,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                   textTransform: 'capitalize'
                 }}
               >
-                {tab === 'dataio' ? 'Data I/O' : tab}
+                {tab === 'debugtest' ? 'Debug & Test' : tab}
               </button>
             ))}
           </div>
@@ -555,97 +642,30 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                     borderRadius: '4px',
                     padding: '12px'
                   }}>
-                    {props.renderInspectorSourceTab(selectedElement, moduleRegistry)}
+                    {props.renderInspectorSourceTab(currentFlowFqn, selectedElement, moduleRegistry)}
                   </div>
                 </div>
               )}
 
-              {/* Data I/O Tab */}
-              {activeInspectorTab === 'dataio' && props.renderInspectorDataIOTab && (
+              {/* Unified DebugTest Tab */}
+              {activeInspectorTab === 'debugtest' && props.renderInspectorDebugTestTab && (
                 <div style={{ marginBottom: '16px' }}>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Data I/O</h4>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Debug & Test</h4>
                   <div style={{ 
                     backgroundColor: 'white', 
                     border: '1px solid #e0e0e0',
                     borderRadius: '4px',
                     padding: '12px'
                   }}>
-                    {props.renderInspectorDataIOTab(null, moduleRegistry)}
+                    {props.renderInspectorDebugTestTab(currentFlowFqn, selectedElement, unifiedDebugTestActions, moduleRegistry)}
                   </div>
                 </div>
               )}
 
-              {/* Debugging Tab */}
-              {activeInspectorTab === 'debugging' && (
+              {/* Fallback DebugTest Tab - for backward compatibility */}
+              {activeInspectorTab === 'debugtest' && !props.renderInspectorDebugTestTab && (
                 <div style={{ marginBottom: '16px' }}>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Debugging</h4>
-                  <div style={{ 
-                    backgroundColor: 'white', 
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '4px',
-                    padding: '12px'
-                  }}>
-                    {props.traceData ? (
-                      <div>
-                        <div style={{ marginBottom: '12px' }}>
-                          <div style={{ fontWeight: '500', marginBottom: '4px' }}>Execution Trace</div>
-                          <div style={{ fontSize: '12px', color: '#666' }}>
-                            Status: <span style={{ color: props.traceData.status === 'COMPLETED' ? '#4CAF50' : '#F44336' }}>
-                              {props.traceData.status}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: '12px', color: '#666' }}>
-                            Duration: {props.traceData.durationMs}ms
-                          </div>
-                        </div>
-                        
-                        <div style={{ marginBottom: '12px' }}>
-                          <div style={{ fontWeight: '500', marginBottom: '4px' }}>Step Details</div>
-                          {props.traceData.steps.map(step => (
-                            <div key={step.stepId} style={{ 
-                              padding: '8px', 
-                              marginBottom: '4px',
-                              backgroundColor: step.status === 'SUCCESS' ? '#E8F5E8' : '#FFEBEE',
-                              border: '1px solid #e0e0e0',
-                              borderRadius: '4px',
-                              fontSize: '12px'
-                            }}>
-                              <div style={{ fontWeight: '500' }}>{step.stepId}</div>
-                              <div>Status: {step.status}</div>
-                              <div>Duration: {step.durationMs}ms</div>
-                              {step.inputData && (
-                                <details style={{ marginTop: '4px' }}>
-                                  <summary style={{ cursor: 'pointer' }}>Input Data</summary>
-                                  <pre style={{ fontSize: '10px', margin: '4px 0', overflow: 'auto' }}>
-                                    {JSON.stringify(step.inputData, null, 2)}
-                                  </pre>
-                                </details>
-                              )}
-                              {step.outputData && (
-                                <details style={{ marginTop: '4px' }}>
-                                  <summary style={{ cursor: 'pointer' }}>Output Data</summary>
-                                  <pre style={{ fontSize: '10px', margin: '4px 0', overflow: 'auto' }}>
-                                    {JSON.stringify(step.outputData, null, 2)}
-                                  </pre>
-                                </details>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-                        No trace data available. Run a flow to see debugging information.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Property Testing Tab */}
-              {activeInspectorTab === 'testing' && (
-                <div style={{ marginBottom: '16px' }}>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Property Testing</h4>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Debug & Test</h4>
                   <div style={{ 
                     backgroundColor: 'white', 
                     border: '1px solid #e0e0e0',

@@ -41,6 +41,53 @@ model cfv_models.InspectorPropertiesActions {
         required: true;
         description: "Call to request saving changes to a part of the selected element's configuration. Signature: (newConfigValue: any, pathToConfig: (string | number)[]) => void";
     }
+    runDebugExecution: cfv_models.Function {
+        required: true;
+        description: "Execute the current step/flow with current properties for debugging. Signature: (elementId: string, config: any) => Promise<StepExecutionTrace | FlowExecutionTrace>";
+    }
+}
+
+model cfv_models.FlowDataAnalysisActions {
+    description: "Actions available for flow-level data analysis and debugging."
+    analyzeDataFlow: cfv_models.Function {
+        required: true;
+        description: "Analyze data flow between steps. Signature: (sourceStepId: string, targetStepId: string) => DataFlowAnalysis";
+    }
+    compareExecutions: cfv_models.Function {
+        required: true;
+        description: "Compare data between multiple executions. Signature: (traceIds: string[]) => ExecutionComparison";
+    }
+}
+
+model cfv_models.DataFlowAnalysis {
+    description: "Analysis of data flow between steps in a flow execution."
+    sourceStepId: String { required: true; }
+    targetStepId: String { required: true; }
+    dataTransformed?: cfv_models.Any { description: "Data that flowed from source to target." }
+    transformationPath: List<String> { required: true; description: "Path of data transformation (e.g., ['steps.source.outputs.data', 'inputs.targetInput'])." }
+    dataSize?: Number { description: "Size of transferred data in bytes." }
+    transferTime?: String { description: "When the data transfer occurred." }
+}
+
+model cfv_models.ExecutionComparison {
+    description: "Comparison between multiple flow executions."
+    traceIds: List<String> { required: true; }
+    differences: List<cfv_models.ExecutionDifference> { required: true; }
+    performanceMetrics: cfv_models.PerformanceComparison { required: true; }
+}
+
+model cfv_models.ExecutionDifference {
+    description: "Difference found between executions."
+    stepId: String { required: true; }
+    field: String { required: true; description: "Field that differs (e.g., 'inputData', 'outputData', 'status')." }
+    values: List<cfv_models.Any> { required: true; description: "Values from each execution being compared." }
+}
+
+model cfv_models.PerformanceComparison {
+    description: "Performance metrics comparison between executions."
+    totalDurations: List<Number> { required: true; description: "Total execution durations for each trace." }
+    stepDurations: Record<String, List<Number>> { required: true; description: "Step durations by step ID for each trace." }
+    criticalPaths: List<List<String>> { required: true; description: "Critical path step IDs for each trace." }
 }
 
 model cfv_models.DslModuleRepresentation {
@@ -470,7 +517,7 @@ model cfv_models.FlowRunListItemActions {
 }
 
 model cfv_models.CascadeFlowVisualizerProps {
-    description: "Main props interface for the CascadeFlowVisualizer component. Enhanced with all implemented features."
+    description: "Main props interface for the CascadeFlowVisualizer component. Enhanced with consolidated inspector tabs."
     
     // Core Data & Loading
     initialModules?: List<cfv_models.DslModuleInput>
@@ -521,29 +568,31 @@ model cfv_models.CascadeFlowVisualizerProps {
     customReactFlowProOptions?: cfv_models.Any
     customNodeTypes: cfv_models.Any { required: true; description: "React Flow NodeTypes object." }
     customEdgeTypes: cfv_models.Any { required: true; description: "React Flow EdgeTypes object." }
+    
+    // Consolidated Inspector Tab Renderers (New Architecture)
     renderInspectorPropertiesTab?: cfv_models.Function {
-        description: "Signature: (selectedElement: SelectedElement | null, actions: InspectorPropertiesActions, moduleRegistry: IModuleRegistry) => React.ReactNode";
+        description: "Component-level configuration FORM editor with debug execution. Signature: (selectedElement: SelectedElement | null, actions: InspectorPropertiesActions, moduleRegistry: IModuleRegistry) => React.ReactNode";
     }
     renderInspectorSourceTab?: cfv_models.Function {
-        description: "Signature: (selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode";
+        description: "Full flow DSL source viewer with selected step highlighting. Signature: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode";
     }
-    renderInspectorDataIOTab?: cfv_models.Function {
-        description: "Signature: (selectedStepTrace: StepExecutionTrace | null, moduleRegistry: IModuleRegistry) => React.ReactNode";
+    renderInspectorDebugTestTab?: cfv_models.Function {
+        description: "Unified debugging and testing interface. Combines step logs, test execution, and results. Signature: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, actions: UnifiedDebugTestActions, moduleRegistry: IModuleRegistry) => React.ReactNode";
     }
-    renderInspectorContextVarsTab?: cfv_models.Function {
-        description: "Signature: (relevantContext: object | null, selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode";
-    }
-    renderInspectorTestDefinitionTab?: cfv_models.Function {
-        description: "Signature: (currentFlowFqn: string | null, actions: TestDefinitionActions, moduleRegistry: IModuleRegistry) => React.ReactNode";
-    }
-    renderInspectorAssertionResultsTab?: cfv_models.Function {
-        description: "Signature: (assertionResults: AssertionResult[] | null, moduleRegistry: IModuleRegistry) => React.ReactNode";
-    }
+    
+    // Removed/Deprecated Tab Renderers
+    // - renderInspectorDataFlowTab (merged into DebugTest)
+    // - renderInspectorTestingTab (merged into DebugTest) 
+    // - renderInspectorDataIOTab (removed - redundant with Properties)
+    // - renderInspectorContextVarsTab (merged into Properties)
+    // - renderInspectorTestDefinitionTab (merged into DebugTest)
+    // - renderInspectorAssertionResultsTab (merged into DebugTest)
+    
     renderFlowRunListItem?: cfv_models.Function {
         description: "Signature: (summary: HistoricalFlowInstanceSummary, actions: FlowRunListItemActions, isSelected: boolean) => React.ReactNode";
     }
 
-    // Layout (New)
+    // Layout
     elkOptions?: cfv_models.LayoutOptions { description: "ELK.js layout configuration options." }
 
     // Styling & Dimensions
@@ -589,4 +638,45 @@ model cfv_models.Any {
 model cfv_models.Function {
     description: "Represents a TypeScript function type."
     type: "Function"
+}
+
+// Updated Inspector Tab Models with Unified Architecture
+
+model cfv_models.UnifiedDebugTestActions {
+    description: "Actions available for the unified debug/test interface."
+    runDebugExecution: cfv_models.Function {
+        required: true;
+        description: "Execute flow/step for debugging with current configuration. Signature: (targetId: string, config?: any) => Promise<ExecutionResult>";
+    }
+    runTestCase: cfv_models.Function {
+        required: true;
+        description: "Execute a test case and return results. Signature: (testCase: FlowTestCase) => Promise<TestRunResult>";
+    }
+    generateTestCase: cfv_models.Function {
+        required: true;
+        description: "Generate default test case from current flow. Signature: (flowFqn: string, testType: 'happy_path' | 'error_handling' | 'performance') => FlowTestCase";
+    }
+    collectStepLogs: cfv_models.Function {
+        required: true;
+        description: "Collect execution logs from each step. Signature: (executionId: string) => Promise<StepLog[]>";
+    }
+}
+
+model cfv_models.StepLog {
+    description: "Log entry from step execution."
+    stepId: String { required: true; }
+    timestamp: String { required: true; }
+    level: String { required: true; description: "Log level: 'debug', 'info', 'warn', 'error'" }
+    message: String { required: true; }
+    data?: cfv_models.Any { description: "Additional log data" }
+}
+
+model cfv_models.ExecutionResult {
+    description: "Result of debug execution."
+    executionId: String { required: true; }
+    status: cfv_models.ExecutionStatusEnum { required: true; }
+    trace?: cfv_models.FlowExecutionTrace
+    stepTrace?: cfv_models.StepExecutionTrace
+    logs: List<cfv_models.StepLog> { required: true; }
+    error?: String
 }

@@ -186,6 +186,7 @@ const renderInspectorPropertiesTab = (
 };
 
 const renderInspectorSourceTab = (
+  currentFlowFqn: string | null,
   selectedElement: SelectedElement | null,
   moduleRegistry: IModuleRegistry
 ) => {
@@ -194,6 +195,12 @@ const renderInspectorSourceTab = (
   return (
     <div>
       <h4>Source</h4>
+      <div style={{ marginBottom: '8px' }}>
+        <strong>Flow:</strong> {currentFlowFqn || 'No flow selected'}
+      </div>
+      <div style={{ marginBottom: '8px' }}>
+        <strong>Selected Element:</strong> {selectedElement.id}
+      </div>
       <pre style={{ fontSize: '10px', backgroundColor: '#f5f5f5', padding: '8px', borderRadius: '4px' }}>
         {selectedElement.data?.dslObject ? 
           JSON.stringify(selectedElement.data.dslObject, null, 2) : 

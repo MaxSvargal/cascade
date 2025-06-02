@@ -437,3 +437,111 @@ requirement cfv_requirements.FR18_YAMLParsingRobustness {
     ]
     source: "User feedback - YAML parsing errors with escape sequences"
 }
+
+requirement cfv_requirements.FR19_ConsolidatedInspectorTabs {
+    title: "FR19: Consolidated Inspector Tab Architecture"
+    description: "Implement consolidated inspector tabs with better separation of concerns between component-level and flow-level functionality."
+    priority: "High"
+    status: "Accepted"
+    source: "Architectural improvement - consolidating overlapping inspector functionality"
+    
+    sub_requirements: [
+        cfv_requirements.FR19_1_PropertiesTabEnhancement,
+        cfv_requirements.FR19_2_SourceTabRedesign,
+        cfv_requirements.FR19_3_DataFlowTabConsolidation,
+        cfv_requirements.FR19_4_TestingTabConsolidation,
+        cfv_requirements.FR19_5_FieldNamingStandardization
+    ]
+}
+    requirement cfv_requirements.FR19_1_PropertiesTabEnhancement {
+        title: "FR19.1: Enhanced Properties Tab for Component Configuration"
+        part_of: cfv_requirements.FR19_ConsolidatedInspectorTabs
+        description: "Properties tab should be an interactive form-based editor with live YAML preview for component configurations."
+        priority: "High"; status: "Accepted"; source: "Inspector tab consolidation";
+        acceptance_criteria: [
+            "Interactive form generation from component schema",
+            "Live YAML preview of configuration changes",
+            "Context variable editing and validation",
+            "Inline validation with error display",
+            "Split-pane layout with form and preview"
+        ]
+    }
+    requirement cfv_requirements.FR19_2_SourceTabRedesign {
+        title: "FR19.2: Source Tab for Full Module Context"
+        part_of: cfv_requirements.FR19_ConsolidatedInspectorTabs
+        description: "Source tab should show full module YAML context with selected element highlighting, not just the selected element."
+        priority: "Medium"; status: "Accepted"; source: "Inspector tab consolidation";
+        acceptance_criteria: [
+            "Display complete module YAML content",
+            "Highlight selected element within full context",
+            "Provide YAML navigation (line numbers, search, folding)",
+            "Show diff view when in editing mode",
+            "Export and copy functionality for YAML sections"
+        ]
+    }
+    requirement cfv_requirements.FR19_3_DataFlowTabConsolidation {
+        title: "FR19.3: Data Flow Tab for Flow-Level Analysis"
+        part_of: cfv_requirements.FR19_ConsolidatedInspectorTabs
+        description: "Consolidate debugging and data I/O functionality into a comprehensive flow-level data analysis tab."
+        priority: "High"; status: "Accepted"; source: "Inspector tab consolidation";
+        acceptance_criteria: [
+            "Flow execution overview with status and performance metrics",
+            "Step execution timeline with duration analysis",
+            "Data lineage visualization between steps",
+            "Critical path analysis and bottleneck identification",
+            "Detailed error analysis with stack traces",
+            "Execution comparison tools for multiple traces",
+            "Step-by-step data inspection with formatting",
+            "Execution replay functionality"
+        ]
+    }
+    requirement cfv_requirements.FR19_4_TestingTabConsolidation {
+        title: "FR19.4: Testing Tab for Comprehensive Property Testing"
+        part_of: cfv_requirements.FR19_ConsolidatedInspectorTabs
+        description: "Consolidate test definition and assertion results into a comprehensive property testing interface."
+        priority: "High"; status: "Accepted"; source: "Inspector tab consolidation";
+        acceptance_criteria: [
+            "Test case creation and management interface",
+            "Test template generation for common scenarios",
+            "Assertion builder with JMESPath selectors",
+            "Component mock configuration",
+            "Test execution with detailed results",
+            "Test coverage analysis and reporting",
+            "Regression testing support",
+            "Test result comparison and history"
+        ]
+    }
+    requirement cfv_requirements.FR19_5_FieldNamingStandardization {
+        title: "FR19.5: Standardize Field Naming Conventions"
+        part_of: cfv_requirements.FR19_ConsolidatedInspectorTabs
+        description: "Standardize field naming conventions across all trace and execution data structures."
+        priority: "Medium"; status: "Accepted"; source: "Inspector tab consolidation";
+        acceptance_criteria: [
+            "Use consistent field names: inputData/outputData in StepExecutionTrace",
+            "Use consistent field names: executionInputData/executionOutputData in node data",
+            "Update all documentation to reflect standardized naming",
+            "Ensure backward compatibility during transition",
+            "Provide migration guide for field name changes"
+        ]
+    }
+
+requirement cfv_requirements.FR20_LegacyTabDeprecation {
+    title: "FR20: Legacy Inspector Tab Deprecation"
+    description: "Deprecate overlapping inspector tabs while maintaining backward compatibility."
+    priority: "Medium"
+    status: "Accepted"
+    source: "Architectural improvement - removing redundant functionality"
+    acceptance_criteria: [
+        "Mark legacy tabs as deprecated in documentation",
+        "Maintain backward compatibility for existing implementations",
+        "Provide clear migration path to new consolidated tabs",
+        "Add deprecation warnings in development mode",
+        "Plan removal timeline for legacy tabs"
+    ]
+    deprecated_tabs: [
+        "renderInspectorDataIOTab - replaced by renderInspectorDataFlowTab",
+        "renderInspectorContextVarsTab - functionality moved to Properties tab",
+        "renderInspectorTestDefinitionTab - replaced by renderInspectorTestingTab", 
+        "renderInspectorAssertionResultsTab - functionality moved to Testing tab"
+    ]
+}

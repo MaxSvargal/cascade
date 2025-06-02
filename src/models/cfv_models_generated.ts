@@ -50,6 +50,81 @@ export interface SelectedElement {
 export interface InspectorPropertiesActions {
   /** Call to request saving changes to a part of the selected element's configuration. Signature: (newConfigValue: any, pathToConfig: (string | number)[]) => void */
   requestSave: (newConfigValue: any, pathToConfig: (string | number)[]) => void;
+  /** Execute the current step/flow with current properties for debugging. Signature: (elementId: string, config: any) => Promise<StepExecutionTrace | FlowExecutionTrace> */
+  runDebugExecution: (elementId: string, config: any) => Promise<StepExecutionTrace | FlowExecutionTrace>;
+}
+
+export interface UnifiedDebugTestActions {
+  /** Execute flow/step for debugging with current configuration. Signature: (targetId: string, config?: any) => Promise<ExecutionResult> */
+  runDebugExecution: (targetId: string, config?: any) => Promise<ExecutionResult>;
+  /** Execute a test case and return results. Signature: (testCase: FlowTestCase) => Promise<TestRunResult> */
+  runTestCase: (testCase: FlowTestCase) => Promise<TestRunResult>;
+  /** Generate default test case from current flow. Signature: (flowFqn: string, testType: 'happy_path' | 'error_handling' | 'performance') => FlowTestCase */
+  generateTestCase: (flowFqn: string, testType: 'happy_path' | 'error_handling' | 'performance') => FlowTestCase;
+  /** Collect execution logs from each step. Signature: (executionId: string) => Promise<StepLog[]> */
+  collectStepLogs: (executionId: string) => Promise<StepLog[]>;
+}
+
+export interface StepLog {
+  stepId: string;
+  timestamp: string;
+  /** Log level: 'debug', 'info', 'warn', 'error' */
+  level: string;
+  message: string;
+  /** Additional log data */
+  data?: any;
+}
+
+export interface ExecutionResult {
+  executionId: string;
+  status: ExecutionStatusEnum;
+  trace?: FlowExecutionTrace;
+  stepTrace?: StepExecutionTrace;
+  logs: StepLog[];
+  error?: string;
+}
+
+export interface FlowDataAnalysisActions {
+  /** Analyze data flow between steps. Signature: (sourceStepId: string, targetStepId: string) => DataFlowAnalysis */
+  analyzeDataFlow: (sourceStepId: string, targetStepId: string) => DataFlowAnalysis;
+  /** Compare data between multiple executions. Signature: (traceIds: string[]) => ExecutionComparison */
+  compareExecutions: (traceIds: string[]) => ExecutionComparison;
+}
+
+export interface DataFlowAnalysis {
+  sourceStepId: string;
+  targetStepId: string;
+  /** Data that flowed from source to target. */
+  dataTransformed?: any;
+  /** Path of data transformation (e.g., ['steps.source.outputs.data', 'inputs.targetInput']). */
+  transformationPath: string[];
+  /** Size of transferred data in bytes. */
+  dataSize?: number;
+  /** When the data transfer occurred. */
+  transferTime?: string;
+}
+
+export interface ExecutionComparison {
+  traceIds: string[];
+  differences: ExecutionDifference[];
+  performanceMetrics: PerformanceComparison;
+}
+
+export interface ExecutionDifference {
+  stepId: string;
+  /** Field that differs (e.g., 'inputData', 'outputData', 'status'). */
+  field: string;
+  /** Values from each execution being compared. */
+  values: any[];
+}
+
+export interface PerformanceComparison {
+  /** Total execution durations for each trace. */
+  totalDurations: number[];
+  /** Step durations by step ID for each trace. */
+  stepDurations: Record<string, number[]>;
+  /** Critical path step IDs for each trace. */
+  criticalPaths: string[][];
 }
 
 export type DslModuleStatusEnum = 'unloaded' | 'loading' | 'loaded' | 'error';
@@ -351,18 +426,23 @@ export interface CascadeFlowVisualizerProps {
   customNodeTypes: any;
   /** React Flow EdgeTypes object. */
   customEdgeTypes: any;
-  /** Signature: (selectedElement: SelectedElement | null, actions: InspectorPropertiesActions, moduleRegistry: IModuleRegistry) => React.ReactNode */
+  
+  // Consolidated Inspector Tab Renderers (New Architecture)
+  /** Component-level configuration FORM editor with debug execution. Signature: (selectedElement: SelectedElement | null, actions: InspectorPropertiesActions, moduleRegistry: IModuleRegistry) => React.ReactNode */
   renderInspectorPropertiesTab?: (selectedElement: SelectedElement | null, actions: InspectorPropertiesActions, moduleRegistry: IModuleRegistry) => React.ReactNode;
-  /** Signature: (selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode */
-  renderInspectorSourceTab?: (selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode;
-  /** Signature: (selectedStepTrace: StepExecutionTrace | null, moduleRegistry: IModuleRegistry) => React.ReactNode */
-  renderInspectorDataIOTab?: (selectedStepTrace: StepExecutionTrace | null, moduleRegistry: IModuleRegistry) => React.ReactNode;
-  /** Signature: (relevantContext: object | null, selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode */
-  renderInspectorContextVarsTab?: (relevantContext: object | null, selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode;
-  /** Signature: (currentFlowFqn: string | null, actions: TestDefinitionActions, moduleRegistry: IModuleRegistry) => React.ReactNode */
-  renderInspectorTestDefinitionTab?: (currentFlowFqn: string | null, actions: TestDefinitionActions, moduleRegistry: IModuleRegistry) => React.ReactNode;
-  /** Signature: (assertionResults: AssertionResult[] | null, moduleRegistry: IModuleRegistry) => React.ReactNode */
-  renderInspectorAssertionResultsTab?: (assertionResults: AssertionResult[] | null, moduleRegistry: IModuleRegistry) => React.ReactNode;
+  /** Full flow DSL source viewer with selected step highlighting. Signature: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode */
+  renderInspectorSourceTab?: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode;
+  /** Unified debugging and testing interface. Combines step logs, test execution, and results. Signature: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, actions: UnifiedDebugTestActions, moduleRegistry: IModuleRegistry) => React.ReactNode */
+  renderInspectorDebugTestTab?: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, actions: UnifiedDebugTestActions, moduleRegistry: IModuleRegistry) => React.ReactNode;
+  
+  // Removed/Deprecated Tab Renderers
+  // - renderInspectorDataFlowTab (merged into DebugTest)
+  // - renderInspectorTestingTab (merged into DebugTest) 
+  // - renderInspectorDataIOTab (removed - redundant with Properties)
+  // - renderInspectorContextVarsTab (merged into Properties)
+  // - renderInspectorTestDefinitionTab (merged into DebugTest)
+  // - renderInspectorAssertionResultsTab (merged into DebugTest)
+  
   /** Signature: (summary: HistoricalFlowInstanceSummary, actions: FlowRunListItemActions, isSelected: boolean) => React.ReactNode */
   renderFlowRunListItem?: (summary: HistoricalFlowInstanceSummary, actions: FlowRunListItemActions, isSelected: boolean) => React.ReactNode;
 

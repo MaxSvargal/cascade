@@ -72,9 +72,9 @@ directive cfv_consumer_directives.CustomEdgeRendering {
 }
 
 directive cfv_consumer_directives.InspectorTabImplementation {
-    title: "Directive for Implementing Inspector Tab Renderers"
+    title: "Directive for Implementing Consolidated Inspector Tab Renderers"
     target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer"
-    description: "Guidance for `renderInspectorPropertiesTab`, `renderInspectorDataIOTab`, etc."
+    description: "Guidance for implementing the consolidated inspector tab architecture with better separation of concerns."
     default_language: "TypeScriptReact"
 
     common_props_usage: {
@@ -83,21 +83,73 @@ directive cfv_consumer_directives.InspectorTabImplementation {
     }
 
     properties_tab_guidance: {
-        // For renderInspectorPropertiesTab
+        // For renderInspectorPropertiesTab - Component-level configuration editor
+        purpose: "Interactive form-based editor for component configurations, with live YAML preview.",
         actions_usage: "Use `actions: cfv_models.InspectorPropertiesActions` to trigger saves. Call `actions.requestSave(newConfigValue, pathToConfig)`.",
         form_generation: "Consider using libraries like `@rjsf/core` with `selectedElement.data.componentSchema.configSchema` to dynamically generate forms for `config` blocks.",
-        state_management: "Manage local form state within your tab component. Only call `requestSave` on explicit user action (e.g., Save button click)."
+        state_management: "Manage local form state within your tab component. Only call `requestSave` on explicit user action (e.g., Save button click).",
+        yaml_preview: "Show live YAML preview of changes before saving. Use split-pane layout with form on left, YAML preview on right.",
+        context_variables: "Display and allow editing of context variable usages found in `selectedElement.data.contextVarUsages`.",
+        validation: "Validate form inputs against `componentSchema.configSchema` and show validation errors inline."
     }
 
-    data_io_tab_guidance: {
-        // For renderInspectorDataIOTab
-        data_prop: "Receives `selectedStepTrace: cfv_models.StepExecutionTrace | null`. Display `inputData` and `outputData` (or `errorData`) from this trace."
+    source_tab_guidance: {
+        // For renderInspectorSourceTab - Full module YAML source viewer
+        purpose: "Read-only viewer showing full module YAML context, not just selected element.",
+        content_scope: "Display the complete module YAML that contains the selected element, with the selected element highlighted.",
+        highlighting: "Highlight the selected element's section within the full module YAML for context.",
+        navigation: "Provide navigation within the YAML (line numbers, search, folding) for large modules.",
+        diff_view: "When in editing mode, show diff between original and modified YAML.",
+        export_options: "Provide options to copy YAML sections or export the full module."
     }
 
-    test_definition_tab_guidance: {
-        // For renderInspectorTestDefinitionTab
-        actions_usage: "Use `actions.runTestCase(testCase: cfv_models.FlowTestCase)` to trigger test execution via `props.onRunTestCase`."
-        state_management: "Manage the draft `FlowTestCase` object state locally within your tab component."
+    data_flow_tab_guidance: {
+        // For renderInspectorDataFlowTab - Flow-level data analysis and debugging
+        purpose: "Flow-level data analysis, execution debugging, and performance monitoring.",
+        data_props: "Receives `currentFlowFqn: string | null`, `traceData: FlowExecutionTrace | null`, and `actions: FlowDataAnalysisActions`.",
+        execution_overview: "Show flow execution summary: status, duration, step count, success/failure rates.",
+        step_timeline: "Display step execution timeline with start/end times and durations.",
+        data_lineage: "Visualize data flow between steps, showing how data transforms through the flow.",
+        performance_analysis: "Show critical path analysis, bottlenecks, and performance metrics.",
+        error_analysis: "Display detailed error information for failed executions with stack traces.",
+        comparison_tools: "Use `actions.compareExecutions` to compare multiple trace executions.",
+        data_inspection: "Show input/output data for each step with JSON/YAML formatting and search.",
+        execution_replay: "Provide step-by-step execution replay with data state at each step."
+    }
+
+    testing_tab_guidance: {
+        // For renderInspectorTestingTab - Property testing interface
+        purpose: "Comprehensive property testing interface for flow validation and quality assurance.",
+        test_case_management: "Create, edit, and manage test cases for the current flow.",
+        template_generation: "Generate test case templates for common scenarios (happy path, error handling, performance).",
+        test_execution: "Use `actions.runTestCase(testCase: cfv_models.FlowTestCase)` to trigger test execution via `props.onRunTestCase`.",
+        assertion_builder: "Provide UI for building test assertions with JMESPath selectors and comparison operators.",
+        mock_configuration: "Allow configuration of component mocks for isolated testing.",
+        test_results: "Display test execution results with pass/fail status and detailed assertion outcomes.",
+        coverage_analysis: "Show test coverage metrics for flow paths and component configurations.",
+        regression_testing: "Support regression testing by comparing results across test runs."
+    }
+
+    migration_guidance: {
+        // For migrating from old tab structure
+        deprecated_tabs: "The following tabs are deprecated: DataIOTab, ContextVarsTab, TestDefinitionTab, AssertionResultsTab.",
+        migration_path: {
+            DataIOTab: "Functionality moved to DataFlowTab with enhanced flow-level analysis.",
+            ContextVarsTab: "Context variables now shown in PropertiesTab alongside component configuration.",
+            TestDefinitionTab: "Functionality consolidated into TestingTab with enhanced test management.",
+            AssertionResultsTab: "Assertion results now shown in TestingTab alongside test definitions."
+        },
+        backward_compatibility: "Legacy tab renderers are still supported but deprecated. Plan migration to new consolidated tabs.",
+        feature_parity: "New tabs provide all functionality of deprecated tabs plus enhanced features."
+    }
+
+    ui_layout_recommendations: {
+        responsive_design: "Design tabs to work well in the 300px right sidebar width.",
+        progressive_disclosure: "Use collapsible sections and progressive disclosure for complex information.",
+        consistent_styling: "Maintain consistent styling with the main visualizer component.",
+        keyboard_navigation: "Support keyboard navigation for accessibility.",
+        loading_states: "Show appropriate loading states for async operations (save, test execution).",
+        error_handling: "Display clear error messages and recovery options for failed operations."
     }
 }
 
