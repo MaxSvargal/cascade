@@ -506,21 +506,21 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
       if (!actualSchema) {
         return {
           isValid: true,
-          errors,
-          warnings,
+          errors: [],
+          warnings: [],
           normalizedData: inputData
         };
       }
       
-      // Basic validation - in a real implementation, use ajv or similar
-      if (actualSchema.type === 'object' && actualSchema.properties) {
-        Object.entries(actualSchema.properties).forEach(([key, propSchema]: [string, any]) => {
-          if (actualSchema.required?.includes(key) && !(key in inputData)) {
+      // Basic validation logic
+      if (actualSchema.required) {
+        actualSchema.required.forEach((field: string) => {
+          if (!inputData || inputData[field] === undefined || inputData[field] === null) {
             errors.push({
-              fieldPath: key,
-              message: `Required field '${key}' is missing`,
-              expectedType: propSchema.type,
-              actualValue: undefined,
+              fieldPath: field,
+              message: `Required field '${field}' is missing`,
+              expectedType: actualSchema.properties?.[field]?.type || 'any',
+              actualValue: inputData?.[field],
               schemaRule: 'required'
             });
           }
@@ -533,6 +533,390 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         warnings,
         normalizedData: inputData
       };
+    },
+    
+    resolveTriggerInputData: (triggerConfig: any, triggerSchema?: any, dataType: 'happy_path' | 'fork_paths' | 'error_cases' = 'happy_path') => {
+      console.log('Resolving trigger input data:', triggerConfig, triggerSchema, dataType);
+      
+      // If we have a trigger schema with inputSchema, use it to generate data
+      if (triggerSchema?.inputSchema) {
+        const generatedData = generateDataFromSchema(triggerSchema.inputSchema, dataType, true);
+        
+        // For HttpTrigger, enhance the generated data with realistic values
+        if (triggerConfig?.type === 'StdLib:HttpTrigger') {
+          // Add method and path from config if not in schema
+          if (!generatedData.method) {
+            generatedData.method = triggerConfig.config?.method || 'POST';
+          }
+          if (!generatedData.path) {
+            generatedData.path = triggerConfig.config?.path || '/api/endpoint';
+          }
+          
+          // Enhance headers with realistic values
+          if (generatedData.headers && typeof generatedData.headers === 'object') {
+            generatedData.headers = {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+              'User-Agent': 'CasinoApp/1.0',
+              'X-Request-ID': `req-${Date.now()}`,
+              ...generatedData.headers
+            };
+          }
+          
+          // Enhance body with realistic casino platform data
+          if (generatedData.body && typeof generatedData.body === 'object') {
+            if (dataType === 'happy_path') {
+              generatedData.body = {
+                userId: 'user_' + Math.random().toString(36).substr(2, 9),
+                email: 'user@example.com',
+                firstName: 'John',
+                lastName: 'Doe',
+                dateOfBirth: '1990-01-15',
+                country: 'US',
+                currency: 'USD',
+                referralCode: 'REF123',
+                acceptedTerms: true,
+                timestamp: new Date().toISOString(),
+                ...generatedData.body
+              };
+            } else if (dataType === 'fork_paths') {
+              generatedData.body = {
+                userId: 'user_' + Math.random().toString(36).substr(2, 9),
+                email: 'vip@example.com',
+                firstName: 'Jane',
+                lastName: 'Smith',
+                dateOfBirth: '1985-06-20',
+                country: 'CA',
+                currency: 'CAD',
+                referralCode: 'VIP456',
+                acceptedTerms: true,
+                isVip: true,
+                specialOfferCode: 'WELCOME100',
+                timestamp: new Date().toISOString(),
+                ...generatedData.body
+              };
+            } else if (dataType === 'error_cases') {
+              generatedData.body = {
+                userId: null, // Missing required field
+                email: 'invalid-email', // Invalid email format
+                firstName: '',
+                lastName: '',
+                dateOfBirth: '2010-01-01', // Underage
+                country: 'XX', // Invalid country
+                currency: 'INVALID',
+                acceptedTerms: false, // Not accepted
+                timestamp: 'invalid-date',
+                ...generatedData.body
+              };
+            }
+          }
+        }
+        
+        return generatedData;
+      }
+      
+      // Fallback to hardcoded generation if no schema available
+      if (triggerConfig?.type === 'StdLib:HttpTrigger') {
+        const baseData = {
+          method: triggerConfig.config?.method || 'POST',
+          path: triggerConfig.config?.path || '/api/endpoint',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+            'User-Agent': 'CasinoApp/1.0',
+            'X-Request-ID': `req-${Date.now()}`
+          }
+        };
+
+        // Generate body based on data type and trigger path
+        let body = {};
+        const path = triggerConfig.config?.path || '';
+        
+        if (path.includes('/users/onboard') || path.includes('/onboard')) {
+          // User onboarding data
+          if (dataType === 'happy_path') {
+            body = {
+              userId: 'user_' + Math.random().toString(36).substr(2, 9),
+              email: 'user@example.com',
+              firstName: 'John',
+              lastName: 'Doe',
+              dateOfBirth: '1990-01-15',
+              country: 'US',
+              currency: 'USD',
+              referralCode: 'REF123',
+              acceptedTerms: true,
+              timestamp: new Date().toISOString()
+            };
+          } else if (dataType === 'fork_paths') {
+            body = {
+              userId: 'user_' + Math.random().toString(36).substr(2, 9),
+              email: 'vip@example.com',
+              firstName: 'Jane',
+              lastName: 'Smith',
+              dateOfBirth: '1985-06-20',
+              country: 'CA',
+              currency: 'CAD',
+              referralCode: 'VIP456',
+              acceptedTerms: true,
+              isVip: true,
+              specialOfferCode: 'WELCOME100',
+              timestamp: new Date().toISOString()
+            };
+          } else if (dataType === 'error_cases') {
+            body = {
+              userId: null,
+              email: 'invalid-email',
+              firstName: '',
+              lastName: '',
+              dateOfBirth: '2010-01-01', // Underage
+              country: 'XX',
+              currency: 'INVALID',
+              acceptedTerms: false,
+              timestamp: 'invalid-date'
+            };
+          }
+        } else if (path.includes('/bet') || path.includes('/place-bet')) {
+          // Betting data
+          if (dataType === 'happy_path') {
+            body = {
+              userId: 'user123',
+              gameId: 'slot_001',
+              betAmount: 10.00,
+              currency: 'USD',
+              gameType: 'slots',
+              sessionId: 'session_' + Date.now(),
+              timestamp: new Date().toISOString()
+            };
+          } else if (dataType === 'fork_paths') {
+            body = {
+              userId: 'user456',
+              gameId: 'blackjack_001',
+              betAmount: 100.00,
+              currency: 'USD',
+              gameType: 'table',
+              sessionId: 'session_' + Date.now(),
+              isHighRoller: true,
+              timestamp: new Date().toISOString()
+            };
+          } else {
+            body = {
+              userId: null,
+              gameId: '',
+              betAmount: -10, // Invalid amount
+              currency: 'INVALID',
+              gameType: 'unknown',
+              timestamp: 'invalid'
+            };
+          }
+        } else {
+          // Generic data
+          if (dataType === 'happy_path') {
+            body = {
+              userId: 'user123',
+              requestId: 'req456',
+              timestamp: new Date().toISOString(),
+              data: { status: 'success' }
+            };
+          } else if (dataType === 'fork_paths') {
+            body = {
+              userId: 'user789',
+              requestId: 'req999',
+              specialFlag: true,
+              timestamp: new Date().toISOString(),
+              data: { status: 'pending', priority: 'high' }
+            };
+          } else if (dataType === 'error_cases') {
+            body = {
+              userId: null,
+              invalidField: null,
+              timestamp: 'invalid-date'
+            };
+          }
+        }
+
+        return { ...baseData, body };
+      } else if (triggerConfig?.type === 'StdLib:EventTrigger') {
+        const eventType = triggerConfig.config?.eventType || 'generic-event';
+        
+        if (dataType === 'happy_path') {
+          return {
+            eventType,
+            payload: {
+              id: 'event123',
+              timestamp: new Date().toISOString(),
+              data: { status: 'success' }
+            }
+          };
+        } else if (dataType === 'fork_paths') {
+          return {
+            eventType,
+            payload: {
+              id: 'event456',
+              timestamp: new Date().toISOString(),
+              data: { status: 'pending', priority: 'high' }
+            }
+          };
+        } else {
+          return {
+            eventType,
+            payload: {
+              id: null,
+              timestamp: 'invalid'
+            }
+          };
+        }
+      }
+
+      // Fallback for unknown trigger types
+      return {
+        triggerType: triggerConfig?.type || 'unknown',
+        data: dataType === 'happy_path' ? { success: true } : { error: 'invalid' }
+      };
+    },
+
+    propagateDataFlow: async (flowFqn: string, triggerData: any) => {
+      console.log('Propagating data flow for:', flowFqn, triggerData);
+      
+      const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
+      if (!flowDef) {
+        throw new Error(`Flow not found: ${flowFqn}`);
+      }
+
+      const stepResults: Record<string, any> = {};
+      stepResults['trigger'] = triggerData;
+
+      // Process steps in execution order
+      if (flowDef.steps) {
+        for (const step of flowDef.steps) {
+          try {
+            const resolvedInput = await unifiedDebugTestActions.resolveStepInputData(step.step_id, flowFqn);
+            stepResults[step.step_id] = {
+              input: resolvedInput,
+              output: generateDataFromSchema({ type: 'object', properties: { result: { type: 'string' } } }, 'happy_path', true)
+            };
+          } catch (error) {
+            console.warn(`Failed to resolve input for step ${step.step_id}:`, error);
+            stepResults[step.step_id] = {
+              input: {},
+              output: {},
+              error: error instanceof Error ? error.message : 'Unknown error'
+            };
+          }
+        }
+      }
+
+      return stepResults;
+    },
+
+    analyzeInputMapping: (stepConfig: any, availableData: Record<string, any>) => {
+      console.log('Analyzing input mapping:', stepConfig, availableData);
+      
+      const inputMappings: any[] = [];
+      
+      if (stepConfig?.inputs_map) {
+        Object.entries(stepConfig.inputs_map).forEach(([targetField, sourceExpression]) => {
+          // Parse source expression (e.g., "trigger.body", "steps.previous-step.outputs.result")
+          const sourceExpr = sourceExpression as string;
+          
+          let sourceType: 'previousStep' | 'contextVariable' | 'triggerData' | 'constant' = 'constant';
+          let sourceStepId: string | undefined;
+          let sourceOutputField: string | undefined;
+          
+          if (sourceExpr.startsWith('trigger.')) {
+            sourceType = 'triggerData';
+            sourceOutputField = sourceExpr.replace('trigger.', '');
+          } else if (sourceExpr.startsWith('steps.')) {
+            sourceType = 'previousStep';
+            const parts = sourceExpr.split('.');
+            if (parts.length >= 2) {
+              sourceStepId = parts[1];
+              sourceOutputField = parts.slice(2).join('.');
+            }
+          } else if (sourceExpr.startsWith('context.')) {
+            sourceType = 'contextVariable';
+            sourceOutputField = sourceExpr.replace('context.', '');
+          }
+          
+          inputMappings.push({
+            targetInputField: targetField,
+            sourceType,
+            sourceStepId,
+            sourceOutputField,
+            transformationRule: sourceExpr,
+            isRequired: true // Default to required
+          });
+        });
+      }
+      
+      return inputMappings;
+    },
+
+    simulateDataFlow: async (flowFqn: string, triggerData: any, targetStepId?: string) => {
+      console.log('Simulating data flow:', flowFqn, triggerData, targetStepId);
+      
+      const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
+      if (!flowDef) {
+        throw new Error(`Flow not found: ${flowFqn}`);
+      }
+
+      const simulationResults: Record<string, any> = {};
+      simulationResults['trigger'] = triggerData;
+
+      // If no target step specified, simulate entire flow
+      const steps = flowDef.steps || [];
+      const targetIndex = targetStepId ? steps.findIndex((s: any) => s.step_id === targetStepId) : steps.length - 1;
+      
+      // Simulate steps up to target
+      for (let i = 0; i <= targetIndex && i < steps.length; i++) {
+        const step = steps[i];
+        
+        try {
+          // Resolve input for this step
+          const inputMappings = unifiedDebugTestActions.analyzeInputMapping(step, simulationResults);
+          const resolvedInput: Record<string, any> = {};
+          
+          inputMappings.forEach(mapping => {
+            if (mapping.sourceType === 'triggerData' && mapping.sourceOutputField) {
+              const value = getNestedValue(triggerData, mapping.sourceOutputField);
+              if (value !== undefined) {
+                resolvedInput[mapping.targetInputField] = value;
+              }
+            } else if (mapping.sourceType === 'previousStep' && mapping.sourceStepId && mapping.sourceOutputField) {
+              const stepResult = simulationResults[mapping.sourceStepId];
+              if (stepResult?.output) {
+                const value = getNestedValue(stepResult.output, mapping.sourceOutputField);
+                if (value !== undefined) {
+                  resolvedInput[mapping.targetInputField] = value;
+                }
+              }
+            }
+          });
+          
+          // Generate mock output for this step
+          const componentSchema = moduleRegistry.getComponentSchema(step.component_ref);
+          let mockOutput = {};
+          if (componentSchema?.outputSchema) {
+            mockOutput = generateDataFromSchema(componentSchema.outputSchema, 'happy_path', true);
+          } else {
+            mockOutput = { result: `output_from_${step.step_id}`, success: true };
+          }
+          
+          simulationResults[step.step_id] = {
+            input: resolvedInput,
+            output: mockOutput
+          };
+          
+        } catch (error) {
+          console.warn(`Failed to simulate step ${step.step_id}:`, error);
+          simulationResults[step.step_id] = {
+            input: {},
+            output: {},
+            error: error instanceof Error ? error.message : 'Simulation error'
+          };
+        }
+      }
+      
+      return simulationResults;
     },
     
     resolveStepInputData: async (stepId: string, flowFqn: string) => {
@@ -851,8 +1235,15 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
     }
   }), [props.onRunTestCase, moduleRegistry]);
 
-  // Helper function to generate data from JSON schema
-  const generateDataFromSchema = (schema: any, dataType: string, useDefaults?: boolean): any => {
+  // Helper function to get nested values from objects
+  const getNestedValue = (obj: any, path: string): any => {
+    return path.split('.').reduce((current, key) => {
+      return current && current[key] !== undefined ? current[key] : undefined;
+    }, obj);
+  };
+
+  // Helper function to generate data from schema
+  const generateDataFromSchema = (schema: any, dataType: 'happy_path' | 'fork_paths' | 'error_cases', useDefaults: boolean = false): any => {
     if (!schema) return {};
     
     switch (schema.type) {

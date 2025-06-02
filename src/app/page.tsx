@@ -449,11 +449,9 @@ const InspectorDebugTestTab: React.FC<{
 }> = ({ currentFlowFqn, selectedElement, actions, moduleRegistry }) => {
   const [activeSection, setActiveSection] = React.useState<'debug' | 'test'>('debug');
   const [inputData, setInputData] = React.useState<string>('{}');
-  const [resolvedInput, setResolvedInput] = React.useState<any>(null);
-  const [dataLineage, setDataLineage] = React.useState<any>(null);
-  const [executionResult, setExecutionResult] = React.useState<any>(null);
+  const [executionResults, setExecutionResults] = React.useState<any>(null);
   const [isExecuting, setIsExecuting] = React.useState(false);
-  const [inputError, setInputError] = React.useState<string | null>(null);
+  const [dataLineage, setDataLineage] = React.useState<any>(null);
   const [validationResult, setValidationResult] = React.useState<any>(null);
 
   // Resolve input data and data lineage when selection changes
@@ -469,120 +467,166 @@ const InspectorDebugTestTab: React.FC<{
             componentSchema = moduleRegistry.getComponentSchema(selectedElement.data.resolvedComponentFqn);
           }
 
-          if (selectedElement.sourceType === 'flowNode' && selectedElement.data?.stepId) {
-            // For step nodes, resolve input data based on schema and flow structure
-            const resolved = await actions.resolveStepInputData(selectedElement.data.stepId, currentFlowFqn);
-            setResolvedInput(resolved);
-            
-            // Generate input structure from schema
-            if (componentSchema?.inputSchema) {
-              const inputStructure = actions.generateInputStructureFromSchema(componentSchema, true);
-              const inputDataString = JSON.stringify(inputStructure, null, 2);
-              setInputData(inputDataString);
-              
-              // Validate the generated input data
-              const validation = actions.validateInputAgainstSchema(inputStructure, componentSchema);
-              setValidationResult(validation);
-            } else {
-              const inputDataString = JSON.stringify(resolved.resolvedInputData, null, 2);
-              setInputData(inputDataString);
-            }
+          // Check if this is a trigger node (either by stepId 'trigger' or triggerType)
+          const isTriggerNode = selectedElement.data?.stepId === 'trigger' || 
+                               selectedElement.data?.triggerType ||
+                               selectedElement.id === 'trigger';
 
-            // Resolve data lineage
-            const lineage = await actions.resolveDataLineage(selectedElement.data.stepId, currentFlowFqn);
-            setDataLineage(lineage);
-          } else if (selectedElement.sourceType === 'flowNode' && selectedElement.data?.triggerType) {
-            // For trigger nodes, use trigger schema
+          if (isTriggerNode) {
+            // For trigger nodes: resolve input from trigger configuration
             const flowDef = moduleRegistry.getFlowDefinition(currentFlowFqn);
             if (flowDef?.trigger) {
-              // Generate trigger input structure
-              const triggerSchema = { 
-                fqn: 'trigger',
-                inputSchema: flowDef.trigger.schema || { type: 'object', properties: {} } 
-              };
-              const inputStructure = actions.generateInputStructureFromSchema(triggerSchema, true);
-              const inputDataString = JSON.stringify(inputStructure, null, 2);
-              setInputData(inputDataString);
+              const triggerInputData = actions.resolveTriggerInputData(
+                flowDef.trigger,
+                componentSchema,
+                'happy_path'
+              );
+              setInputData(JSON.stringify(triggerInputData, null, 2));
               
-              // Validate the generated trigger input data
-              const validation = actions.validateInputAgainstSchema(inputStructure, triggerSchema);
-              setValidationResult(validation);
+              // For triggers, data lineage starts from the trigger itself
+              setDataLineage({
+                targetStepId: 'trigger',
+                flowFqn: currentFlowFqn,
+                dataPath: [{
+                  stepId: 'trigger',
+                  stepType: 'trigger',
+                  componentFqn: flowDef.trigger.type,
+                  outputData: triggerInputData,
+                  executionOrder: 0
+                }],
+                availableInputs: triggerInputData,
+                contextVariables: {},
+                inputMappings: []
+              });
             }
+          } else if (selectedElement.sourceType === 'flowNode' && selectedElement.data?.stepId) {
+            // For step nodes: resolve input from flow structure and previous steps
+            const resolvedInput = await actions.resolveStepInputData(
+              selectedElement.data.stepId, 
+              currentFlowFqn
+            );
+            
+            setInputData(JSON.stringify(resolvedInput.resolvedInputData, null, 2));
+            
+            // Resolve data lineage
+            const lineage = await actions.resolveDataLineage(
+              selectedElement.data.stepId,
+              currentFlowFqn
+            );
+            setDataLineage(lineage);
           }
+
+          // Validate input data if we have a schema
+          if (componentSchema) {
+            try {
+              const parsedInput = JSON.parse(inputData);
+              const validation = actions.validateInputAgainstSchema(parsedInput, componentSchema);
+              setValidationResult(validation);
+            } catch (error) {
+              // Input is not valid JSON, skip validation
+              setValidationResult(null);
+            }
+          } else {
+            setValidationResult(null);
+          }
+
         } catch (error) {
           console.error('Error resolving input data:', error);
-          setInputError(error instanceof Error ? error.message : 'Unknown error');
+          setInputData('{}');
+          setDataLineage(null);
+          setValidationResult(null);
         }
       };
 
       resolveData();
     } else {
-      setResolvedInput(null);
-      setDataLineage(null);
       setInputData('{}');
+      setDataLineage(null);
       setValidationResult(null);
     }
-  }, [selectedElement, currentFlowFqn, actions, moduleRegistry]);
+  }, [selectedElement, currentFlowFqn, moduleRegistry, actions]);
+
+  // Validate input data when it changes
+  React.useEffect(() => {
+    if (selectedElement && inputData) {
+      let componentSchema = null;
+      if (selectedElement.data?.componentSchema) {
+        componentSchema = selectedElement.data.componentSchema;
+      } else if (selectedElement.data?.resolvedComponentFqn) {
+        componentSchema = moduleRegistry.getComponentSchema(selectedElement.data.resolvedComponentFqn);
+      }
+
+      if (componentSchema) {
+        try {
+          const parsedInput = JSON.parse(inputData);
+          const validation = actions.validateInputAgainstSchema(parsedInput, componentSchema);
+          setValidationResult(validation);
+        } catch (error) {
+          setValidationResult({
+            isValid: false,
+            errors: [{
+              fieldPath: 'root',
+              message: 'Invalid JSON format',
+              expectedType: 'object',
+              actualValue: inputData,
+              schemaRule: 'format'
+            }],
+            warnings: []
+          });
+        }
+      } else {
+        // If no schema, consider input valid
+        try {
+          JSON.parse(inputData);
+          setValidationResult({ isValid: true, errors: [], warnings: [] });
+        } catch (error) {
+          setValidationResult({
+            isValid: false,
+            errors: [{
+              fieldPath: 'root',
+              message: 'Invalid JSON format',
+              expectedType: 'object',
+              actualValue: inputData,
+              schemaRule: 'format'
+            }],
+            warnings: []
+          });
+        }
+      }
+    }
+  }, [inputData, selectedElement, moduleRegistry, actions]);
 
   const validateAndParseInput = (input: string) => {
     try {
       const parsed = JSON.parse(input);
-      setInputError(null);
-      
-      // Validate against schema if available
-      if (selectedElement?.data?.componentSchema) {
-        const validation = actions.validateInputAgainstSchema(parsed, selectedElement.data.componentSchema);
-        setValidationResult(validation);
-        if (!validation.isValid) {
-          setInputError(`Validation errors: ${validation.errors.map(e => e.message).join(', ')}`);
-        }
-      }
-      
-      return parsed;
+      return { isValid: true, data: parsed };
     } catch (error) {
-      setInputError('Invalid JSON format');
-      return null;
+      return { 
+        isValid: false, 
+        error: error instanceof Error ? error.message : 'Invalid JSON' 
+      };
     }
   };
 
-  const handleInputChange = (value: string) => {
-    setInputData(value);
-    validateAndParseInput(value);
-  };
+  const executeFlow = async () => {
+    const validation = validateAndParseInput(inputData);
+    if (!validation.isValid) {
+      console.error('Invalid input data:', validation.error);
+      return;
+    }
 
-  const generateSchemaBasedData = (dataType: 'happy_path' | 'fork_paths' | 'error_cases') => {
     if (!selectedElement) return;
-
-    const componentSchema = selectedElement.data?.componentSchema || 
-      (selectedElement.data?.resolvedComponentFqn ? moduleRegistry.getComponentSchema(selectedElement.data.resolvedComponentFqn) : null);
-
-    if (componentSchema) {
-      const generatedData = actions.generateSchemaBasedInputData(
-        selectedElement.id, 
-        dataType, 
-        componentSchema,
-        {} // outputSchemas - would be populated from previous steps in real implementation
-      );
-      setInputData(JSON.stringify(generatedData, null, 2));
-    }
-  };
-
-  const executeFromSelection = async () => {
-    if (!selectedElement || !currentFlowFqn) return;
-
-    const parsedInput = validateAndParseInput(inputData);
-    if (!parsedInput) return;
 
     setIsExecuting(true);
     try {
-      const result = await actions.runDebugExecution(selectedElement.id, parsedInput, {
+      const result = await actions.runDebugExecution(selectedElement.id, validation.data, {
         useMocks: true,
         timeoutMs: 30000
       });
-      setExecutionResult(result);
+      setExecutionResults(result);
     } catch (error) {
       console.error('Execution failed:', error);
-      setExecutionResult({
+      setExecutionResults({
         error: error instanceof Error ? error.message : 'Execution failed',
         status: 'FAILURE'
       });
@@ -591,10 +635,77 @@ const InspectorDebugTestTab: React.FC<{
     }
   };
 
+  // Generate test data based on type
+  const generateTestData = (dataType: 'happy_path' | 'fork_paths' | 'error_cases') => {
+    if (!selectedElement || !currentFlowFqn) return;
+
+    try {
+      let generatedData;
+      
+      // Check if this is a trigger node
+      const isTriggerNode = selectedElement.data?.stepId === 'trigger' || 
+                           selectedElement.data?.triggerType ||
+                           selectedElement.id === 'trigger';
+      
+      if (isTriggerNode) {
+        // For trigger nodes, generate trigger input data
+        const flowDef = moduleRegistry.getFlowDefinition(currentFlowFqn);
+        if (flowDef?.trigger) {
+          let componentSchema = null;
+          if (selectedElement.data?.componentSchema) {
+            componentSchema = selectedElement.data.componentSchema;
+          } else if (selectedElement.data?.resolvedComponentFqn) {
+            componentSchema = moduleRegistry.getComponentSchema(selectedElement.data.resolvedComponentFqn);
+          }
+          
+          generatedData = actions.resolveTriggerInputData(
+            flowDef.trigger,
+            componentSchema,
+            dataType
+          );
+        }
+      } else if (selectedElement.sourceType === 'flowNode' && selectedElement.data?.stepId) {
+        // For step nodes, generate input data based on schema
+        let componentSchema = null;
+        if (selectedElement.data?.componentSchema) {
+          componentSchema = selectedElement.data.componentSchema;
+        } else if (selectedElement.data?.resolvedComponentFqn) {
+          componentSchema = moduleRegistry.getComponentSchema(selectedElement.data.resolvedComponentFqn);
+        }
+        
+        if (componentSchema) {
+          generatedData = actions.generateSchemaBasedInputData(
+            selectedElement.data.stepId,
+            dataType,
+            componentSchema
+          );
+        }
+      }
+
+      if (generatedData) {
+        setInputData(JSON.stringify(generatedData, null, 2));
+        
+        // If this is a trigger, propagate the data flow to update dependent steps
+        if (isTriggerNode) {
+          actions.propagateDataFlow(currentFlowFqn, generatedData)
+            .then(flowResults => {
+              console.log('Data flow propagated:', flowResults);
+              // The propagation results could be used to update other UI elements
+            })
+            .catch(error => {
+              console.warn('Failed to propagate data flow:', error);
+            });
+        }
+      }
+    } catch (error) {
+      console.error('Error generating test data:', error);
+    }
+  };
+
   const exportResults = (format: 'json' | 'yaml' | 'csv') => {
-    if (!executionResult) return;
+    if (!executionResults) return;
     
-    const exported = actions.exportExecutionResults(executionResult, format);
+    const exported = actions.exportExecutionResults(executionResults, format);
     const blob = new Blob([exported], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -653,7 +764,7 @@ const InspectorDebugTestTab: React.FC<{
               <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>Input Data</h4>
               <div style={{ display: 'flex', gap: '4px' }}>
                 <button
-                  onClick={() => generateSchemaBasedData('happy_path')}
+                  onClick={() => generateTestData('happy_path')}
                   style={{
                     padding: '4px 8px',
                     fontSize: '11px',
@@ -667,7 +778,7 @@ const InspectorDebugTestTab: React.FC<{
                   Happy Path
                 </button>
                 <button
-                  onClick={() => generateSchemaBasedData('fork_paths')}
+                  onClick={() => generateTestData('fork_paths')}
                   style={{
                     padding: '4px 8px',
                     fontSize: '11px',
@@ -681,7 +792,7 @@ const InspectorDebugTestTab: React.FC<{
                   Fork Paths
                 </button>
                 <button
-                  onClick={() => generateSchemaBasedData('error_cases')}
+                  onClick={() => generateTestData('error_cases')}
                   style={{
                     padding: '4px 8px',
                     fontSize: '11px',
@@ -699,13 +810,13 @@ const InspectorDebugTestTab: React.FC<{
             
             <textarea
               value={inputData}
-              onChange={(e) => handleInputChange(e.target.value)}
+              onChange={(e) => setInputData(e.target.value)}
               style={{
                 width: '100%',
                 height: '120px',
                 fontFamily: 'monospace',
                 fontSize: '12px',
-                border: `1px solid ${inputError ? '#f44336' : '#e0e0e0'}`,
+                border: `1px solid ${validationResult && !validationResult.isValid ? '#f44336' : '#e0e0e0'}`,
                 borderRadius: '4px',
                 padding: '8px',
                 resize: 'vertical'
@@ -713,7 +824,7 @@ const InspectorDebugTestTab: React.FC<{
               placeholder="Enter JSON input data..."
             />
             
-            {inputError && (
+            {validationResult && !validationResult.isValid && (
               <div style={{ 
                 color: '#f44336', 
                 fontSize: '12px', 
@@ -722,15 +833,6 @@ const InspectorDebugTestTab: React.FC<{
                 backgroundColor: '#ffebee',
                 borderRadius: '3px'
               }}>
-                {inputError}
-              </div>
-            )}
-
-            {validationResult && !validationResult.isValid && (
-              <div style={{ marginTop: '8px' }}>
-                <div style={{ fontSize: '12px', fontWeight: '600', color: '#f44336', marginBottom: '4px' }}>
-                  Schema Validation Errors:
-                </div>
                 {validationResult.errors.map((error: any, index: number) => (
                   <div key={index} style={{ 
                     fontSize: '11px', 
@@ -827,8 +929,8 @@ const InspectorDebugTestTab: React.FC<{
           {/* Execution Controls */}
           <div style={{ marginBottom: '16px' }}>
             <button
-              onClick={executeFromSelection}
-              disabled={isExecuting || !!inputError}
+              onClick={executeFlow}
+              disabled={isExecuting || (validationResult && !validationResult.isValid)}
               style={{
                 width: '100%',
                 padding: '12px',
@@ -846,7 +948,7 @@ const InspectorDebugTestTab: React.FC<{
           </div>
 
           {/* Execution Results */}
-          {executionResult && (
+          {executionResults && (
             <div style={{ marginBottom: '16px' }}>
               <div style={{ 
                 display: 'flex', 
@@ -906,105 +1008,65 @@ const InspectorDebugTestTab: React.FC<{
                 border: '1px solid #e0e0e0',
                 borderRadius: '4px',
                 padding: '8px',
+                fontSize: '12px',
                 maxHeight: '300px',
                 overflowY: 'auto'
               }}>
-                <div style={{ marginBottom: '8px' }}>
-                  <strong>Status:</strong> 
-                  <span style={{ 
-                    color: executionResult.status === 'SUCCESS' ? '#4CAF50' : '#f44336',
-                    marginLeft: '8px'
-                  }}>
-                    {executionResult.status}
-                  </span>
-                </div>
-                
-                {executionResult.durationMs && (
-                  <div style={{ marginBottom: '8px', fontSize: '12px' }}>
-                    <strong>Duration:</strong> {executionResult.durationMs}ms
+                {executionResults.error ? (
+                  <div style={{ color: '#f44336' }}>
+                    <strong>Error:</strong> {executionResults.error}
                   </div>
-                )}
-
-                {executionResult.finalOutput && (
-                  <div style={{ marginBottom: '8px' }}>
-                    <strong>Final Output:</strong>
-                    <pre style={{ 
-                      fontSize: '11px', 
-                      backgroundColor: 'white',
-                      padding: '8px',
-                      borderRadius: '3px',
-                      border: '1px solid #e0e0e0',
-                      margin: '4px 0',
-                      whiteSpace: 'pre-wrap'
-                    }}>
-                      {JSON.stringify(executionResult.finalOutput, null, 2)}
-                    </pre>
-                  </div>
-                )}
-
-                {executionResult.logs && executionResult.logs.length > 0 && (
-                  <div style={{ marginBottom: '8px' }}>
-                    <strong>Execution Logs:</strong>
-                    <div style={{ 
-                      maxHeight: '150px',
-                      overflowY: 'auto',
-                      backgroundColor: 'white',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '3px',
-                      margin: '4px 0'
-                    }}>
-                      {executionResult.logs.map((log: any, index: number) => (
-                        <div key={index} style={{ 
-                          padding: '4px 8px',
-                          borderBottom: '1px solid #f0f0f0',
-                          fontSize: '11px',
-                          fontFamily: 'monospace'
-                        }}>
-                          <span style={{ color: '#666' }}>[{log.timestamp}]</span>
-                          <span style={{ 
-                            color: log.level === 'error' ? '#f44336' : 
-                                   log.level === 'warn' ? '#FF9800' : '#666',
-                            marginLeft: '8px',
-                            fontWeight: '600'
-                          }}>
-                            {log.level.toUpperCase()}
-                          </span>
-                          <span style={{ marginLeft: '8px' }}>{log.message}</span>
-                        </div>
-                      ))}
+                ) : (
+                  <div>
+                    <div style={{ marginBottom: '8px' }}>
+                      <strong>Status:</strong> {executionResults.status}
                     </div>
-                  </div>
-                )}
-
-                {executionResult.systemTriggers && executionResult.systemTriggers.length > 0 && (
-                  <div style={{ marginBottom: '8px' }}>
-                    <strong>System Triggers:</strong>
-                    <div style={{ fontSize: '11px', marginTop: '4px' }}>
-                      {executionResult.systemTriggers.map((trigger: any, index: number) => (
-                        <div key={index} style={{ 
-                          padding: '4px',
+                    {executionResults.durationMs && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <strong>Duration:</strong> {executionResults.durationMs}ms
+                      </div>
+                    )}
+                    {executionResults.finalOutput && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <strong>Output:</strong>
+                        <pre style={{ 
                           backgroundColor: 'white',
-                          border: '1px solid #e0e0e0',
+                          padding: '8px',
                           borderRadius: '3px',
-                          marginBottom: '2px'
+                          border: '1px solid #e0e0e0',
+                          fontSize: '11px',
+                          marginTop: '4px',
+                          whiteSpace: 'pre-wrap'
                         }}>
-                          <div><strong>{trigger.triggerType}</strong> → {trigger.targetSystem}</div>
-                          <div style={{ color: '#666' }}>From: {trigger.sourceStepId}</div>
+                          {JSON.stringify(executionResults.finalOutput, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                    {executionResults.logs && executionResults.logs.length > 0 && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <strong>Logs:</strong>
+                        <div style={{ 
+                          backgroundColor: 'white',
+                          padding: '8px',
+                          borderRadius: '3px',
+                          border: '1px solid #e0e0e0',
+                          fontSize: '11px',
+                          marginTop: '4px',
+                          maxHeight: '150px',
+                          overflowY: 'auto'
+                        }}>
+                          {executionResults.logs.map((log: any, index: number) => (
+                            <div key={index} style={{ 
+                              marginBottom: '2px',
+                              color: log.level === 'error' ? '#f44336' : 
+                                     log.level === 'warn' ? '#ff9800' : '#333'
+                            }}>
+                              [{log.timestamp}] {log.level.toUpperCase()}: {log.message}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {executionResult.error && (
-                  <div style={{ 
-                    color: '#f44336',
-                    backgroundColor: '#ffebee',
-                    padding: '8px',
-                    borderRadius: '3px',
-                    fontSize: '12px'
-                  }}>
-                    <strong>Error:</strong> {executionResult.error}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1016,29 +1078,7 @@ const InspectorDebugTestTab: React.FC<{
       {activeSection === 'test' && (
         <div>
           <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-            <h4>Test Case Management</h4>
-            <p style={{ fontSize: '12px', margin: '8px 0' }}>
-              Test case creation and management functionality will be implemented here.
-            </p>
-            <button
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#4CAF50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}
-              onClick={() => {
-                if (currentFlowFqn) {
-                  const testCase = actions.generateTestCase(currentFlowFqn, 'happy_path');
-                  console.log('Generated test case:', testCase);
-                }
-              }}
-            >
-              Generate Test Case
-            </button>
+            Test case management functionality coming soon...
           </div>
         </div>
       )}

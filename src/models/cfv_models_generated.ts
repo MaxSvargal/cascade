@@ -71,6 +71,14 @@ export interface UnifiedDebugTestActions {
   resolveDataLineage: (stepId: string, flowFqn: string) => Promise<DataLineage>;
   /** Validate input data against component input schema. Signature: (inputData: any, inputSchema: ComponentSchema) => ValidationResult */
   validateInputAgainstSchema: (inputData: any, inputSchema: ComponentSchema) => ValidationResult;
+  /** Resolve trigger input data based on trigger configuration and schema. Signature: (triggerConfig: any, triggerSchema?: ComponentSchema, dataType?: 'happy_path' | 'fork_paths' | 'error_cases') => any */
+  resolveTriggerInputData: (triggerConfig: any, triggerSchema?: ComponentSchema, dataType?: 'happy_path' | 'fork_paths' | 'error_cases') => any;
+  /** Propagate data flow from trigger to target step. Signature: (flowFqn: string, triggerData: any) => Promise<Record<string, any>> */
+  propagateDataFlow: (flowFqn: string, triggerData: any) => Promise<Record<string, any>>;
+  /** Analyze input mapping between step configuration and available data. Signature: (stepConfig: any, availableData: Record<string, any>) => InputMapping[] */
+  analyzeInputMapping: (stepConfig: any, availableData: Record<string, any>) => InputMapping[];
+  /** Simulate data flow from trigger to target step. Signature: (flowFqn: string, triggerData: any, targetStepId?: string) => Promise<Record<string, any>> */
+  simulateDataFlow: (flowFqn: string, triggerData: any, targetStepId?: string) => Promise<Record<string, any>>;
   /** Collect execution logs from each step. Signature: (executionId: string) => Promise<StepLog[]> */
   collectStepLogs: (executionId: string) => Promise<StepLog[]>;
   /** Export execution results for analysis. Signature: (executionResult: ExecutionResult, format: 'json' | 'yaml' | 'csv') => string */

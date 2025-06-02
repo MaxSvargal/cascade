@@ -676,6 +676,22 @@ model cfv_models.UnifiedDebugTestActions {
         required: true;
         description: "Validate input data against component input schema. Signature: (inputData: any, inputSchema: ComponentSchema) => ValidationResult";
     }
+    resolveTriggerInputData: cfv_models.Function {
+        required: true;
+        description: "Resolve input data for a trigger based on trigger configuration and schema. Signature: (triggerConfig: any, triggerSchema?: ComponentSchema, dataType?: 'happy_path' | 'fork_paths' | 'error_cases') => any";
+    }
+    propagateDataFlow: cfv_models.Function {
+        required: true;
+        description: "Propagate data flow from trigger through all steps to simulate execution. Signature: (flowFqn: string, triggerData: any) => Promise<Record<string, any>>";
+    }
+    analyzeInputMapping: cfv_models.Function {
+        required: true;
+        description: "Analyze input mapping for a step based on available data. Signature: (stepConfig: any, availableData: Record<string, any>) => InputMapping[]";
+    }
+    simulateDataFlow: cfv_models.Function {
+        required: true;
+        description: "Simulate data flow through the flow up to a target step. Signature: (flowFqn: string, triggerData: any, targetStepId?: string) => Promise<Record<string, any>>";
+    }
     collectStepLogs: cfv_models.Function {
         required: true;
         description: "Collect execution logs from each step. Signature: (executionId: string) => Promise<StepLog[]>";

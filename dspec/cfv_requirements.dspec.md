@@ -707,18 +707,32 @@ requirement cfv_requirements.FR22_EnhancedDebugTestInterface {
     requirement cfv_requirements.FR22_6_SchemaBasedInputResolution {
         title: "FR22.6: Schema-Based Input Data Resolution"
         part_of: cfv_requirements.FR22_EnhancedDebugTestInterface
-        description: "Resolve input data for components based on their input schemas and flow data lineage."
+        description: "The debug interface must intelligently resolve input data for selected components based on their schemas, flow structure, and data lineage from triggers and previous steps."
         priority: "High"; status: "Accepted"; source: "Enhanced Debug & Test Interface";
         acceptance_criteria: [
-            "Use component inputSchema to determine expected input structure",
-            "Resolve input values from previous step outputSchema when available",
-            "Map output fields to input fields using inputs_map configuration",
-            "Use schema default values when no previous step data is available",
-            "Support complex data types (objects, arrays, primitives) from schemas",
-            "Handle optional vs required fields based on schema definitions",
-            "Provide data type conversion based on schema types",
-            "Show data flow path from trigger through all previous steps",
-            "Support context variable resolution in input data",
-            "Generate realistic test data based on schema constraints (min/max, patterns, enums)"
+            "R22_6_1: Use component `inputSchema` to determine expected input structure and data types",
+            "R22_6_2: For trigger nodes, generate input data based on trigger schema and configuration",
+            "R22_6_3: For step nodes, resolve input data by mapping from:
+              - Trigger output data (for first steps)
+              - Previous step output data (based on `inputs_map`)
+              - Context variables
+              - Schema default values as fallback",
+            "R22_6_4: Support real-time data flow simulation where changes to trigger input propagate to dependent steps",
+            "R22_6_5: Handle complex data type mapping (object, array, primitive) with proper type conversion",
+            "R22_6_6: Generate constraint-compliant test data for different scenarios:
+              - Happy path: Valid data within schema constraints
+              - Fork paths: Data that triggers different conditional branches
+              - Error cases: Invalid data that violates schema constraints",
+            "R22_6_7: Validate resolved input data against component schemas with detailed error reporting",
+            "R22_6_8: Display data lineage showing how each input field is resolved from the flow structure",
+            "Trigger Input Resolution: Parse trigger configuration to determine input structure",
+            "For HttpTrigger: Generate realistic HTTP request data (method, path, body, headers)",
+            "For EventTrigger: Generate event payload based on eventType",
+            "Use trigger schema if available, otherwise infer from configuration",
+            "Step Input Resolution: Analyze `inputs_map` to determine data sources",
+            "Resolve actual values from trigger/previous step outputs",
+            "Apply data transformations as specified in `inputs_map`",
+            "Fill missing fields with schema defaults or generated values",
+            "Maintain data consistency across the flow execution path"
         ]
     }
