@@ -328,6 +328,8 @@ model cfv_models.ComponentSchema {
     configSchema?: Object { description: "JSON Schema for the 'config' block." }
     inputSchema?: Object { description: "JSON Schema describing input ports/data structure." }
     outputSchema?: Object { description: "JSON Schema describing output ports/data structure." }
+    triggerSchema?: Object { description: "JSON Schema for trigger input/output data structure (for trigger components)." }
+    componentType?: String { description: "Type of component: 'trigger', 'processor', 'sink', etc." }
 }
 
 // --- Trace & Execution Types (Enhanced) ---

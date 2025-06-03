@@ -311,6 +311,339 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         inputData: config,
         outputData: { result: 'debug execution completed' }
       };
+    },
+    resolveStepConfigData: (stepId: string, flowFqn: string) => {
+      console.log('Resolving config data for step:', stepId, 'in flow:', flowFqn);
+      
+      try {
+        const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
+        if (!flowDef) {
+          throw new Error(`Flow not found: ${flowFqn}`);
+        }
+        
+        // Handle trigger config
+        if (stepId === 'trigger') {
+          return {
+            stepId: 'trigger',
+            configData: flowDef.trigger?.config || {},
+            configSchema: undefined // Will be resolved from component schema
+          };
+        }
+        
+        // Find the step
+        const step = flowDef.steps?.find((s: any) => s.step_id === stepId);
+        if (!step) {
+          throw new Error(`Step not found: ${stepId} in flow ${flowFqn}`);
+        }
+        
+        // Get component schema for config validation
+        const moduleFqn = flowFqn.split('.').slice(0, -1).join('.');
+        const componentInfo = moduleRegistry.resolveComponentTypeInfo(step.component_ref, moduleFqn);
+        const componentSchema = componentInfo ? moduleRegistry.getComponentSchema(componentInfo.baseType) : undefined;
+        
+        return {
+          stepId,
+          configData: step.config || {},
+          configSchema: componentSchema?.configSchema,
+          componentType: componentInfo?.baseType
+        };
+      } catch (error) {
+        console.error('Failed to resolve config data:', error);
+        return {
+          stepId,
+          configData: {},
+          configSchema: undefined,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    },
+    resolveStepInputData: async (stepId: string, flowFqn: string) => {
+      console.log('Resolving input data for step:', stepId, 'in flow:', flowFqn);
+      
+      // Use the new flow simulation to get actual data
+      try {
+        // Get flow definition
+        const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
+        if (!flowDef) {
+          throw new Error(`Flow not found: ${flowFqn}`);
+        }
+        
+        // Generate trigger data
+        let triggerData;
+        if (flowDef.trigger) {
+          triggerData = generateTriggerData(flowDef.trigger);
+        } else {
+          triggerData = { timestamp: new Date().toISOString(), data: {} };
+        }
+        
+        // Initialize simulation state
+        const stepResults: Record<string, any> = {};
+        const contextState = { ...(flowDef.context || {}) };
+        const executionOrder: string[] = [];
+        
+        // Find target step index
+        let targetStepIndex = -1;
+        if (flowDef.steps) {
+          targetStepIndex = flowDef.steps.findIndex((s: any) => s.step_id === stepId);
+          if (targetStepIndex === -1 && stepId !== 'trigger') {
+            throw new Error(`Target step not found: ${stepId}`);
+          }
+        }
+        
+        // Simulate trigger execution
+        const triggerResult = {
+          stepId: 'trigger',
+          componentFqn: flowDef.trigger?.type || 'trigger',
+          inputData: triggerData,
+          outputData: triggerData,
+          contextChanges: {},
+          executionOrder: 0,
+          simulationSuccess: true
+        };
+        stepResults['trigger'] = triggerResult;
+        executionOrder.push('trigger');
+        
+        // Simulate each step up to target step
+        if (flowDef.steps && targetStepIndex >= 0) {
+          for (let stepIndex = 0; stepIndex <= targetStepIndex; stepIndex++) {
+            const step = flowDef.steps[stepIndex];
+            const stepResult = simulateStepExecution(step, stepResults, contextState, flowFqn);
+            
+            if (!stepResult.simulationSuccess) {
+              break;
+            }
+            
+            stepResults[step.step_id] = stepResult;
+            executionOrder.push(step.step_id);
+            
+            // Update context state with step changes
+            Object.assign(contextState, stepResult.contextChanges);
+          }
+        }
+        
+        // Resolve final input data for target step
+        let finalInputData = {};
+        if (stepId === 'trigger') {
+          finalInputData = triggerData;
+        } else if (flowDef.steps && targetStepIndex >= 0) {
+          const targetStep = flowDef.steps[targetStepIndex];
+          finalInputData = resolveStepInputFromSimulation(targetStep, stepResults, contextState);
+        }
+        
+        return {
+          stepId,
+          resolvedInputData: finalInputData,
+          inputSources: [], // Will be populated by simulation
+          availableContext: contextState,
+          inputSchema: undefined // Will be resolved from component schema
+        };
+      } catch (error) {
+        console.error('Flow simulation failed, falling back to mock data:', error);
+        
+        // Fallback to original logic if simulation fails
+        const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
+        if (!flowDef) {
+          throw new Error(`Flow not found: ${flowFqn}`);
+        }
+        
+        const step = flowDef.steps?.find((s: any) => s.step_id === stepId);
+        if (!step) {
+          throw new Error(`Step not found: ${stepId} in flow ${flowFqn}`);
+        }
+        
+        // Generate basic mock data as fallback
+        let resolvedInputData: Record<string, any> = {};
+        if (step.inputs_map) {
+          Object.keys(step.inputs_map).forEach(key => {
+            resolvedInputData[key] = `resolved_${key}_value`;
+          });
+        }
+        
+        return {
+          stepId,
+          resolvedInputData,
+          inputSources: [],
+          availableContext: {},
+          inputSchema: undefined
+        };
+      }
+    },
+    
+    simulateFlowExecution: async (flowFqn: string, targetStepId: string, triggerData?: any) => {
+      console.log('Simulating flow execution for:', flowFqn, 'up to step:', targetStepId);
+      
+      // Get flow definition
+      const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
+      if (!flowDef) {
+        throw new Error(`Flow not found: ${flowFqn}`);
+      }
+      
+      // Generate trigger data if not provided
+      if (!triggerData) {
+        if (flowDef.trigger) {
+          triggerData = generateTriggerData(flowDef.trigger);
+        } else {
+          triggerData = { timestamp: new Date().toISOString(), data: {} };
+        }
+      }
+      
+      // Initialize simulation state
+      const stepResults: Record<string, any> = {};
+      const contextState = { ...(flowDef.context || {}) };
+      const executionOrder: string[] = [];
+      const errors: string[] = [];
+      
+      // Find target step index
+      let targetStepIndex = -1;
+      if (flowDef.steps) {
+        targetStepIndex = flowDef.steps.findIndex((s: any) => s.step_id === targetStepId);
+        if (targetStepIndex === -1 && targetStepId !== 'trigger') {
+          throw new Error(`Target step not found: ${targetStepId}`);
+        }
+      }
+      
+      // Simulate trigger execution
+      const triggerResult = {
+        stepId: 'trigger',
+        componentFqn: flowDef.trigger?.type || 'trigger',
+        inputData: triggerData,
+        outputData: triggerData,
+        contextChanges: {},
+        executionOrder: 0,
+        simulationSuccess: true
+      };
+      stepResults['trigger'] = triggerResult;
+      executionOrder.push('trigger');
+      
+      // Simulate each step up to target step
+      if (flowDef.steps && targetStepIndex >= 0) {
+        for (let stepIndex = 0; stepIndex <= targetStepIndex; stepIndex++) {
+          const step = flowDef.steps[stepIndex];
+          try {
+            const stepResult = simulateStepExecution(step, stepResults, contextState, flowFqn);
+            
+            if (!stepResult.simulationSuccess) {
+              errors.push(stepResult.error || 'Step simulation failed');
+              break;
+            }
+            
+            stepResults[step.step_id] = stepResult;
+            executionOrder.push(step.step_id);
+            
+            // Update context state with step changes
+            Object.assign(contextState, stepResult.contextChanges);
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+            errors.push(`Step ${step.step_id}: ${errorMsg}`);
+            break;
+          }
+        }
+      }
+      
+      // Resolve final input data for target step
+      let finalInputData = {};
+      if (targetStepId === 'trigger') {
+        finalInputData = triggerData;
+      } else if (flowDef.steps && targetStepIndex >= 0) {
+        const targetStep = flowDef.steps[targetStepIndex];
+        finalInputData = resolveStepInputFromSimulation(targetStep, stepResults, contextState);
+      }
+      
+      return {
+        flowFqn,
+        targetStepId,
+        triggerData,
+        stepResults,
+        finalInputData,
+        executionOrder,
+        contextState,
+        errors
+      };
+    },
+    
+    resolveDataLineage: async (stepId: string, flowFqn: string) => {
+      console.log('Resolving data lineage for step:', stepId, 'in flow:', flowFqn);
+      return {
+        targetStepId: stepId,
+        flowFqn,
+        dataPath: [],
+        availableInputs: {},
+        contextVariables: {},
+        inputMappings: []
+      };
+    },
+    
+    collectStepLogs: async (executionId: string) => {
+      console.log('Collecting step logs for execution:', executionId);
+      return [
+        {
+          stepId: 'sample-step',
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: 'Step execution started',
+          data: { executionId }
+        }
+      ];
+    },
+    
+    exportExecutionResults: (executionResult: any, format: 'json' | 'yaml' | 'csv') => {
+      console.log('Exporting execution results:', executionResult, 'format:', format);
+      const exportData = {
+        timestamp: new Date().toISOString(),
+        executionId: executionResult.executionId || `export-${Date.now()}`,
+        results: executionResult,
+        format
+      };
+      return JSON.stringify(exportData, null, 2);
+    },
+    
+    resolveTriggerInputData: (triggerConfig: any, triggerSchema?: any, dataType?: 'happy_path' | 'fork_paths' | 'error_cases') => {
+      console.log('Resolving trigger input data:', triggerConfig, triggerSchema, dataType);
+      return generateTriggerData(triggerConfig);
+    },
+    
+    propagateDataFlow: async (flowFqn: string, triggerData: any) => {
+      console.log('Propagating data flow for flow:', flowFqn, 'with trigger data:', triggerData);
+      const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
+      if (!flowDef || !flowDef.steps) {
+        return { trigger: triggerData };
+      }
+      
+      const results: Record<string, any> = { trigger: triggerData };
+      let contextState = { ...(flowDef.context || {}) };
+      
+      for (const step of flowDef.steps) {
+        const stepResult = simulateStepExecution(step, results, contextState, flowFqn);
+        results[step.step_id] = stepResult.outputData;
+        Object.assign(contextState, stepResult.contextChanges);
+      }
+      
+      return results;
+    },
+    
+    analyzeInputMapping: (stepConfig: any, availableData: Record<string, any>) => {
+      console.log('Analyzing input mapping for step:', stepConfig, 'with available data:', availableData);
+      const mappings: any[] = [];
+      
+      if (stepConfig.inputs_map) {
+        Object.entries(stepConfig.inputs_map).forEach(([targetField, sourceExpr]) => {
+          mappings.push({
+            targetInputField: targetField,
+            sourceType: typeof sourceExpr === 'string' && sourceExpr.startsWith('steps.') ? 'previousStep' : 'constant',
+            sourceStepId: typeof sourceExpr === 'string' && sourceExpr.startsWith('steps.') ? sourceExpr.split('.')[1] : undefined,
+            sourceOutputField: typeof sourceExpr === 'string' && sourceExpr.startsWith('steps.') ? sourceExpr.split('.').slice(2).join('.') : undefined,
+            defaultValue: typeof sourceExpr !== 'string' ? sourceExpr : undefined,
+            isRequired: true
+          });
+        });
+      }
+      
+      return mappings;
+    },
+    
+    simulateDataFlow: async (flowFqn: string, triggerData: any, targetStepId?: string) => {
+      console.log('Simulating data flow for flow:', flowFqn, 'to step:', targetStepId);
+      return await unifiedDebugTestActions.propagateDataFlow(flowFqn, triggerData);
     }
   }), [selectedElement, props.onSaveModule, props.onModuleLoadError, dslModuleRepresentations, currentFlowFqn]);
 
@@ -538,240 +871,8 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
     resolveTriggerInputData: (triggerConfig: any, triggerSchema?: any, dataType: 'happy_path' | 'fork_paths' | 'error_cases' = 'happy_path') => {
       console.log('Resolving trigger input data:', triggerConfig, triggerSchema, dataType);
       
-      // If we have a trigger schema with inputSchema, use it to generate data
-      if (triggerSchema?.inputSchema) {
-        const generatedData = generateDataFromSchema(triggerSchema.inputSchema, dataType, true);
-        
-        // For HttpTrigger, enhance the generated data with realistic values
-        if (triggerConfig?.type === 'StdLib:HttpTrigger') {
-          // Add method and path from config if not in schema
-          if (!generatedData.method) {
-            generatedData.method = triggerConfig.config?.method || 'POST';
-          }
-          if (!generatedData.path) {
-            generatedData.path = triggerConfig.config?.path || '/api/endpoint';
-          }
-          
-          // Enhance headers with realistic values
-          if (generatedData.headers && typeof generatedData.headers === 'object') {
-            generatedData.headers = {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-              'User-Agent': 'CasinoApp/1.0',
-              'X-Request-ID': `req-${Date.now()}`,
-              ...generatedData.headers
-            };
-          }
-          
-          // Enhance body with realistic casino platform data
-          if (generatedData.body && typeof generatedData.body === 'object') {
-            if (dataType === 'happy_path') {
-              generatedData.body = {
-                userId: 'user_' + Math.random().toString(36).substr(2, 9),
-                email: 'user@example.com',
-                firstName: 'John',
-                lastName: 'Doe',
-                dateOfBirth: '1990-01-15',
-                country: 'US',
-                currency: 'USD',
-                referralCode: 'REF123',
-                acceptedTerms: true,
-                timestamp: new Date().toISOString(),
-                ...generatedData.body
-              };
-            } else if (dataType === 'fork_paths') {
-              generatedData.body = {
-                userId: 'user_' + Math.random().toString(36).substr(2, 9),
-                email: 'vip@example.com',
-                firstName: 'Jane',
-                lastName: 'Smith',
-                dateOfBirth: '1985-06-20',
-                country: 'CA',
-                currency: 'CAD',
-                referralCode: 'VIP456',
-                acceptedTerms: true,
-                isVip: true,
-                specialOfferCode: 'WELCOME100',
-                timestamp: new Date().toISOString(),
-                ...generatedData.body
-              };
-            } else if (dataType === 'error_cases') {
-              generatedData.body = {
-                userId: null, // Missing required field
-                email: 'invalid-email', // Invalid email format
-                firstName: '',
-                lastName: '',
-                dateOfBirth: '2010-01-01', // Underage
-                country: 'XX', // Invalid country
-                currency: 'INVALID',
-                acceptedTerms: false, // Not accepted
-                timestamp: 'invalid-date',
-                ...generatedData.body
-              };
-            }
-          }
-        }
-        
-        return generatedData;
-      }
-      
-      // Fallback to hardcoded generation if no schema available
-      if (triggerConfig?.type === 'StdLib:HttpTrigger') {
-        const baseData = {
-          method: triggerConfig.config?.method || 'POST',
-          path: triggerConfig.config?.path || '/api/endpoint',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-            'User-Agent': 'CasinoApp/1.0',
-            'X-Request-ID': `req-${Date.now()}`
-          }
-        };
-
-        // Generate body based on data type and trigger path
-        let body = {};
-        const path = triggerConfig.config?.path || '';
-        
-        if (path.includes('/users/onboard') || path.includes('/onboard')) {
-          // User onboarding data
-          if (dataType === 'happy_path') {
-            body = {
-              userId: 'user_' + Math.random().toString(36).substr(2, 9),
-              email: 'user@example.com',
-              firstName: 'John',
-              lastName: 'Doe',
-              dateOfBirth: '1990-01-15',
-              country: 'US',
-              currency: 'USD',
-              referralCode: 'REF123',
-              acceptedTerms: true,
-              timestamp: new Date().toISOString()
-            };
-          } else if (dataType === 'fork_paths') {
-            body = {
-              userId: 'user_' + Math.random().toString(36).substr(2, 9),
-              email: 'vip@example.com',
-              firstName: 'Jane',
-              lastName: 'Smith',
-              dateOfBirth: '1985-06-20',
-              country: 'CA',
-              currency: 'CAD',
-              referralCode: 'VIP456',
-              acceptedTerms: true,
-              isVip: true,
-              specialOfferCode: 'WELCOME100',
-              timestamp: new Date().toISOString()
-            };
-          } else if (dataType === 'error_cases') {
-            body = {
-              userId: null,
-              email: 'invalid-email',
-              firstName: '',
-              lastName: '',
-              dateOfBirth: '2010-01-01', // Underage
-              country: 'XX',
-              currency: 'INVALID',
-              acceptedTerms: false,
-              timestamp: 'invalid-date'
-            };
-          }
-        } else if (path.includes('/bet') || path.includes('/place-bet')) {
-          // Betting data
-          if (dataType === 'happy_path') {
-            body = {
-              userId: 'user123',
-              gameId: 'slot_001',
-              betAmount: 10.00,
-              currency: 'USD',
-              gameType: 'slots',
-              sessionId: 'session_' + Date.now(),
-              timestamp: new Date().toISOString()
-            };
-          } else if (dataType === 'fork_paths') {
-            body = {
-              userId: 'user456',
-              gameId: 'blackjack_001',
-              betAmount: 100.00,
-              currency: 'USD',
-              gameType: 'table',
-              sessionId: 'session_' + Date.now(),
-              isHighRoller: true,
-              timestamp: new Date().toISOString()
-            };
-          } else {
-            body = {
-              userId: null,
-              gameId: '',
-              betAmount: -10, // Invalid amount
-              currency: 'INVALID',
-              gameType: 'unknown',
-              timestamp: 'invalid'
-            };
-          }
-        } else {
-          // Generic data
-          if (dataType === 'happy_path') {
-            body = {
-              userId: 'user123',
-              requestId: 'req456',
-              timestamp: new Date().toISOString(),
-              data: { status: 'success' }
-            };
-          } else if (dataType === 'fork_paths') {
-            body = {
-              userId: 'user789',
-              requestId: 'req999',
-              specialFlag: true,
-              timestamp: new Date().toISOString(),
-              data: { status: 'pending', priority: 'high' }
-            };
-          } else if (dataType === 'error_cases') {
-            body = {
-              userId: null,
-              invalidField: null,
-              timestamp: 'invalid-date'
-            };
-          }
-        }
-
-        return { ...baseData, body };
-      } else if (triggerConfig?.type === 'StdLib:EventTrigger') {
-        const eventType = triggerConfig.config?.eventType || 'generic-event';
-        
-        if (dataType === 'happy_path') {
-          return {
-            eventType,
-            payload: {
-              id: 'event123',
-              timestamp: new Date().toISOString(),
-              data: { status: 'success' }
-            }
-          };
-        } else if (dataType === 'fork_paths') {
-          return {
-            eventType,
-            payload: {
-              id: 'event456',
-              timestamp: new Date().toISOString(),
-              data: { status: 'pending', priority: 'high' }
-            }
-          };
-        } else {
-          return {
-            eventType,
-            payload: {
-              id: null,
-              timestamp: 'invalid'
-            }
-          };
-        }
-      }
-
-      // Fallback for unknown trigger types
-      return {
-        triggerType: triggerConfig?.type || 'unknown',
-        data: dataType === 'happy_path' ? { success: true } : { error: 'invalid' }
-      };
+      // Use the generateTriggerData function for consistency
+      return generateTriggerData(triggerConfig);
     },
 
     propagateDataFlow: async (flowFqn: string, triggerData: any) => {
@@ -919,6 +1020,52 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
       return simulationResults;
     },
     
+    resolveStepConfigData: (stepId: string, flowFqn: string) => {
+      console.log('Resolving config data for step:', stepId, 'in flow:', flowFqn);
+      
+      try {
+        const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
+        if (!flowDef) {
+          throw new Error(`Flow not found: ${flowFqn}`);
+        }
+        
+        // Handle trigger config
+        if (stepId === 'trigger') {
+          return {
+            stepId: 'trigger',
+            configData: flowDef.trigger?.config || {},
+            configSchema: undefined // Will be resolved from component schema
+          };
+        }
+        
+        // Find the step
+        const step = flowDef.steps?.find((s: any) => s.step_id === stepId);
+        if (!step) {
+          throw new Error(`Step not found: ${stepId} in flow ${flowFqn}`);
+        }
+        
+        // Get component schema for config validation
+        const moduleFqn = flowFqn.split('.').slice(0, -1).join('.');
+        const componentInfo = moduleRegistry.resolveComponentTypeInfo(step.component_ref, moduleFqn);
+        const componentSchema = componentInfo ? moduleRegistry.getComponentSchema(componentInfo.baseType) : undefined;
+        
+        return {
+          stepId,
+          configData: step.config || {},
+          configSchema: componentSchema?.configSchema,
+          componentType: componentInfo?.baseType
+        };
+      } catch (error) {
+        console.error('Failed to resolve config data:', error);
+        return {
+          stepId,
+          configData: {},
+          configSchema: undefined,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    },
+    
     resolveStepInputData: async (stepId: string, flowFqn: string) => {
       console.log('Resolving input data for step:', stepId, 'in flow:', flowFqn);
       
@@ -1030,338 +1177,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         };
       }
     },
-    
-    simulateFlowExecution: async (flowFqn: string, targetStepId: string, triggerData?: any) => {
-      console.log('Simulating flow execution for:', flowFqn, 'up to step:', targetStepId);
-      
-      // Get flow definition
-      const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
-      if (!flowDef) {
-        throw new Error(`Flow not found: ${flowFqn}`);
-      }
-      
-      // Generate trigger data if not provided
-      if (!triggerData) {
-        if (flowDef.trigger) {
-          triggerData = generateTriggerData(flowDef.trigger);
-        } else {
-          triggerData = { timestamp: new Date().toISOString(), data: {} };
-        }
-      }
-      
-      // Initialize simulation state
-      const stepResults: Record<string, any> = {};
-      const contextState = { ...(flowDef.context || {}) };
-      const executionOrder: string[] = [];
-      const errors: string[] = [];
-      
-      // Find target step index
-      let targetStepIndex = -1;
-      if (flowDef.steps) {
-        targetStepIndex = flowDef.steps.findIndex((s: any) => s.step_id === targetStepId);
-        if (targetStepIndex === -1 && targetStepId !== 'trigger') {
-          throw new Error(`Target step not found: ${targetStepId}`);
-        }
-      }
-      
-      // Simulate trigger execution
-      const triggerResult = {
-        stepId: 'trigger',
-        componentFqn: flowDef.trigger?.type || 'trigger',
-        inputData: triggerData,
-        outputData: triggerData,
-        contextChanges: {},
-        executionOrder: 0,
-        simulationSuccess: true
-      };
-      stepResults['trigger'] = triggerResult;
-      executionOrder.push('trigger');
-      
-      // Simulate each step up to target step
-      if (flowDef.steps && targetStepIndex >= 0) {
-        for (let stepIndex = 0; stepIndex <= targetStepIndex; stepIndex++) {
-          const step = flowDef.steps[stepIndex];
-          try {
-            const stepResult = simulateStepExecution(step, stepResults, contextState, flowFqn);
-            
-            if (!stepResult.simulationSuccess) {
-              errors.push(stepResult.error || 'Step simulation failed');
-              break;
-            }
-            
-            stepResults[step.step_id] = stepResult;
-            executionOrder.push(step.step_id);
-            
-            // Update context state with step changes
-            Object.assign(contextState, stepResult.contextChanges);
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-            errors.push(`Step ${step.step_id}: ${errorMsg}`);
-            break;
-          }
-        }
-      }
-      
-      // Resolve final input data for target step
-      let finalInputData = {};
-      if (targetStepId === 'trigger') {
-        finalInputData = triggerData;
-      } else if (flowDef.steps && targetStepIndex >= 0) {
-        const targetStep = flowDef.steps[targetStepIndex];
-        finalInputData = resolveStepInputFromSimulation(targetStep, stepResults, contextState);
-      }
-      
-      return {
-        flowFqn,
-        targetStepId,
-        triggerData,
-        stepResults,
-        finalInputData,
-        executionOrder,
-        contextState,
-        errors
-      };
-    },
-    
-    resolveDataLineage: async (stepId: string, flowFqn: string) => {
-      console.log('Resolving data lineage for step:', stepId, 'in flow:', flowFqn);
-      
-      try {
-        // Use the simulation to get actual data lineage
-        const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
-        if (!flowDef) {
-          throw new Error(`Flow not found: ${flowFqn}`);
-        }
-        
-        // Generate trigger data
-        let triggerData;
-        if (flowDef.trigger) {
-          triggerData = generateTriggerData(flowDef.trigger);
-        } else {
-          triggerData = { timestamp: new Date().toISOString(), data: {} };
-        }
-        
-        // Initialize simulation state
-        const stepResults: Record<string, any> = {};
-        const contextState = { ...(flowDef.context || {}) };
-        
-        // Find target step index
-        let targetStepIndex = -1;
-        if (flowDef.steps) {
-          targetStepIndex = flowDef.steps.findIndex((s: any) => s.step_id === stepId);
-          if (targetStepIndex === -1 && stepId !== 'trigger') {
-            throw new Error(`Target step not found: ${stepId}`);
-          }
-        }
-        
-        // Simulate trigger execution
-        const triggerResult = {
-          stepId: 'trigger',
-          componentFqn: flowDef.trigger?.type || 'trigger',
-          inputData: triggerData,
-          outputData: triggerData,
-          contextChanges: {},
-          executionOrder: 0,
-          simulationSuccess: true
-        };
-        stepResults['trigger'] = triggerResult;
-        
-        // Build data path from simulation
-        const dataPath: any[] = [{
-          stepId: 'trigger',
-          stepType: 'trigger',
-          componentFqn: flowDef.trigger?.type || 'trigger',
-          outputSchema: undefined,
-          outputData: triggerData,
-          executionOrder: 0
-        }];
-        
-        // Simulate each step up to target step
-        if (flowDef.steps && targetStepIndex >= 0) {
-          for (let stepIndex = 0; stepIndex <= targetStepIndex; stepIndex++) {
-            const step = flowDef.steps[stepIndex];
-            const stepResult = simulateStepExecution(step, stepResults, contextState, flowFqn);
-            
-            if (!stepResult.simulationSuccess) {
-              break;
-            }
-            
-            stepResults[step.step_id] = stepResult;
-            Object.assign(contextState, stepResult.contextChanges);
-            
-            // Add to data path
-            dataPath.push({
-              stepId: step.step_id,
-              stepType: 'component',
-              componentFqn: stepResult.componentFqn,
-              outputSchema: undefined,
-              outputData: stepResult.outputData,
-              executionOrder: stepIndex + 1
-            });
-          }
-        }
-        
-        // Generate input mappings for target step
-        const inputMappings: any[] = [];
-        if (stepId !== 'trigger' && flowDef.steps && targetStepIndex >= 0) {
-          const targetStep = flowDef.steps[targetStepIndex];
-          if (targetStep.inputs_map) {
-            Object.entries(targetStep.inputs_map).forEach(([targetField, sourceExpression]: [string, any]) => {
-              if (typeof sourceExpression === 'string') {
-                if (sourceExpression.startsWith('trigger.')) {
-                  inputMappings.push({
-                    targetInputField: targetField,
-                    sourceType: 'triggerData' as const,
-                    sourceStepId: 'trigger',
-                    sourceOutputField: sourceExpression.replace('trigger.', ''),
-                    defaultValue: null,
-                    transformationRule: 'direct',
-                    isRequired: true
-                  });
-                } else if (sourceExpression.startsWith('steps.')) {
-                  const match = sourceExpression.match(/^steps\.([^.]+)\.(.+)$/);
-                  if (match) {
-                    const sourceStepId = match[1];
-                    const outputPath = match[2];
-                    inputMappings.push({
-                      targetInputField: targetField,
-                      sourceType: 'previousStep' as const,
-                      sourceStepId: sourceStepId,
-                      sourceOutputField: outputPath,
-                      defaultValue: null,
-                      transformationRule: 'direct',
-                      isRequired: true
-                    });
-                  }
-                } else if (sourceExpression.startsWith('context.')) {
-                  const contextVar = sourceExpression.replace('context.', '');
-                  inputMappings.push({
-                    targetInputField: targetField,
-                    sourceType: 'contextVariable' as const,
-                    contextVariableName: contextVar,
-                    defaultValue: null,
-                    transformationRule: 'direct',
-                    isRequired: false
-                  });
-                }
-              }
-            });
-          }
-        }
-        
-        // Generate available inputs based on actual simulation results
-        const availableInputs: Record<string, any> = {};
-        dataPath.forEach(pathStep => {
-          if (pathStep.outputData) {
-            Object.entries(pathStep.outputData).forEach(([key, value]) => {
-              availableInputs[`${pathStep.stepId}.${key}`] = value;
-            });
-          }
-        });
-        
-        return {
-          targetStepId: stepId,
-          flowFqn,
-          dataPath,
-          availableInputs,
-          contextVariables: contextState,
-          inputMappings
-        };
-      } catch (error) {
-        console.error('Data lineage simulation failed:', error);
-        
-        // Fallback to original mock logic
-        const flowDef = moduleRegistry.getFlowDefinition(flowFqn);
-        if (!flowDef) {
-          throw new Error(`Flow not found: ${flowFqn}`);
-        }
-        
-        const targetStep = flowDef.steps?.find((s: any) => s.step_id === stepId);
-        if (!targetStep) {
-          throw new Error(`Step not found: ${stepId} in flow ${flowFqn}`);
-        }
-        
-        // Build basic mock data lineage
-        const dataPath: any[] = [];
-        const inputMappings: any[] = [];
-        
-        // Add trigger as the starting point
-        if (flowDef.trigger) {
-          dataPath.push({
-            stepId: 'trigger',
-            stepType: 'trigger',
-            componentFqn: flowDef.trigger.type,
-            outputSchema: undefined,
-            outputData: { 
-              eventType: 'sample-event',
-              data: { userId: 'user123', timestamp: new Date().toISOString() }
-            },
-            executionOrder: 0
-          });
-        }
-        
-        return {
-          targetStepId: stepId,
-          flowFqn,
-          dataPath,
-          availableInputs: {},
-          contextVariables: {},
-          inputMappings
-        };
-      }
-    },
-    
-    collectStepLogs: async (executionId: string) => {
-      // Mock step logs with more detail
-      return [
-        {
-          stepId: 'step1',
-          timestamp: new Date().toISOString(),
-          level: 'info',
-          message: 'Step execution started',
-          data: { executionId }
-        },
-        {
-          stepId: 'step1',
-          timestamp: new Date().toISOString(),
-          level: 'debug',
-          message: 'Processing input data',
-          data: { inputSize: 1024 }
-        },
-        {
-          stepId: 'step1',
-          timestamp: new Date().toISOString(),
-          level: 'info',
-          message: 'Step execution completed',
-          data: { outputSize: 2048, duration: 500 }
-        }
-      ];
-    },
-    
-    exportExecutionResults: (executionResult: any, format: 'json' | 'yaml' | 'csv') => {
-      switch (format) {
-        case 'json':
-          return JSON.stringify(executionResult, null, 2);
-        case 'yaml':
-          // Simple YAML-like format
-          return Object.entries(executionResult)
-            .map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`)
-            .join('\n');
-        case 'csv':
-          // Simple CSV format for logs
-          if (executionResult.logs) {
-            const headers = 'stepId,timestamp,level,message';
-            const rows = executionResult.logs.map((log: any) => 
-              `${log.stepId},${log.timestamp},${log.level},"${log.message}"`
-            ).join('\n');
-            return `${headers}\n${rows}`;
-          }
-          return 'No log data available';
-        default:
-          return JSON.stringify(executionResult, null, 2);
-      }
-    }
-  }), [props.onRunTestCase, moduleRegistry]);
+  }), [selectedElement, props.onSaveModule, props.onModuleLoadError, dslModuleRepresentations, currentFlowFqn]);
 
   // Helper function to get nested values from objects
   const getNestedValue = (obj: any, path: string): any => {
@@ -1419,6 +1235,8 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
 
   // Helper function to generate trigger data
   const generateTriggerData = (trigger: any): any => {
+    console.log(`🎯 Generating trigger data for:`, trigger);
+    
     switch (trigger.type) {
       case 'StdLib:HttpTrigger':
         const path = trigger.config?.path || '/api/endpoint';
@@ -1428,73 +1246,131 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         let body: any = {};
         
         if (path.includes('/users/onboard') || path.includes('/onboard')) {
-          // User onboarding data
+          // User onboarding data - CRITICAL: This becomes the trigger output that flows to first step
           body = {
-            email: 'john.doe@example.com',
-            password: 'SecurePass123!',
-            firstName: 'John',
-            lastName: 'Doe',
-            dateOfBirth: '1990-01-15',
-            country: 'US',
-            phoneNumber: '+1234567890',
-            referralCode: 'REF123',
-            acceptedTerms: true,
-            timestamp: new Date().toISOString()
+            userData: { // Structured data that components can reference
+              email: 'john.doe@example.com',
+              password: 'SecurePass123!',
+              firstName: 'John',
+              lastName: 'Doe',
+              dateOfBirth: '1990-01-15',
+              country: 'US',
+              phoneNumber: '+1234567890',
+              referralCode: 'REF123',
+              acceptedTerms: true
+            },
+            requestMetadata: {
+              timestamp: new Date().toISOString(),
+              requestId: 'req-' + Math.random().toString(36).substr(2, 9),
+              userAgent: 'CasinoApp/1.0',
+              ipAddress: '192.168.1.100'
+            }
           };
         } else if (path.includes('/bet') || path.includes('/place-bet')) {
           // Betting data
           body = {
-            userId: 'user123',
-            gameId: 'slot_001',
-            betAmount: 10.00,
-            currency: 'USD',
-            gameType: 'slots',
-            sessionId: 'session_' + Date.now(),
-            timestamp: new Date().toISOString()
+            betData: {
+              userId: 'user123',
+              gameId: 'slot_001',
+              betAmount: 10.00,
+              currency: 'USD',
+              gameType: 'slots',
+              sessionId: 'session_' + Date.now()
+            },
+            requestMetadata: {
+              timestamp: new Date().toISOString(),
+              requestId: 'req-' + Math.random().toString(36).substr(2, 9)
+            }
           };
         } else {
           // Generic data
           body = { 
-            userId: 'user123', 
-            requestId: 'req456',
-            timestamp: new Date().toISOString()
+            data: {
+              userId: 'user123', 
+              requestId: 'req456'
+            },
+            requestMetadata: {
+              timestamp: new Date().toISOString()
+            }
           };
         }
         
-        return {
+        // CRITICAL: The trigger output should be the complete HTTP request data
+        // This is what gets passed to the first step via inputs_map
+        const triggerOutput = {
           method,
           path,
           headers: { 
             'content-type': 'application/json',
             'authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-            'user-agent': 'CasinoApp/1.0'
+            'user-agent': 'CasinoApp/1.0',
+            'x-request-id': body.requestMetadata?.requestId || 'req-unknown'
           },
-          body
+          body,
+          // Additional trigger metadata
+          triggerType: 'StdLib:HttpTrigger',
+          triggerConfig: trigger.config,
+          receivedAt: new Date().toISOString()
         };
+        
+        console.log(`🎯 Generated HttpTrigger output:`, triggerOutput);
+        return triggerOutput;
+        
       case 'StdLib:ScheduledTrigger':
-        return {
+        const scheduledOutput = {
           scheduledTime: new Date().toISOString(),
-          triggerType: 'scheduled',
-          data: { batchId: 'batch123' }
+          triggerType: 'StdLib:ScheduledTrigger',
+          data: { 
+            batchId: 'batch123',
+            scheduleName: trigger.config?.scheduleName || 'default-schedule'
+          },
+          triggerConfig: trigger.config,
+          triggeredAt: new Date().toISOString()
         };
+        console.log(`🎯 Generated ScheduledTrigger output:`, scheduledOutput);
+        return scheduledOutput;
+        
+      case 'StdLib:EventTrigger':
+        const eventOutput = {
+          eventType: trigger.config?.eventType || 'generic-event',
+          eventData: {
+            userId: 'user123',
+            eventId: 'event-' + Math.random().toString(36).substr(2, 9),
+            timestamp: new Date().toISOString()
+          },
+          triggerType: 'StdLib:EventTrigger',
+          triggerConfig: trigger.config,
+          receivedAt: new Date().toISOString()
+        };
+        console.log(`🎯 Generated EventTrigger output:`, eventOutput);
+        return eventOutput;
+        
       default:
-        return {
+        const defaultOutput = {
           eventType: 'sample-event',
           data: { 
             userId: 'user123', 
             timestamp: new Date().toISOString() 
-          }
+          },
+          triggerType: trigger.type || 'unknown',
+          triggerConfig: trigger.config,
+          triggeredAt: new Date().toISOString()
         };
+        console.log(`🎯 Generated default trigger output:`, defaultOutput);
+        return defaultOutput;
     }
   };
 
   // Helper function to simulate step execution
   const simulateStepExecution = (step: any, previousStepResults: Record<string, any>, contextState: Record<string, any>, flowFqn: string): any => {
+    console.log(`🔄 Simulating step: ${step.step_id}`, { step, previousStepResults, contextState });
+    
     // Resolve component information
     const moduleFqn = flowFqn.split('.').slice(0, -1).join('.');
     const componentInfo = moduleRegistry.resolveComponentTypeInfo(step.component_ref, moduleFqn);
     
     if (!componentInfo) {
+      console.error(`❌ Component not found: ${step.component_ref} for step ${step.step_id}`);
       return {
         stepId: step.step_id,
         componentFqn: step.component_ref,
@@ -1513,8 +1389,12 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
     // Get component schema for output generation
     const componentSchema = moduleRegistry.getComponentSchema(componentInfo.baseType);
 
-    // Simulate component execution based on type
-    const outputData = simulateComponentExecution(componentInfo.baseType, inputData, step.config, componentSchema);
+    // CRITICAL: Pass the step's config to the component simulation
+    const stepConfig = step.config || {};
+    console.log(`📋 Using step config for ${step.step_id}:`, stepConfig);
+
+    // Simulate component execution based on type with BOTH input data AND config
+    const outputData = simulateComponentExecution(componentInfo.baseType, inputData, stepConfig, componentSchema);
 
     // Determine context changes
     const contextChanges: Record<string, any> = {};
@@ -1622,42 +1502,61 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   // Helper function to simulate component execution
   const simulateComponentExecution = (componentType: string, inputData: any, config: any, componentSchema?: any): any => {
     // Generate realistic output based on component type and schema - CRITICAL: outputs must be usable by next steps
+    // Components receive BOTH inputData AND config, and should return structured outputs
+    console.log(`🔧 Simulating ${componentType} with input:`, inputData, 'and config:', config);
+    
     switch (componentType) {
       case 'StdLib:HttpCall':
         return {
           status: 200,
           body: { success: true, data: inputData, timestamp: new Date().toISOString() },
-          headers: { 'content-type': 'application/json' }
+          headers: { 'content-type': 'application/json' },
+          requestConfig: config, // Include config that was used
+          inputData: inputData // Preserve input data for debugging
         };
       
       case 'StdLib:DatabaseQuery':
         return {
           rows: [{ id: 1, ...inputData, created_at: new Date().toISOString() }],
           rowCount: 1,
-          success: true
+          success: true,
+          queryConfig: config,
+          inputData: inputData
         };
       
       case 'StdLib:JsonSchemaValidator':
-        // CRITICAL: For validators, return validData that contains the validated input
+        // CRITICAL: For validators, return BOTH validation result AND the validated data
         if (inputData?.data) {
           return {
             isValid: true,
-            validData: inputData.data, // Pass through the validated data
-            errors: [],
-            validationResult: 'success'
+            validData: inputData.data, // The validated data that passes to next steps
+            validationResult: {
+              passed: true,
+              errors: [],
+              schema: config?.schema,
+              validatedFields: Object.keys(inputData.data || {})
+            },
+            inputData: inputData, // Original input for reference
+            config: config // Validation config used
           };
         } else {
           return {
             isValid: true,
-            validData: inputData, // Pass through all input data
-            errors: [],
-            validationResult: 'success'
+            validData: inputData, // Pass through all input data if no nested data
+            validationResult: {
+              passed: true,
+              errors: [],
+              schema: config?.schema,
+              validatedFields: Object.keys(inputData || {})
+            },
+            inputData: inputData,
+            config: config
           };
         }
       
       case 'StdLib:DataTransform':
       case 'StdLib:MapData':
-        // CRITICAL: For data transformation, apply actual transformations or pass through enhanced data
+        // CRITICAL: For data transformation, apply actual transformations based on config
         const transformed = { ...inputData };
         if (config?.expression) {
           // Simulate expression evaluation - in real implementation would use actual expression engine
@@ -1684,7 +1583,11 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
           transformed.result = inputData;
           transformed.success = true;
         }
-        return transformed;
+        return {
+          ...transformed, // Spread the transformed data
+          transformationConfig: config, // Include config used
+          originalInput: inputData // Preserve original input
+        };
       
       case 'StdLib:Fork':
         // CRITICAL: Fork components run multiple branches and return combined results
@@ -1692,35 +1595,66 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         if (config?.branches) {
           config.branches.forEach((branch: any) => {
             if (branch.name === 'jurisdiction-check') {
-              forkResults['jurisdiction-check'] = { allowed: true, jurisdiction: inputData?.userData?.country || 'US' };
+              forkResults[branch.name] = { 
+                allowed: true, 
+                jurisdiction: inputData?.userData?.country || 'US',
+                checkConfig: branch.config
+              };
             } else if (branch.name === 'sanctions-check') {
-              forkResults['sanctions-check'] = { flagged: false, clearanceLevel: 'green' };
+              forkResults[branch.name] = { 
+                flagged: false, 
+                clearanceLevel: 'green',
+                checkConfig: branch.config
+              };
             } else if (branch.name === 'age-verification') {
-              forkResults['age-verification'] = { 
+              forkResults[branch.name] = { 
                 age: 25, 
                 isEligible: true, 
-                jurisdiction: inputData?.userData?.country || 'US' 
+                jurisdiction: inputData?.userData?.country || 'US',
+                checkConfig: branch.config
               };
             } else if (branch.name === 'welcome-email') {
-              forkResults['welcome-email'] = { sent: true, messageId: 'email-' + Math.random().toString(36).substr(2, 9) };
+              forkResults[branch.name] = { 
+                sent: true, 
+                messageId: 'email-' + Math.random().toString(36).substr(2, 9),
+                emailConfig: branch.config
+              };
             } else if (branch.name === 'welcome-sms') {
-              forkResults['welcome-sms'] = { sent: true, messageId: 'sms-' + Math.random().toString(36).substr(2, 9) };
+              forkResults[branch.name] = { 
+                sent: true, 
+                messageId: 'sms-' + Math.random().toString(36).substr(2, 9),
+                smsConfig: branch.config
+              };
             } else if (branch.name === 'analytics-event') {
-              forkResults['analytics-event'] = { tracked: true, eventId: 'event-' + Math.random().toString(36).substr(2, 9) };
+              forkResults[branch.name] = { 
+                tracked: true, 
+                eventId: 'event-' + Math.random().toString(36).substr(2, 9),
+                analyticsConfig: branch.config
+              };
             } else {
               // Generic branch result
-              forkResults[branch.name] = { success: true, data: inputData };
+              forkResults[branch.name] = { 
+                success: true, 
+                data: inputData,
+                branchConfig: branch.config
+              };
             }
           });
         }
-        return forkResults;
+        return {
+          branches: forkResults, // All branch results
+          forkConfig: config, // Fork configuration
+          inputData: inputData // Original input data
+        };
       
       case 'StdLib:FilterData':
         // CRITICAL: Filter components evaluate conditions and return filtered data
         const filterResult: any = {
           matched: true, // Simulate successful filter match
           filteredData: inputData,
-          filterExpression: config?.expression || 'default'
+          filterExpression: config?.expression || 'default',
+          filterConfig: config,
+          inputData: inputData
         };
         if (config?.matchOutput) {
           filterResult[config.matchOutput] = true;
@@ -1731,14 +1665,18 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         return {
           isValid: true,
           validatedData: inputData,
-          errors: []
+          errors: [],
+          validationConfig: config,
+          inputData: inputData
         };
       
       case 'StdLib:SubFlowInvoker':
         return {
           subFlowResult: { success: true, data: inputData },
           executionId: 'sub-exec-' + Math.random().toString(36).substr(2, 9),
-          status: 'completed'
+          status: 'completed',
+          subFlowConfig: config,
+          inputData: inputData
         };
       
       default:
@@ -1748,43 +1686,58 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
             status: 'initiated',
             kycId: 'kyc-' + Math.random().toString(36).substr(2, 9),
             requiredDocuments: ['passport', 'proof_of_address'],
-            estimatedCompletionTime: '24-48 hours'
+            estimatedCompletionTime: '24-48 hours',
+            kycConfig: config,
+            inputData: inputData
           };
         } else if (componentType.startsWith('responsible.')) {
           return {
             limitsSet: true,
-            dailyLimit: 1000,
-            weeklyLimit: 5000,
-            monthlyLimit: 20000,
-            userId: inputData?.userId || 'user-' + Math.random().toString(36).substr(2, 9)
+            dailyLimit: config?.dailyLimit || 1000,
+            weeklyLimit: config?.weeklyLimit || 5000,
+            monthlyLimit: config?.monthlyLimit || 20000,
+            userId: inputData?.userId || 'user-' + Math.random().toString(36).substr(2, 9),
+            limitsConfig: config,
+            inputData: inputData
           };
         } else if (componentType.startsWith('bonuses.')) {
           return {
             bonusProcessed: true,
-            bonusAmount: 50,
-            bonusType: 'referral',
+            bonusAmount: config?.bonusAmount || 50,
+            bonusType: config?.bonusType || 'referral',
             bonusId: 'bonus-' + Math.random().toString(36).substr(2, 9),
-            expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+            expiryDate: new Date(Date.now() + (config?.expiryDays || 30) * 24 * 60 * 60 * 1000).toISOString(),
+            bonusConfig: config,
+            inputData: inputData
           };
         } else if (componentType.startsWith('analytics.')) {
           return {
             tracked: true,
             eventId: 'analytics-' + Math.random().toString(36).substr(2, 9),
             timestamp: new Date().toISOString(),
-            userId: inputData?.userId || inputData?.userData?.userId || 'unknown'
+            userId: inputData?.userId || inputData?.userData?.userId || 'unknown',
+            analyticsConfig: config,
+            inputData: inputData
           };
         }
         
         // Use schema to generate output if available
         if (componentSchema?.outputSchema) {
-          return generateDataFromSchema(componentSchema.outputSchema, 'happy_path', true);
+          const schemaBasedOutput = generateDataFromSchema(componentSchema.outputSchema, 'happy_path', true);
+          return {
+            ...schemaBasedOutput,
+            componentConfig: config,
+            inputData: inputData
+          };
         } else {
-          // CRITICAL: Default fallback should preserve input data for next steps
+          // CRITICAL: Default fallback should preserve input data and config for next steps
           return { 
             result: inputData, 
             success: true, 
             timestamp: new Date().toISOString(),
-            componentType: componentType
+            componentType: componentType,
+            componentConfig: config,
+            inputData: inputData
           };
         }
     }

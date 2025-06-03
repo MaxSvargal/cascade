@@ -1046,42 +1046,59 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
     
     detailed_behavior: `
         // Generate realistic output based on component type and schema - CRITICAL: outputs must be usable by next steps
+        // Components receive BOTH inputData AND config, and should return structured outputs
         SWITCH componentType
             CASE 'StdLib:HttpCall'
                 RETURN_VALUE {
                     status: 200,
                     body: { success: true, data: inputData, timestamp: new Date().toISOString() },
-                    headers: { 'content-type': 'application/json' }
+                    headers: { 'content-type': 'application/json' },
+                    requestConfig: config, // Include config that was used
+                    inputData: inputData // Preserve input data for debugging
                 }
             
             CASE 'StdLib:DatabaseQuery'
                 RETURN_VALUE {
                     rows: [{ id: 1, ...inputData, created_at: new Date().toISOString() }],
                     rowCount: 1,
-                    success: true
+                    success: true,
+                    queryConfig: config,
+                    inputData: inputData
                 }
             
             CASE 'StdLib:JsonSchemaValidator'
-                // CRITICAL: For validators, return validData that contains the validated input
+                // CRITICAL: For validators, return BOTH validation result AND the validated data
                 IF inputData?.data IS_DEFINED THEN
                     RETURN_VALUE {
                         isValid: true,
-                        validData: inputData.data, // Pass through the validated data
-                        errors: [],
-                        validationResult: 'success'
+                        validData: inputData.data, // The validated data that passes to next steps
+                        validationResult: {
+                            passed: true,
+                            errors: [],
+                            schema: config?.schema,
+                            validatedFields: Object.keys(inputData.data || {})
+                        },
+                        inputData: inputData, // Original input for reference
+                        config: config // Validation config used
                     }
                 ELSE
                     RETURN_VALUE {
                         isValid: true,
-                        validData: inputData, // Pass through all input data
-                        errors: [],
-                        validationResult: 'success'
+                        validData: inputData, // Pass through all input data if no nested data
+                        validationResult: {
+                            passed: true,
+                            errors: [],
+                            schema: config?.schema,
+                            validatedFields: Object.keys(inputData || {})
+                        },
+                        inputData: inputData,
+                        config: config
                     }
                 END_IF
             
             CASE 'StdLib:DataTransform'
             CASE 'StdLib:MapData'
-                // CRITICAL: For data transformation, apply actual transformations or pass through enhanced data
+                // CRITICAL: For data transformation, apply actual transformations based on config
                 DECLARE transformed = CLONE inputData
                 IF config?.expression IS_DEFINED THEN
                     // Simulate expression evaluation - in real implementation would use actual expression engine
@@ -1108,7 +1125,11 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
                     ASSIGN transformed.result = inputData
                     ASSIGN transformed.success = true
                 END_IF
-                RETURN_VALUE transformed
+                RETURN_VALUE {
+                    ...transformed, // Spread the transformed data
+                    transformationConfig: config, // Include config used
+                    originalInput: inputData // Preserve original input
+                }
             
             CASE 'StdLib:Fork'
                 // CRITICAL: Fork components run multiple branches and return combined results
@@ -1116,35 +1137,66 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
                 IF config?.branches IS_DEFINED THEN
                     FOR_EACH branch IN config.branches
                         IF branch.name EQUALS 'jurisdiction-check' THEN
-                            ASSIGN forkResults['jurisdiction-check'] = { allowed: true, jurisdiction: inputData?.userData?.country OR 'US' }
+                            ASSIGN forkResults[branch.name] = { 
+                                allowed: true, 
+                                jurisdiction: inputData?.userData?.country OR 'US',
+                                checkConfig: branch.config
+                            }
                         ELSE_IF branch.name EQUALS 'sanctions-check' THEN
-                            ASSIGN forkResults['sanctions-check'] = { flagged: false, clearanceLevel: 'green' }
+                            ASSIGN forkResults[branch.name] = { 
+                                flagged: false, 
+                                clearanceLevel: 'green',
+                                checkConfig: branch.config
+                            }
                         ELSE_IF branch.name EQUALS 'age-verification' THEN
-                            ASSIGN forkResults['age-verification'] = { 
+                            ASSIGN forkResults[branch.name] = { 
                                 age: 25, 
                                 isEligible: true, 
-                                jurisdiction: inputData?.userData?.country OR 'US' 
+                                jurisdiction: inputData?.userData?.country OR 'US',
+                                checkConfig: branch.config
                             }
                         ELSE_IF branch.name EQUALS 'welcome-email' THEN
-                            ASSIGN forkResults['welcome-email'] = { sent: true, messageId: 'email-' + Math.random().toString(36).substr(2, 9) }
+                            ASSIGN forkResults[branch.name] = { 
+                                sent: true, 
+                                messageId: 'email-' + Math.random().toString(36).substr(2, 9),
+                                emailConfig: branch.config
+                            }
                         ELSE_IF branch.name EQUALS 'welcome-sms' THEN
-                            ASSIGN forkResults['welcome-sms'] = { sent: true, messageId: 'sms-' + Math.random().toString(36).substr(2, 9) }
+                            ASSIGN forkResults[branch.name] = { 
+                                sent: true, 
+                                messageId: 'sms-' + Math.random().toString(36).substr(2, 9),
+                                smsConfig: branch.config
+                            }
                         ELSE_IF branch.name EQUALS 'analytics-event' THEN
-                            ASSIGN forkResults['analytics-event'] = { tracked: true, eventId: 'event-' + Math.random().toString(36).substr(2, 9) }
+                            ASSIGN forkResults[branch.name] = { 
+                                tracked: true, 
+                                eventId: 'event-' + Math.random().toString(36).substr(2, 9),
+                                analyticsConfig: branch.config
+                            }
                         ELSE
                             // Generic branch result
-                            ASSIGN forkResults[branch.name] = { success: true, data: inputData }
+                            ASSIGN forkResults[branch.name] = { 
+                                success: true, 
+                                data: inputData,
+                                branchConfig: branch.config
+                            }
                         END_IF
                     END_FOR
                 END_IF
-                RETURN_VALUE forkResults
+                RETURN_VALUE {
+                    branches: forkResults, // All branch results
+                    forkConfig: config, // Fork configuration
+                    inputData: inputData // Original input data
+                }
             
             CASE 'StdLib:FilterData'
                 // CRITICAL: Filter components evaluate conditions and return filtered data
                 DECLARE filterResult = {
                     matched: true, // Simulate successful filter match
                     filteredData: inputData,
-                    filterExpression: config?.expression OR 'default'
+                    filterExpression: config?.expression OR 'default',
+                    filterConfig: config,
+                    inputData: inputData
                 }
                 IF config?.matchOutput IS_DEFINED THEN
                     ASSIGN filterResult[config.matchOutput] = true
@@ -1155,14 +1207,18 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
                 RETURN_VALUE {
                     isValid: true,
                     validatedData: inputData,
-                    errors: []
+                    errors: [],
+                    validationConfig: config,
+                    inputData: inputData
                 }
             
             CASE 'StdLib:SubFlowInvoker'
                 RETURN_VALUE {
                     subFlowResult: { success: true, data: inputData },
                     executionId: 'sub-exec-' + Math.random().toString(36).substr(2, 9),
-                    status: 'completed'
+                    status: 'completed',
+                    subFlowConfig: config,
+                    inputData: inputData
                 }
             
             // CRITICAL: Handle named components (custom components defined in modules)
@@ -1171,25 +1227,31 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
                     status: 'initiated',
                     kycId: 'kyc-' + Math.random().toString(36).substr(2, 9),
                     requiredDocuments: ['passport', 'proof_of_address'],
-                    estimatedCompletionTime: '24-48 hours'
+                    estimatedCompletionTime: '24-48 hours',
+                    kycConfig: config,
+                    inputData: inputData
                 }
             
             CASE STARTS_WITH 'responsible.'
                 RETURN_VALUE {
                     limitsSet: true,
-                    dailyLimit: 1000,
-                    weeklyLimit: 5000,
-                    monthlyLimit: 20000,
-                    userId: inputData?.userId OR 'user-' + Math.random().toString(36).substr(2, 9)
+                    dailyLimit: config?.dailyLimit OR 1000,
+                    weeklyLimit: config?.weeklyLimit OR 5000,
+                    monthlyLimit: config?.monthlyLimit OR 20000,
+                    userId: inputData?.userId OR 'user-' + Math.random().toString(36).substr(2, 9),
+                    limitsConfig: config,
+                    inputData: inputData
                 }
             
             CASE STARTS_WITH 'bonuses.'
                 RETURN_VALUE {
                     bonusProcessed: true,
-                    bonusAmount: 50,
-                    bonusType: 'referral',
+                    bonusAmount: config?.bonusAmount OR 50,
+                    bonusType: config?.bonusType OR 'referral',
                     bonusId: 'bonus-' + Math.random().toString(36).substr(2, 9),
-                    expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                    expiryDate: new Date(Date.now() + (config?.expiryDays OR 30) * 24 * 60 * 60 * 1000).toISOString(),
+                    bonusConfig: config,
+                    inputData: inputData
                 }
             
             CASE STARTS_WITH 'analytics.'
@@ -1197,20 +1259,29 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
                     tracked: true,
                     eventId: 'analytics-' + Math.random().toString(36).substr(2, 9),
                     timestamp: new Date().toISOString(),
-                    userId: inputData?.userId OR inputData?.userData?.userId OR 'unknown'
+                    userId: inputData?.userId OR inputData?.userData?.userId OR 'unknown',
+                    analyticsConfig: config,
+                    inputData: inputData
                 }
             
             DEFAULT
                 // Use schema to generate output if available
                 IF componentSchema?.outputSchema IS_DEFINED THEN
-                    RETURN_VALUE CALL generateDataFromSchema WITH componentSchema.outputSchema, 'happy_path', true
+                    DECLARE schemaBasedOutput = CALL generateDataFromSchema WITH componentSchema.outputSchema, 'happy_path', true
+                    RETURN_VALUE {
+                        ...schemaBasedOutput,
+                        componentConfig: config,
+                        inputData: inputData
+                    }
                 ELSE
-                    // CRITICAL: Default fallback should preserve input data for next steps
+                    // CRITICAL: Default fallback should preserve input data and config for next steps
                     RETURN_VALUE { 
                         result: inputData, 
                         success: true, 
                         timestamp: new Date().toISOString(),
-                        componentType: componentType
+                        componentType: componentType,
+                        componentConfig: config,
+                        inputData: inputData
                     }
                 END_IF
         END_SWITCH
