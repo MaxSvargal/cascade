@@ -316,8 +316,8 @@ export class SimulationService {
       const triggerResult = executionContext.stepResults.get('trigger');
       if (triggerResult) {
         const path = expression.substring(8); // Remove 'trigger.'
-        // CRITICAL: Handle new { input, output } structure
-        const triggerOutput = triggerResult.outputData.output || triggerResult.outputData;
+        // CRITICAL: Handle optimized structure - trigger outputs are direct
+        const triggerOutput = triggerResult.outputData;
         source.type = 'trigger';
         source.stepId = 'trigger';
         source.path = path;
@@ -335,12 +335,22 @@ export class SimulationService {
         const stepResult = executionContext.stepResults.get(stepId);
         
         if (stepResult) {
-          // CRITICAL: Handle new { input, output } structure
+          // CRITICAL: Handle optimized structure - access output directly
           const stepOutput = stepResult.outputData.output || stepResult.outputData;
-          source.type = 'step';
-          source.stepId = stepId;
-          source.path = path;
-          source.resolvedValue = this.getNestedValue(stepOutput, path);
+          
+          // SPECIAL HANDLING for Fork outputs: steps.fork-step.outputs.branch-name
+          if (path.startsWith('outputs.') && stepOutput.branches) {
+            const branchName = path.substring(8); // Remove 'outputs.'
+            source.type = 'step';
+            source.stepId = stepId;
+            source.path = path;
+            source.resolvedValue = stepOutput.branches[branchName];
+          } else {
+            source.type = 'step';
+            source.stepId = stepId;
+            source.path = path;
+            source.resolvedValue = this.getNestedValue(stepOutput, path);
+          }
         } else {
           source.error = `Step result not found: ${stepId}`;
           source.resolvedValue = null;
@@ -366,7 +376,7 @@ export class SimulationService {
   private executeStepDetailed(step: any, stepInput: InternalResolvedStepInput, executionContext: ExecutionContext): StepExecutionResult {
     const startTime = Date.now();
     
-    // CRITICAL: Component now returns { input: ..., output: ... } structure
+    // CRITICAL: Component now returns optimized { inputRef, output } structure
     const componentResult = this.dataGenerationService.simulateComponentExecution(
       step.component_ref,
       stepInput.resolvedInput,
@@ -374,7 +384,7 @@ export class SimulationService {
       this.componentSchemas[step.component_ref]
     );
 
-    // Extract the actual output data from the component result
+    // Extract the actual output data from the optimized component result
     const outputData = componentResult.output || componentResult; // Fallback for backward compatibility
 
     const executionTime = Date.now() - startTime;
@@ -383,7 +393,7 @@ export class SimulationService {
       stepId: step.step_id,
       componentType: step.component_ref,
       inputData: stepInput.resolvedInput,
-      outputData: componentResult, // CRITICAL: Store the complete { input, output } structure
+      outputData: componentResult, // CRITICAL: Store the complete optimized structure
       executionTime,
       timestamp: new Date().toISOString(),
       success: true,
@@ -523,8 +533,8 @@ export class SimulationService {
             const triggerResult = stepResults['trigger'];
             if (triggerResult && triggerResult.outputData) {
               const dataPath = sourceExpression.replace('trigger.', '');
-              // CRITICAL: Handle new { input, output } structure
-              const triggerOutput = triggerResult.outputData.output || triggerResult.outputData;
+              // CRITICAL: Handle optimized structure - trigger outputs are direct
+              const triggerOutput = triggerResult.outputData;
               resolvedValue = this.dataGenerationService.getNestedValue(triggerOutput, dataPath);
               console.log(`    ✅ From trigger.${dataPath}:`, resolvedValue);
             } else {
@@ -539,11 +549,16 @@ export class SimulationService {
               const sourceStepResult = stepResults[sourceStepId];
               
               if (sourceStepResult && sourceStepResult.outputData) {
-                // CRITICAL: Handle new { input, output } structure
+                // CRITICAL: Handle optimized structure - access output directly
                 const stepOutput = sourceStepResult.outputData.output || sourceStepResult.outputData;
                 
-                // Handle both "outputs.field" and direct field access
-                if (outputPath.startsWith('outputs.')) {
+                // SPECIAL HANDLING for Fork outputs: steps.fork-step.outputs.branch-name
+                if (outputPath.startsWith('outputs.') && stepOutput.branches) {
+                  const branchName = outputPath.substring(8); // Remove 'outputs.'
+                  resolvedValue = stepOutput.branches[branchName];
+                  console.log(`    ✅ From Fork steps.${sourceStepId}.outputs.${branchName}:`, resolvedValue);
+                } else if (outputPath.startsWith('outputs.')) {
+                  // Handle regular outputs.field access
                   const actualPath = outputPath.replace('outputs.', '');
                   resolvedValue = this.dataGenerationService.getNestedValue(stepOutput, actualPath);
                   console.log(`    ✅ From steps.${sourceStepId}.outputs.${actualPath}:`, resolvedValue);

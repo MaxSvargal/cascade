@@ -204,9 +204,45 @@ export class DataGenerationService {
   }
 
   /**
-   * Simulate component execution with realistic outputs
-   * CRITICAL REQUIREMENT: Each component must return BOTH its input data AND its own output data
-   * This ensures proper data flow where each step can access all previous step data
+   * Generate realistic HTTP response bodies based on URL patterns
+   */
+  private generateHttpResponseBody(componentType: string, inputData: any, config: any): any {
+    // Generate realistic HTTP response bodies based on URL patterns
+    if (config?.url?.includes('jurisdiction-check')) {
+      return {
+        allowed: inputData?.country !== 'RESTRICTED',
+        jurisdiction: inputData?.country || 'US',
+        restrictions: [],
+        checkId: 'jur-' + Math.random().toString(36).substr(2, 9)
+      };
+    } else if (config?.url?.includes('sanctions-screening')) {
+      return {
+        flagged: false, // Simulate clean screening
+        riskScore: 0.1,
+        screeningId: 'san-' + Math.random().toString(36).substr(2, 9),
+        lastUpdated: new Date().toISOString()
+      };
+    } else if (config?.url?.includes('/users') && config?.method === 'POST') {
+      return {
+        userId: 'user-' + Math.random().toString(36).substr(2, 9),
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        profile: inputData?.userData || inputData
+      };
+    } else {
+      // Generic HTTP response
+      return {
+        success: true,
+        data: inputData,
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * Simulate component execution with optimized data flow
+   * OPTIMIZED: Components return streamlined structure to reduce duplication
+   * Components receive BOTH inputData AND config, and should return structured outputs
    */
   simulateComponentExecution(
     componentType: string, 
@@ -215,77 +251,52 @@ export class DataGenerationService {
     componentSchema?: ComponentSchema
   ): any {
     // Generate realistic output based on component type and schema - CRITICAL: outputs must be usable by next steps
-    // Components receive BOTH inputData AND config, and should return structured outputs
     console.log(`🔧 Simulating ${componentType} with input:`, inputData, 'and config:', config);
     
     switch (componentType) {
-      case 'StdLib:HttpCall':
-        const httpOutput = {
-          status: 200,
-          body: { success: true, data: inputData, timestamp: new Date().toISOString() },
-          headers: { 'content-type': 'application/json' },
-          requestConfig: config
-        };
-        return {
-          input: inputData, // CRITICAL: Preserve input data from previous step
-          output: httpOutput // Component's own output
-        };
-      
-      case 'StdLib:DatabaseQuery':
-        const dbOutput = {
-          rows: [{ id: 1, ...inputData, created_at: new Date().toISOString() }],
-          rowCount: 1,
-          success: true,
-          queryConfig: config
-        };
-        return {
-          input: inputData, // CRITICAL: Preserve input data from previous step
-          output: dbOutput // Component's own output
-        };
-      
-      case 'StdLib:JsonSchemaValidator':
-        // CRITICAL: For validators, return BOTH validation result AND the validated data
-        let schemaValidationOutput;
-        if (inputData?.data) {
-          schemaValidationOutput = {
-            isValid: true,
-            validData: inputData.data, // The validated data that passes to next steps
-            validationResult: {
-              passed: true,
-              errors: [],
-              schema: config?.schema,
-              validatedFields: Object.keys(inputData.data || {})
-            },
-            config: config // Validation config used
-          };
-        } else {
-          schemaValidationOutput = {
-            isValid: true,
-            validData: inputData, // Pass through all input data if no nested data
-            validationResult: {
-              passed: true,
-              errors: [],
-              schema: config?.schema,
-              validatedFields: Object.keys(inputData || {})
-            },
-            config: config
-          };
+      case 'StdLib:Fork':
+        // CRITICAL: Fork components duplicate input data to multiple named output ports
+        // OPTIMIZED: Return only the data needed, not the full input history
+        const forkResults: Record<string, any> = {};
+        
+        if (config?.outputNames) {
+          // Use outputNames from config (correct DSL format)
+          config.outputNames.forEach((outputName: string) => {
+            // Fork duplicates ONLY the essential input data to each named output port
+            forkResults[outputName] = inputData.data || inputData;
+          });
+        } else if (config?.branches) {
+          // Fallback for legacy config with branches
+          config.branches.forEach((branch: any) => {
+            forkResults[branch.name] = inputData.data || inputData;
+          });
         }
-        return {
-          input: inputData, // CRITICAL: Preserve input data from previous step
-          output: schemaValidationOutput // Component's own validation output
+        
+        const forkOutput = {
+          branches: forkResults, // All branch results with ESSENTIAL data only
+          forkConfig: config // Fork configuration
         };
-      
-      case 'StdLib:DataTransform':
+        
+        // OPTIMIZED: Return streamlined structure
+        return {
+          // Store only essential input reference, not full input data
+          inputRef: { 
+            sourceType: "previous_step",
+            dataSize: JSON.stringify(inputData).length,
+            timestamp: new Date().toISOString()
+          },
+          output: forkOutput // Component's own output
+        };
+
       case 'StdLib:MapData':
         // CRITICAL: For data transformation, apply actual transformations based on config
-        const transformed = { ...inputData };
+        const transformed = { ...(inputData.data || inputData) };
         if (config?.expression) {
-          // Simulate expression evaluation - in real implementation would use actual expression engine
-          if (config.expression.includes('age') && inputData?.userData?.dateOfBirth) {
+          // Apply transformation logic based on expression
+          if (config.expression.includes('age') && inputData?.dateOfBirth) {
             transformed.age = 25; // Simulated age calculation
             transformed.isEligible = true;
-            transformed.jurisdiction = inputData.userData.country || 'US';
+            transformed.jurisdiction = inputData.country || 'US';
           } else if (config.expression.includes('canProceed')) {
             // Handle evaluate-compliance-results step specifically
             transformed.canProceed = inputData.jurisdictionAllowed !== false && 
@@ -299,74 +310,136 @@ export class DataGenerationService {
             transformed.riskLevel = transformed.canProceed ? 'low' : 'high';
           } else {
             // Generic transformation - enhance input data
-            transformed.result = inputData;
+            transformed.result = inputData.data || inputData;
             transformed.processed = true;
             transformed.timestamp = new Date().toISOString();
           }
         } else {
           // No expression, pass through with enhancement
-          transformed.result = inputData;
+          transformed.result = inputData.data || inputData;
           transformed.success = true;
         }
-        const transformationOutput = {
-          ...transformed, // Spread the transformed data
-          transformationConfig: config // Include config used
-        };
+        
+        // OPTIMIZED: Return streamlined structure
         return {
-          input: inputData, // CRITICAL: Preserve input data from previous step
-          output: transformationOutput // Component's own transformation output
+          inputRef: { 
+            sourceType: "previous_step",
+            dataSize: JSON.stringify(inputData).length,
+            timestamp: new Date().toISOString()
+          },
+          output: transformed // Component's own transformation output
         };
-      
-      case 'StdLib:Fork':
-        // CRITICAL: Fork components run multiple branches and return combined results
-        const forkResults: Record<string, any> = {};
-        if (config?.outputNames) {
-          // Use outputNames from config (correct DSL format)
-          config.outputNames.forEach((outputName: string) => {
-            // Fork duplicates input data to each named output port
-            forkResults[outputName] = inputData;
-          });
-        } else if (config?.branches) {
-          // Fallback for legacy config with branches
-          config.branches.forEach((branch: any) => {
-            if (branch.name === 'jurisdiction-check') {
-              forkResults[branch.name] = { 
-                allowed: true, 
-                jurisdiction: inputData?.userData?.country || inputData?.country || 'US',
-                checkConfig: branch.config
-              };
-            } else if (branch.name === 'sanctions-check') {
-              forkResults[branch.name] = { 
-                flagged: false, 
-                clearanceLevel: 'green',
-                checkConfig: branch.config
-              };
-            } else if (branch.name === 'age-verification') {
-              forkResults[branch.name] = { 
-                age: 25, 
-                isEligible: true, 
-                jurisdiction: inputData?.userData?.country || inputData?.country || 'US',
-                checkConfig: branch.config
-              };
-            } else {
-              // Generic branch result
-              forkResults[branch.name] = { 
-                success: true, 
-                data: inputData,
-                branchConfig: branch.config
-              };
-            }
-          });
+
+      case 'StdLib:HttpCall':
+        // CRITICAL: HTTP calls return response structure
+        const responseBody = this.generateHttpResponseBody(componentType, inputData, config);
+        const httpResponse = {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: responseBody
+        };
+        
+        // OPTIMIZED: Return streamlined structure
+        return {
+          inputRef: { 
+            sourceType: "previous_step",
+            dataSize: JSON.stringify(inputData).length,
+            timestamp: new Date().toISOString()
+          },
+          output: { response: httpResponse }
+        };
+
+      case 'StdLib:JsonSchemaValidator':
+        // CRITICAL: For validators, return validation result AND the validated data
+        let validationOutput;
+        if (inputData?.data) {
+          validationOutput = {
+            isValid: true,
+            validData: inputData.data, // The validated data that passes to next steps
+            validationResult: {
+              passed: true,
+              errors: [],
+              schema: config?.schema,
+              validatedFields: Object.keys(inputData.data || {})
+            },
+            config: config // Validation config used
+          };
+        } else {
+          validationOutput = {
+            isValid: true,
+            validData: inputData, // Pass through all input data if no nested data
+            validationResult: {
+              passed: true,
+              errors: [],
+              schema: config?.schema,
+              validatedFields: Object.keys(inputData || {})
+            },
+            config: config
+          };
         }
-        const forkOutput = {
-          branches: forkResults, // All branch results
-          forkConfig: config // Fork configuration
+        
+        // OPTIMIZED: Return streamlined structure
+        return {
+          inputRef: { 
+            sourceType: "previous_step",
+            dataSize: JSON.stringify(inputData).length,
+            timestamp: new Date().toISOString()
+          },
+          output: validationOutput
+        };
+
+      case 'StdLib:DatabaseQuery':
+        const dbOutput = {
+          rows: [{ id: 1, ...inputData, created_at: new Date().toISOString() }],
+          rowCount: 1,
+          success: true,
+          queryConfig: config
         };
         return {
-          input: inputData, // CRITICAL: Preserve input data from previous step
-          output: forkOutput // Component's own fork output
+          inputRef: { 
+            sourceType: "previous_step",
+            dataSize: JSON.stringify(inputData).length,
+            timestamp: new Date().toISOString()
+          },
+          output: dbOutput
         };
-      
+
+      case 'StdLib:DataTransform':
+        // Handle legacy DataTransform - same as MapData
+        const dataTransformOutput = { ...(inputData.data || inputData) };
+        if (config?.expression) {
+          if (config.expression.includes('age') && (inputData?.dateOfBirth || inputData?.userData?.dateOfBirth)) {
+            dataTransformOutput.age = 25;
+            dataTransformOutput.isEligible = true;
+            dataTransformOutput.jurisdiction = inputData?.country || inputData?.userData?.country || 'US';
+          } else if (config.expression.includes('canProceed')) {
+            dataTransformOutput.canProceed = inputData.jurisdictionAllowed !== false && 
+                                           inputData.onSanctionsList !== true && 
+                                           inputData.ageEligible !== false;
+            dataTransformOutput.complianceFlags = {
+              jurisdiction: inputData.jurisdictionAllowed !== false,
+              sanctions: inputData.onSanctionsList !== true,
+              age: inputData.ageEligible !== false
+            };
+            dataTransformOutput.riskLevel = dataTransformOutput.canProceed ? 'low' : 'high';
+          } else {
+            dataTransformOutput.result = inputData.data || inputData;
+            dataTransformOutput.processed = true;
+            dataTransformOutput.timestamp = new Date().toISOString();
+          }
+        } else {
+          dataTransformOutput.result = inputData.data || inputData;
+          dataTransformOutput.success = true;
+        }
+        return {
+          inputRef: { 
+            sourceType: "previous_step",
+            dataSize: JSON.stringify(inputData).length,
+            timestamp: new Date().toISOString()
+          },
+          output: { ...dataTransformOutput, transformationConfig: config }
+        };
+
       case 'StdLib:FilterData':
         // CRITICAL: Filter components evaluate conditions and return filtered data
         const filterOutput: Record<string, any> = {
@@ -376,13 +449,20 @@ export class DataGenerationService {
           filterConfig: config
         };
         if (config?.matchOutput) {
-          filterOutput[config.matchOutput] = true;
+          filterOutput[config.matchOutput] = inputData;
+        }
+        if (config?.noMatchOutput) {
+          filterOutput[config.noMatchOutput] = null;
         }
         return {
-          input: inputData, // CRITICAL: Preserve input data from previous step
-          output: filterOutput // Component's own filter output
+          inputRef: { 
+            sourceType: "previous_step",
+            dataSize: JSON.stringify(inputData).length,
+            timestamp: new Date().toISOString()
+          },
+          output: filterOutput
         };
-      
+
       case 'StdLib:Validation':
         const basicValidationOutput = {
           isValid: true,
@@ -391,10 +471,14 @@ export class DataGenerationService {
           validationConfig: config
         };
         return {
-          input: inputData, // CRITICAL: Preserve input data from previous step
-          output: basicValidationOutput // Component's own validation output
+          inputRef: { 
+            sourceType: "previous_step",
+            dataSize: JSON.stringify(inputData).length,
+            timestamp: new Date().toISOString()
+          },
+          output: basicValidationOutput
         };
-      
+
       case 'StdLib:SubFlowInvoker':
         const subFlowOutput = {
           subFlowResult: { success: true, data: inputData },
@@ -403,34 +487,113 @@ export class DataGenerationService {
           subFlowConfig: config
         };
         return {
-          input: inputData, // CRITICAL: Preserve input data from previous step
-          output: subFlowOutput // Component's own subflow output
+          inputRef: { 
+            sourceType: "previous_step",
+            dataSize: JSON.stringify(inputData).length,
+            timestamp: new Date().toISOString()
+          },
+          output: subFlowOutput
         };
-      
+
       default:
         // CRITICAL: Handle named components and use schema if available
-        if (componentSchema?.outputSchema) {
+        if (componentType.startsWith('kyc.') || componentType.includes('KYC') || componentType.includes('Kyc')) {
+          const kycOutput = {
+            status: 'initiated',
+            kycId: 'kyc-' + Math.random().toString(36).substr(2, 9),
+            requiredDocuments: ['passport', 'proof_of_address'],
+            estimatedCompletionTime: '24-48 hours',
+            kycConfig: config
+          };
+          return {
+            inputRef: { 
+              sourceType: "previous_step",
+              dataSize: JSON.stringify(inputData).length,
+              timestamp: new Date().toISOString()
+            },
+            output: kycOutput
+          };
+        } else if (componentType.startsWith('responsible.') || componentType.includes('Responsible')) {
+          const responsibleOutput = {
+            limitsSet: true,
+            dailyLimit: config?.dailyLimit || 1000,
+            weeklyLimit: config?.weeklyLimit || 5000,
+            monthlyLimit: config?.monthlyLimit || 20000,
+            userId: inputData?.userId || 'user-' + Math.random().toString(36).substr(2, 9),
+            limitsConfig: config
+          };
+          return {
+            inputRef: { 
+              sourceType: "previous_step",
+              dataSize: JSON.stringify(inputData).length,
+              timestamp: new Date().toISOString()
+            },
+            output: responsibleOutput
+          };
+        } else if (componentType.startsWith('bonuses.') || componentType.includes('Bonus')) {
+          const bonusOutput = {
+            bonusProcessed: true,
+            bonusAmount: config?.bonusAmount || 50,
+            bonusType: config?.bonusType || 'referral',
+            bonusId: 'bonus-' + Math.random().toString(36).substr(2, 9),
+            expiryDate: new Date(Date.now() + (config?.expiryDays || 30) * 24 * 60 * 60 * 1000).toISOString(),
+            bonusConfig: config
+          };
+          return {
+            inputRef: { 
+              sourceType: "previous_step",
+              dataSize: JSON.stringify(inputData).length,
+              timestamp: new Date().toISOString()
+            },
+            output: bonusOutput
+          };
+        } else if (componentType.startsWith('analytics.') || componentType.includes('Analytics')) {
+          const analyticsOutput = {
+            tracked: true,
+            eventId: 'analytics-' + Math.random().toString(36).substr(2, 9),
+            timestamp: new Date().toISOString(),
+            userId: inputData?.userId || inputData?.userData?.userId || 'unknown',
+            analyticsConfig: config
+          };
+          return {
+            inputRef: { 
+              sourceType: "previous_step",
+              dataSize: JSON.stringify(inputData).length,
+              timestamp: new Date().toISOString()
+            },
+            output: analyticsOutput
+          };
+        } else if (componentSchema?.outputSchema) {
+          // Use schema to generate output if available
           const schemaBasedOutput = this.generateDataFromSchema(componentSchema.outputSchema, 'happy_path', true);
           const componentOutput = {
             ...schemaBasedOutput,
             componentConfig: config
           };
           return {
-            input: inputData, // CRITICAL: Preserve input data from previous step
-            output: componentOutput // Component's own schema-based output
+            inputRef: { 
+              sourceType: "previous_step",
+              dataSize: JSON.stringify(inputData).length,
+              timestamp: new Date().toISOString()
+            },
+            output: componentOutput
           };
         } else {
           // CRITICAL: Default fallback should preserve input data and config for next steps
           const defaultOutput = { 
-            result: inputData, 
+            result: inputData.data || inputData, 
             success: true, 
             timestamp: new Date().toISOString(),
             componentType: componentType,
             componentConfig: config
           };
           return {
-            input: inputData, // CRITICAL: Preserve input data from previous step
-            output: defaultOutput // Component's own default output
+            inputRef: { 
+              sourceType: "previous_step",
+              dataSize: JSON.stringify(inputData).length,
+              timestamp: new Date().toISOString()
+            },
+            output: defaultOutput
           };
         }
     }

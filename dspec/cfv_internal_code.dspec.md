@@ -1038,7 +1038,7 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
     part_of_design: cfv_designs.TestCaseService
     language: "TypeScript"
     implementation_location: {
-        filepath: "services/flowSimulationService.ts",
+        filepath: "services/dataGenerationService.ts",
         entry_point_name: "simulateComponentExecution",
         entry_point_type: "function"
     }
@@ -1046,287 +1046,326 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
     
     detailed_behavior: `
         // Generate realistic output based on component type and schema - CRITICAL: outputs must be usable by next steps
+        // OPTIMIZED DATA FLOW: Components return streamlined structure to reduce duplication
+        // COMPREHENSIVE: All component types are properly handled with realistic simulation
         // Components receive BOTH inputData AND config, and should return structured outputs
-        // CRITICAL REQUIREMENT: Each component must return BOTH its input data AND its own output data
-        // This ensures proper data flow where each step can access all previous step data
-        SWITCH componentType
-            CASE 'StdLib:HttpCall'
-                DECLARE componentOutput = {
-                    status: 200,
-                    body: { success: true, data: inputData, timestamp: new Date().toISOString() },
-                    headers: { 'content-type': 'application/json' },
-                    requestConfig: config
-                }
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: componentOutput // Component's own output
-                }
+        
+        FUNCTION simulateComponentExecution(componentType, inputData, config, componentSchema) {
+            LOG "🔧 Simulating " + componentType + " with input: " + inputData + " and config: " + config
             
-            CASE 'StdLib:DatabaseQuery'
-                DECLARE componentOutput = {
-                    rows: [{ id: 1, ...inputData, created_at: new Date().toISOString() }],
-                    rowCount: 1,
-                    success: true,
-                    queryConfig: config
-                }
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: componentOutput // Component's own output
-                }
-            
-            CASE 'StdLib:JsonSchemaValidator'
-                // CRITICAL: For validators, return BOTH validation result AND the validated data
-                DECLARE validationOutput = null
-                IF inputData?.data IS_DEFINED THEN
-                    ASSIGN validationOutput = {
-                        isValid: true,
-                        validData: inputData.data, // The validated data that passes to next steps
-                        validationResult: {
-                            passed: true,
-                            errors: [],
-                            schema: config?.schema,
-                            validatedFields: Object.keys(inputData.data || {})
-                        },
-                        config: config // Validation config used
+            SWITCH componentType {
+                CASE 'StdLib:HttpCall'
+                    // CRITICAL: HTTP calls return response structure with realistic data
+                    DECLARE responseBody = generateHttpResponseBody(componentType, inputData, config)
+                    DECLARE httpResponse = {
+                        status: 200,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: responseBody
                     }
-                ELSE
-                    ASSIGN validationOutput = {
-                        isValid: true,
-                        validData: inputData, // Pass through all input data if no nested data
-                        validationResult: {
-                            passed: true,
-                            errors: [],
-                            schema: config?.schema,
-                            validatedFields: Object.keys(inputData || {})
+                    RETURN_VALUE {
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
                         },
-                        config: config
+                        output: { response: httpResponse }
                     }
-                END_IF
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: validationOutput // Component's own validation output
-                }
-            
-            CASE 'StdLib:DataTransform'
-            CASE 'StdLib:MapData'
-                // CRITICAL: For data transformation, apply actual transformations based on config
-                DECLARE transformed = CLONE inputData
-                IF config?.expression IS_DEFINED THEN
-                    // Simulate expression evaluation - in real implementation would use actual expression engine
-                    IF config.expression.includes('age') AND inputData?.userData?.dateOfBirth THEN
-                        ASSIGN transformed.age = 25 // Simulated age calculation
-                        ASSIGN transformed.isEligible = true
-                        ASSIGN transformed.jurisdiction = inputData.userData.country OR 'US'
-                    ELSE_IF config.expression.includes('canProceed') THEN
-                        ASSIGN transformed.canProceed = true
-                        ASSIGN transformed.complianceFlags = {
-                            jurisdiction: true,
-                            sanctions: true,
-                            age: true
+                
+                CASE 'StdLib:DatabaseQuery'
+                    // Database operations return rows and metadata
+                    DECLARE dbOutput = {
+                        rows: [{ id: 1, ...inputData, created_at: new Date().toISOString() }],
+                        rowCount: 1,
+                        success: true,
+                        queryConfig: config
+                    }
+                    RETURN_VALUE {
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
+                        },
+                        output: dbOutput
+                    }
+                
+                CASE 'StdLib:JsonSchemaValidator'
+                    // CRITICAL: For validators, return BOTH validation result AND the validated data
+                    DECLARE validationOutput = null
+                    IF inputData?.data IS_DEFINED THEN
+                        ASSIGN validationOutput = {
+                            isValid: true,
+                            validData: inputData.data, // The validated data that passes to next steps
+                            validationResult: {
+                                passed: true,
+                                errors: [],
+                                schema: config?.schema,
+                                validatedFields: Object.keys(inputData.data || {})
+                            },
+                            config: config // Validation config used
                         }
-                        ASSIGN transformed.riskLevel = 'low'
                     ELSE
-                        // Generic transformation - enhance input data
-                        ASSIGN transformed.result = inputData
-                        ASSIGN transformed.processed = true
-                        ASSIGN transformed.timestamp = new Date().toISOString()
+                        ASSIGN validationOutput = {
+                            isValid: true,
+                            validData: inputData, // Pass through all input data if no nested data
+                            validationResult: {
+                                passed: true,
+                                errors: [],
+                                schema: config?.schema,
+                                validatedFields: Object.keys(inputData || {})
+                            },
+                            config: config
+                        }
                     END_IF
-                ELSE
-                    // No expression, pass through with enhancement
-                    ASSIGN transformed.result = inputData
-                    ASSIGN transformed.success = true
-                END_IF
-                DECLARE transformationOutput = {
-                    ...transformed, // Spread the transformed data
-                    transformationConfig: config // Include config used
-                }
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: transformationOutput // Component's own transformation output
-                }
-            
-            CASE 'StdLib:Fork'
-                // CRITICAL: Fork components run multiple branches and return combined results
-                DECLARE forkResults = {}
-                IF config?.branches IS_DEFINED THEN
-                    FOR_EACH branch IN config.branches
-                        IF branch.name EQUALS 'jurisdiction-check' THEN
-                            ASSIGN forkResults[branch.name] = { 
-                                allowed: true, 
-                                jurisdiction: inputData?.userData?.country OR 'US',
-                                checkConfig: branch.config
+                    RETURN_VALUE {
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
+                        },
+                        output: validationOutput
+                    }
+                
+                CASE 'StdLib:DataTransform'
+                CASE 'StdLib:MapData'
+                    // CRITICAL: For data transformation, apply actual transformations based on config
+                    DECLARE transformed = CLONE inputData.data || inputData
+                    IF config?.expression IS_DEFINED THEN
+                        // Apply transformation logic based on expression
+                        IF config.expression.includes('age') AND (inputData?.dateOfBirth OR inputData?.userData?.dateOfBirth) THEN
+                            ASSIGN transformed.age = 25 // Simulated age calculation
+                            ASSIGN transformed.isEligible = true
+                            ASSIGN transformed.jurisdiction = inputData?.country OR inputData?.userData?.country OR 'US'
+                        ELSE_IF config.expression.includes('canProceed') THEN
+                            // Handle evaluate-compliance-results step specifically
+                            ASSIGN transformed.canProceed = inputData.jurisdictionAllowed !== false AND 
+                                                           inputData.onSanctionsList !== true AND 
+                                                           inputData.ageEligible !== false
+                            ASSIGN transformed.complianceFlags = {
+                                jurisdiction: inputData.jurisdictionAllowed !== false,
+                                sanctions: inputData.onSanctionsList !== true,
+                                age: inputData.ageEligible !== false
                             }
-                        ELSE_IF branch.name EQUALS 'sanctions-check' THEN
-                            ASSIGN forkResults[branch.name] = { 
-                                flagged: false, 
-                                clearanceLevel: 'green',
-                                checkConfig: branch.config
-                            }
-                        ELSE_IF branch.name EQUALS 'age-verification' THEN
-                            ASSIGN forkResults[branch.name] = { 
-                                age: 25, 
-                                isEligible: true, 
-                                jurisdiction: inputData?.userData?.country OR 'US',
-                                checkConfig: branch.config
-                            }
-                        ELSE_IF branch.name EQUALS 'welcome-email' THEN
-                            ASSIGN forkResults[branch.name] = { 
-                                sent: true, 
-                                messageId: 'email-' + Math.random().toString(36).substr(2, 9),
-                                emailConfig: branch.config
-                            }
-                        ELSE_IF branch.name EQUALS 'welcome-sms' THEN
-                            ASSIGN forkResults[branch.name] = { 
-                                sent: true, 
-                                messageId: 'sms-' + Math.random().toString(36).substr(2, 9),
-                                smsConfig: branch.config
-                            }
-                        ELSE_IF branch.name EQUALS 'analytics-event' THEN
-                            ASSIGN forkResults[branch.name] = { 
-                                tracked: true, 
-                                eventId: 'event-' + Math.random().toString(36).substr(2, 9),
-                                analyticsConfig: branch.config
-                            }
+                            ASSIGN transformed.riskLevel = transformed.canProceed ? 'low' : 'high'
                         ELSE
-                            // Generic branch result
-                            ASSIGN forkResults[branch.name] = { 
-                                success: true, 
-                                data: inputData,
-                                branchConfig: branch.config
-                            }
+                            // Generic transformation - enhance input data
+                            ASSIGN transformed.result = inputData.data || inputData
+                            ASSIGN transformed.processed = true
+                            ASSIGN transformed.timestamp = new Date().toISOString()
                         END_IF
-                    END_FOR
-                END_IF
-                DECLARE forkOutput = {
-                    branches: forkResults, // All branch results
-                    forkConfig: config // Fork configuration
-                }
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: forkOutput // Component's own fork output
-                }
-            
-            CASE 'StdLib:FilterData'
-                // CRITICAL: Filter components evaluate conditions and return filtered data
-                DECLARE filterOutput = {
-                    matched: true, // Simulate successful filter match
-                    filteredData: inputData,
-                    filterExpression: config?.expression OR 'default',
-                    filterConfig: config
-                }
-                IF config?.matchOutput IS_DEFINED THEN
-                    ASSIGN filterOutput[config.matchOutput] = true
-                END_IF
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: filterOutput // Component's own filter output
-                }
-            
-            CASE 'StdLib:Validation'
-                DECLARE validationOutput = {
-                    isValid: true,
-                    validatedData: inputData,
-                    errors: [],
-                    validationConfig: config
-                }
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: validationOutput // Component's own validation output
-                }
-            
-            CASE 'StdLib:SubFlowInvoker'
-                DECLARE subFlowOutput = {
-                    subFlowResult: { success: true, data: inputData },
-                    executionId: 'sub-exec-' + Math.random().toString(36).substr(2, 9),
-                    status: 'completed',
-                    subFlowConfig: config
-                }
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: subFlowOutput // Component's own subflow output
-                }
-            
-            // CRITICAL: Handle named components (custom components defined in modules)
-            CASE STARTS_WITH 'kyc.'
-                DECLARE kycOutput = {
-                    status: 'initiated',
-                    kycId: 'kyc-' + Math.random().toString(36).substr(2, 9),
-                    requiredDocuments: ['passport', 'proof_of_address'],
-                    estimatedCompletionTime: '24-48 hours',
-                    kycConfig: config
-                }
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: kycOutput // Component's own KYC output
-                }
-            
-            CASE STARTS_WITH 'responsible.'
-                DECLARE responsibleOutput = {
-                    limitsSet: true,
-                    dailyLimit: config?.dailyLimit OR 1000,
-                    weeklyLimit: config?.weeklyLimit OR 5000,
-                    monthlyLimit: config?.monthlyLimit OR 20000,
-                    userId: inputData?.userId OR 'user-' + Math.random().toString(36).substr(2, 9),
-                    limitsConfig: config
-                }
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: responsibleOutput // Component's own responsible gambling output
-                }
-            
-            CASE STARTS_WITH 'bonuses.'
-                DECLARE bonusOutput = {
-                    bonusProcessed: true,
-                    bonusAmount: config?.bonusAmount OR 50,
-                    bonusType: config?.bonusType OR 'referral',
-                    bonusId: 'bonus-' + Math.random().toString(36).substr(2, 9),
-                    expiryDate: new Date(Date.now() + (config?.expiryDays OR 30) * 24 * 60 * 60 * 1000).toISOString(),
-                    bonusConfig: config
-                }
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: bonusOutput // Component's own bonus output
-                }
-            
-            CASE STARTS_WITH 'analytics.'
-                DECLARE analyticsOutput = {
-                    tracked: true,
-                    eventId: 'analytics-' + Math.random().toString(36).substr(2, 9),
-                    timestamp: new Date().toISOString(),
-                    userId: inputData?.userId OR inputData?.userData?.userId OR 'unknown',
-                    analyticsConfig: config
-                }
-                RETURN_VALUE {
-                    input: inputData, // CRITICAL: Preserve input data from previous step
-                    output: analyticsOutput // Component's own analytics output
-                }
-            
-            DEFAULT
-                // Use schema to generate output if available
-                IF componentSchema?.outputSchema IS_DEFINED THEN
-                    DECLARE schemaBasedOutput = CALL generateDataFromSchema WITH componentSchema.outputSchema, 'happy_path', true
-                    DECLARE componentOutput = {
-                        ...schemaBasedOutput,
-                        componentConfig: config
+                    ELSE
+                        // No expression, pass through with enhancement
+                        ASSIGN transformed.result = inputData.data || inputData
+                        ASSIGN transformed.success = true
+                    END_IF
+                    
+                    RETURN_VALUE {
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
+                        },
+                        output: { ...transformed, transformationConfig: config }
+                    }
+                
+                CASE 'StdLib:Fork'
+                    // CRITICAL: Fork components duplicate input data to multiple named output ports
+                    // OPTIMIZED: Return only the data needed, not the full input history
+                    DECLARE forkResults = {}
+                    IF config?.outputNames IS_DEFINED THEN
+                        // Use outputNames from config (correct DSL format)
+                        FOR_EACH outputName IN config.outputNames
+                            // Fork duplicates input data to each named output port
+                            ASSIGN forkResults[outputName] = inputData.data || inputData
+                        END_FOR
+                    ELSE_IF config?.branches IS_DEFINED THEN
+                        // Fallback for legacy config with branches
+                        FOR_EACH branch IN config.branches
+                            ASSIGN forkResults[branch.name] = inputData.data || inputData
+                        END_FOR
+                    END_IF
+                    
+                    DECLARE forkOutput = {
+                        branches: forkResults, // All branch results
+                        forkConfig: config // Fork configuration
+                    }
+                    
+                    RETURN_VALUE {
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
+                        },
+                        output: forkOutput
+                    }
+                
+                CASE 'StdLib:FilterData'
+                    // CRITICAL: Filter components evaluate conditions and return filtered data
+                    DECLARE filterOutput = {
+                        matched: true, // Simulate successful filter match
+                        filteredData: inputData,
+                        filterExpression: config?.expression OR 'default',
+                        filterConfig: config
+                    }
+                    IF config?.matchOutput IS_DEFINED THEN
+                        ASSIGN filterOutput[config.matchOutput] = inputData
+                    END_IF
+                    IF config?.noMatchOutput IS_DEFINED THEN
+                        ASSIGN filterOutput[config.noMatchOutput] = null
+                    END_IF
+                    RETURN_VALUE {
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
+                        },
+                        output: filterOutput
+                    }
+                
+                CASE 'StdLib:Validation'
+                    DECLARE validationOutput = {
+                        isValid: true,
+                        validatedData: inputData,
+                        errors: [],
+                        validationConfig: config
                     }
                     RETURN_VALUE {
-                        input: inputData, // CRITICAL: Preserve input data from previous step
-                        output: componentOutput // Component's own schema-based output
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
+                        },
+                        output: validationOutput
                     }
-                ELSE
-                    // CRITICAL: Default fallback should preserve input data and config for next steps
-                    DECLARE defaultOutput = { 
-                        result: inputData, 
-                        success: true, 
+                
+                CASE 'StdLib:SubFlowInvoker'
+                    DECLARE subFlowOutput = {
+                        subFlowResult: { success: true, data: inputData },
+                        executionId: 'sub-exec-' + Math.random().toString(36).substr(2, 9),
+                        status: 'completed',
+                        subFlowConfig: config
+                    }
+                    RETURN_VALUE {
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
+                        },
+                        output: subFlowOutput
+                    }
+                
+                // CRITICAL: Handle named components (custom components defined in modules)
+                CASE STARTS_WITH 'kyc.' OR CONTAINS 'KYC' OR CONTAINS 'Kyc'
+                    DECLARE kycOutput = {
+                        status: 'initiated',
+                        kycId: 'kyc-' + Math.random().toString(36).substr(2, 9),
+                        requiredDocuments: ['passport', 'proof_of_address'],
+                        estimatedCompletionTime: '24-48 hours',
+                        kycConfig: config
+                    }
+                    RETURN_VALUE {
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
+                        },
+                        output: kycOutput
+                    }
+                
+                CASE STARTS_WITH 'responsible.' OR CONTAINS 'Responsible'
+                    DECLARE responsibleOutput = {
+                        limitsSet: true,
+                        dailyLimit: config?.dailyLimit OR 1000,
+                        weeklyLimit: config?.weeklyLimit OR 5000,
+                        monthlyLimit: config?.monthlyLimit OR 20000,
+                        userId: inputData?.userId OR 'user-' + Math.random().toString(36).substr(2, 9),
+                        limitsConfig: config
+                    }
+                    RETURN_VALUE {
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
+                        },
+                        output: responsibleOutput
+                    }
+                
+                CASE STARTS_WITH 'bonuses.' OR CONTAINS 'Bonus'
+                    DECLARE bonusOutput = {
+                        bonusProcessed: true,
+                        bonusAmount: config?.bonusAmount OR 50,
+                        bonusType: config?.bonusType OR 'referral',
+                        bonusId: 'bonus-' + Math.random().toString(36).substr(2, 9),
+                        expiryDate: new Date(Date.now() + (config?.expiryDays OR 30) * 24 * 60 * 60 * 1000).toISOString(),
+                        bonusConfig: config
+                    }
+                    RETURN_VALUE {
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
+                        },
+                        output: bonusOutput
+                    }
+                
+                CASE STARTS_WITH 'analytics.' OR CONTAINS 'Analytics'
+                    DECLARE analyticsOutput = {
+                        tracked: true,
+                        eventId: 'analytics-' + Math.random().toString(36).substr(2, 9),
                         timestamp: new Date().toISOString(),
-                        componentType: componentType,
-                        componentConfig: config
+                        userId: inputData?.userId OR inputData?.userData?.userId OR 'unknown',
+                        analyticsConfig: config
                     }
                     RETURN_VALUE {
-                        input: inputData, // CRITICAL: Preserve input data from previous step
-                        output: defaultOutput // Component's own default output
+                        inputRef: { 
+                            sourceType: "previous_step",
+                            dataSize: JSON.stringify(inputData).length,
+                            timestamp: new Date().toISOString()
+                        },
+                        output: analyticsOutput
                     }
-                END_IF
-        END_SWITCH
+                
+                DEFAULT
+                    // Use schema to generate output if available
+                    IF componentSchema?.outputSchema IS_DEFINED THEN
+                        DECLARE schemaBasedOutput = CALL generateDataFromSchema WITH componentSchema.outputSchema, 'happy_path', true
+                        DECLARE componentOutput = {
+                            ...schemaBasedOutput,
+                            componentConfig: config
+                        }
+                        RETURN_VALUE {
+                            inputRef: { 
+                                sourceType: "previous_step",
+                                dataSize: JSON.stringify(inputData).length,
+                                timestamp: new Date().toISOString()
+                            },
+                            output: componentOutput
+                        }
+                    ELSE
+                        // CRITICAL: Default fallback should preserve input data and config for next steps
+                        DECLARE defaultOutput = { 
+                            result: inputData.data || inputData, 
+                            success: true, 
+                            timestamp: new Date().toISOString(),
+                            componentType: componentType,
+                            componentConfig: config
+                        }
+                        RETURN_VALUE {
+                            inputRef: { 
+                                sourceType: "previous_step",
+                                dataSize: JSON.stringify(inputData).length,
+                                timestamp: new Date().toISOString()
+                            },
+                            output: defaultOutput
+                        }
+                    END_IF
+            }
+        }
+        
+        // CRITICAL: This optimized structure reduces duplication while maintaining:
+        // 1. Data traceability through inputRef
+        // 2. Component output isolation
+        // 3. Proper data flow for next steps
+        // 4. Comprehensive component type support
+        // 5. Realistic data generation for all component types
     `
 }
