@@ -306,8 +306,12 @@ const InspectorPropertiesTab: React.FC<{
 
   // Get component data
   const componentSchema = selectedElement?.data?.componentSchema;
-  const currentConfig = selectedElement?.data?.dslObject?.config || {};
   const resolvedComponentFqn = selectedElement?.data?.resolvedComponentFqn;
+  
+  // Memoize currentConfig to prevent infinite re-renders
+  const currentConfig = React.useMemo(() => {
+    return selectedElement?.data?.dslObject?.config || {};
+  }, [selectedElement?.data?.dslObject?.config]);
 
   // Update form data when selected element changes
   React.useEffect(() => {
@@ -519,11 +523,9 @@ const InspectorDebugTestTab: React.FC<{
           } else if (selectedElement.data?.fqn && selectedElement.data.fqn.includes('.')) {
             // For system nodes, the fqn might be the flow FQN
             stepFlowFqn = selectedElement.data.fqn;
-          } else if (currentFlowFqn) {
-            // Fallback to current flow
-            stepFlowFqn = currentFlowFqn;
           } else {
-            // Try to find the flow that contains this step by searching all modules
+            // CRITICAL: First try to find the flow that contains this step by searching all modules
+            // This should take priority over currentFlowFqn to avoid mismatches
             const allModules = moduleRegistry.getAllLoadedModules();
             for (const module of allModules) {
               if (module.definitions?.flows) {
@@ -531,16 +533,24 @@ const InspectorDebugTestTab: React.FC<{
                   const flowFqn = `${module.fqn}.${flow.name}`;
                   if (flow.steps?.some((step: any) => step.step_id === selectedElement.id)) {
                     stepFlowFqn = flowFqn;
+                    console.log(`🎯 Found step "${selectedElement.id}" in flow "${flowFqn}"`);
                     break;
                   }
                   // Check if this is the trigger for this flow
                   if (isTriggerNode && flow.trigger) {
                     stepFlowFqn = flowFqn;
+                    console.log(`🎯 Found trigger "${selectedElement.id}" in flow "${flowFqn}"`);
                     break;
                   }
                 }
                 if (stepFlowFqn) break;
               }
+            }
+            
+            // Only fallback to currentFlowFqn if we couldn't find the step in any flow
+            if (!stepFlowFqn && currentFlowFqn) {
+              console.warn(`⚠️ Could not find step "${selectedElement.id}" in any flow, falling back to current flow "${currentFlowFqn}"`);
+              stepFlowFqn = currentFlowFqn;
             }
           }
 
@@ -1259,72 +1269,6 @@ export default function HomePage() {
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Navigation Header */}
-      <div style={{ 
-        backgroundColor: '#1976D2', 
-        color: 'white', 
-        padding: '16px 24px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>
-            Cascade Flow Visualizer
-          </h1>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-            <a 
-              href="/casino-demo" 
-              style={{ 
-                color: 'white', 
-                textDecoration: 'none',
-                padding: '8px 16px',
-                backgroundColor: 'rgba(255,255,255,0.2)',
-                borderRadius: '6px',
-                transition: 'background-color 0.2s ease'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.3)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
-            >
-              🎰 Casino Platform Demo
-            </a>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => setMode('design')}
-                style={{
-                  padding: '6px 12px',
-                  border: 'none',
-                  borderRadius: '4px',
-                  backgroundColor: mode === 'design' ? 'white' : 'rgba(255,255,255,0.2)',
-                  color: mode === 'design' ? '#1976D2' : 'white',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                Design
-              </button>
-              <button
-                onClick={() => setMode('trace')}
-                style={{
-                  padding: '6px 12px',
-                  border: 'none',
-                  borderRadius: '4px',
-                  backgroundColor: mode === 'trace' ? 'white' : 'rgba(255,255,255,0.2)',
-                  color: mode === 'trace' ? '#1976D2' : 'white',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                Trace
-              </button>
-            </div>
-          </div>
-        </div>
-        <p style={{ margin: '8px 0 0 0', fontSize: '16px', opacity: 0.9 }}>
-          Enhanced with left-to-right layout, improved node styling, and system overview navigation
-        </p>
-      </div>
-
-      {/* Main Content */}
-      <div style={{ flex: 1 }}>
         <CascadeFlowVisualizer
           initialModules={sampleModules}
           componentSchemas={sampleComponentSchemas}
@@ -1353,6 +1297,5 @@ export default function HomePage() {
           }}
         />
       </div>
-    </div>
   );
 } 

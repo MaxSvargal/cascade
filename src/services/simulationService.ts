@@ -336,7 +336,15 @@ export class SimulationService {
         
         if (stepResult) {
           // CRITICAL: Handle optimized structure - access output directly
-          const stepOutput = stepResult.outputData.output || stepResult.outputData;
+          let stepOutput;
+          
+          if (stepResult.outputData.output) {
+            // New optimized structure: { inputRef, output }
+            stepOutput = stepResult.outputData.output;
+          } else {
+            // Fallback for direct output data (trigger, etc.)
+            stepOutput = stepResult.outputData;
+          }
           
           // SPECIAL HANDLING for Fork outputs: steps.fork-step.outputs.branch-name
           if (path.startsWith('outputs.') && stepOutput.branches) {
@@ -345,7 +353,15 @@ export class SimulationService {
             source.stepId = stepId;
             source.path = path;
             source.resolvedValue = stepOutput.branches[branchName];
+          } else if (path.startsWith('outputs.')) {
+            // Handle regular outputs.field access
+            const actualPath = path.replace('outputs.', '');
+            source.type = 'step';
+            source.stepId = stepId;
+            source.path = path;
+            source.resolvedValue = this.getNestedValue(stepOutput, actualPath);
           } else {
+            // Direct field access or complex path
             source.type = 'step';
             source.stepId = stepId;
             source.path = path;
@@ -550,7 +566,16 @@ export class SimulationService {
               
               if (sourceStepResult && sourceStepResult.outputData) {
                 // CRITICAL: Handle optimized structure - access output directly
-                const stepOutput = sourceStepResult.outputData.output || sourceStepResult.outputData;
+                // The outputData now contains the complete { inputRef, output } structure
+                let stepOutput;
+                
+                if (sourceStepResult.outputData.output) {
+                  // New optimized structure: { inputRef, output }
+                  stepOutput = sourceStepResult.outputData.output;
+                } else {
+                  // Fallback for direct output data (trigger, etc.)
+                  stepOutput = sourceStepResult.outputData;
+                }
                 
                 // SPECIAL HANDLING for Fork outputs: steps.fork-step.outputs.branch-name
                 if (outputPath.startsWith('outputs.') && stepOutput.branches) {
@@ -566,6 +591,14 @@ export class SimulationService {
                   // Direct field access for backward compatibility
                   resolvedValue = this.dataGenerationService.getNestedValue(stepOutput, outputPath);
                   console.log(`    ✅ From steps.${sourceStepId}.${outputPath}:`, resolvedValue);
+                }
+                
+                // CRITICAL: Special handling for complex paths like "response.body.allowed"
+                // This is needed for HttpCall components that return { response: { body: ... } }
+                if (resolvedValue === undefined && outputPath.includes('.')) {
+                  // Try to resolve the full path from the step output
+                  resolvedValue = this.dataGenerationService.getNestedValue(stepOutput, outputPath);
+                  console.log(`    ✅ From complex path steps.${sourceStepId}.${outputPath}:`, resolvedValue);
                 }
               } else {
                 console.warn(`    ❌ Source step ${sourceStepId} not found or has no output data`);

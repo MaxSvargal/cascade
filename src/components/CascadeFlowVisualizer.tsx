@@ -38,6 +38,53 @@ import { createInspectorActions } from '@/services/inspectorActionsService';
 
 import 'reactflow/dist/style.css';
 
+// Constants for sidebar sizing
+const MIN_SIDEBAR_WIDTH = 20;
+const MAX_SIDEBAR_WIDTH = 900;
+const DEFAULT_LEFT_SIDEBAR_WIDTH = 300;
+const DEFAULT_RIGHT_SIDEBAR_WIDTH = 300;
+
+// Helper functions for localStorage
+const getSidebarWidths = () => {
+  if (typeof window === 'undefined') {
+    return {
+      leftWidth: DEFAULT_LEFT_SIDEBAR_WIDTH,
+      rightWidth: DEFAULT_RIGHT_SIDEBAR_WIDTH
+    };
+  }
+  
+  try {
+    const stored = localStorage.getItem('cascade-visualizer-sidebar-widths');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        leftWidth: Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed.leftWidth || DEFAULT_LEFT_SIDEBAR_WIDTH)),
+        rightWidth: Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed.rightWidth || DEFAULT_RIGHT_SIDEBAR_WIDTH))
+      };
+    }
+  } catch (error) {
+    console.warn('Failed to load sidebar widths from localStorage:', error);
+  }
+  
+  return {
+    leftWidth: DEFAULT_LEFT_SIDEBAR_WIDTH,
+    rightWidth: DEFAULT_RIGHT_SIDEBAR_WIDTH
+  };
+};
+
+const setSidebarWidths = (leftWidth: number, rightWidth: number) => {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    localStorage.setItem('cascade-visualizer-sidebar-widths', JSON.stringify({
+      leftWidth,
+      rightWidth
+    }));
+  } catch (error) {
+    console.warn('Failed to save sidebar widths to localStorage:', error);
+  }
+};
+
 const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   // Initialize module registry from props
   useModuleRegistryInitializer({
@@ -59,8 +106,63 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   const [expandedModules, setExpandedModules] = React.useState<Set<string>>(new Set());
   const [activeInspectorTab, setActiveInspectorTab] = React.useState<'properties' | 'source' | 'debugtest'>('properties');
 
+  // Sidebar width state
+  const [sidebarWidths, setSidebarWidthsState] = React.useState(() => getSidebarWidths());
+  const [isResizing, setIsResizing] = React.useState<'left' | 'right' | null>(null);
+  const resizeStartX = useRef<number>(0);
+  const resizeStartWidth = useRef<number>(0);
+
   // Add ref to prevent infinite loops in onViewChange
   const isCallingOnViewChange = useRef(false);
+
+  // Save sidebar widths to localStorage when they change
+  useEffect(() => {
+    setSidebarWidths(sidebarWidths.leftWidth, sidebarWidths.rightWidth);
+  }, [sidebarWidths]);
+
+  // Mouse event handlers for resizing
+  const handleMouseDown = useCallback((side: 'left' | 'right', e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(side);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = side === 'left' ? sidebarWidths.leftWidth : sidebarWidths.rightWidth;
+  }, [sidebarWidths]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return;
+
+    const deltaX = e.clientX - resizeStartX.current;
+    let newWidth: number;
+
+    if (isResizing === 'left') {
+      newWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, resizeStartWidth.current + deltaX));
+      setSidebarWidthsState(prev => ({ ...prev, leftWidth: newWidth }));
+    } else {
+      newWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, resizeStartWidth.current - deltaX));
+      setSidebarWidthsState(prev => ({ ...prev, rightWidth: newWidth }));
+    }
+  }, [isResizing]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(null);
+  }, []);
+
+  // Add global mouse event listeners
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+    }
+  }, [isResizing, handleMouseMove, handleMouseUp]);
 
   // Toggle module expansion
   const toggleModuleExpansion = useCallback((moduleFqn: string) => {
@@ -258,11 +360,16 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
       <div style={{ display: 'flex', height: '100vh', fontFamily: 'system-ui, sans-serif' }}>
         {/* Left Sidebar */}
         <div style={{ 
-          width: '300px', 
+          width: `${sidebarWidths.leftWidth}px`, 
           borderRight: '1px solid #e0e0e0', 
           padding: '16px',
           backgroundColor: '#fafafa',
-          overflowY: 'auto'
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          position: 'relative',
+          minWidth: `${MIN_SIDEBAR_WIDTH}px`,
+          maxWidth: `${MAX_SIDEBAR_WIDTH}px`,
+          wordWrap: 'break-word'
         }}>
           <div style={{ marginBottom: '16px' }}>
             <button 
@@ -391,6 +498,36 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
               })
             )}
           </div>
+
+          {/* Left Resize Handle */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: -3,
+              width: '6px',
+              height: '100%',
+              cursor: 'col-resize',
+              backgroundColor: isResizing === 'left' ? '#1976D2' : '#d0d7de',
+              opacity: isResizing === 'left' ? 1 : 0.5,
+              borderRadius: '0 3px 3px 0',
+              zIndex: 10,
+              transition: 'all 0.2s ease'
+            }}
+            onMouseDown={(e) => handleMouseDown('left', e)}
+            onMouseEnter={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.opacity = '0.8';
+                e.currentTarget.style.backgroundColor = '#1976D2';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.opacity = '0.5';
+                e.currentTarget.style.backgroundColor = '#d0d7de';
+              }
+            }}
+          />
         </div>
 
         {/* Main Canvas */}
@@ -435,12 +572,47 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
 
         {/* Right Sidebar */}
         <div style={{ 
-          width: '300px', 
+          width: `${sidebarWidths.rightWidth}px`, 
           borderLeft: '1px solid #e0e0e0', 
           padding: '16px',
           backgroundColor: '#fafafa',
-          overflowY: 'auto'
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          position: 'relative',
+          minWidth: `${MIN_SIDEBAR_WIDTH}px`,
+          maxWidth: `${MAX_SIDEBAR_WIDTH}px`,
+          wordWrap: 'break-word'
         }}>
+          {/* Right Resize Handle */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: -3,
+              width: '6px',
+              height: '100%',
+              cursor: 'col-resize',
+              backgroundColor: isResizing === 'right' ? '#1976D2' : '#d0d7de',
+              opacity: isResizing === 'right' ? 1 : 0.5,
+              borderRadius: '3px 0 0 3px',
+              zIndex: 10,
+              transition: 'all 0.2s ease'
+            }}
+            onMouseDown={(e) => handleMouseDown('right', e)}
+            onMouseEnter={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.opacity = '0.8';
+                e.currentTarget.style.backgroundColor = '#1976D2';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.opacity = '0.5';
+                e.currentTarget.style.backgroundColor = '#d0d7de';
+              }
+            }}
+          />
+
           <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#333' }}>Inspector</h3>
           
           {/* Tab Navigation */}
