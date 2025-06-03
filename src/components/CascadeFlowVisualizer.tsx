@@ -24,9 +24,20 @@ import {
 } from '@/state/moduleRegistryAtoms';
 import { 
   currentFlowFqnAtom, 
-  systemViewActiveAtom, 
-  selectedElementAtom 
+  systemViewActiveAtom,
+  navigateToFlowAtom,
+  navigateToSystemOverviewAtom,
+  toggleSystemViewAtom
 } from '@/state/navigationAtoms';
+import { 
+  selectedElementAtom 
+} from '@/state/selectionAtoms';
+import { 
+  activeInspectorTabAtom 
+} from '@/state/inspectorAtoms';
+import { 
+  traceListSummariesAtom 
+} from '@/state/traceListAtoms';
 import { 
   generateFlowDetailGraphData, 
   generateSystemOverviewGraphData,
@@ -35,6 +46,8 @@ import {
 import { createModuleRegistryInterface } from '@/services/moduleRegistryService';
 import { DebugTestActionsService } from '@/services/debugTestActionsService';
 import { createInspectorActions } from '@/services/inspectorActionsService';
+import { TraceListService } from '@/services/traceListService';
+import { NavigationService } from '@/services/navigationService';
 
 import 'reactflow/dist/style.css';
 
@@ -99,21 +112,47 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   const dslModuleRepresentations = useAtomValue(dslModuleRepresentationsAtom);
   const componentSchemas = useAtomValue(componentSchemasAtom);
 
+  // Navigation actions
+  const navigateToFlow = useSetAtom(navigateToFlowAtom);
+  const navigateToSystemOverview = useSetAtom(navigateToSystemOverviewAtom);
+  const toggleSystemView = useSetAtom(toggleSystemViewAtom);
+
   // React Flow state management
   const [nodes, setNodes] = React.useState<Node[]>([]);
   const [edges, setEdges] = React.useState<Edge[]>([]);
   const [isGeneratingGraph, setIsGeneratingGraph] = React.useState(false);
   const [expandedModules, setExpandedModules] = React.useState<Set<string>>(new Set());
-  const [activeInspectorTab, setActiveInspectorTab] = React.useState<'properties' | 'source' | 'debugtest'>('properties');
+  const [activeInspectorTab, setActiveInspectorTab] = useAtom(activeInspectorTabAtom);
 
-  // Sidebar width state
-  const [sidebarWidths, setSidebarWidthsState] = React.useState(() => getSidebarWidths());
+  // Sidebar width state - start with defaults to avoid hydration mismatch
+  const [sidebarWidths, setSidebarWidthsState] = React.useState({
+    leftWidth: DEFAULT_LEFT_SIDEBAR_WIDTH,
+    rightWidth: DEFAULT_RIGHT_SIDEBAR_WIDTH
+  });
   const [isResizing, setIsResizing] = React.useState<'left' | 'right' | null>(null);
   const resizeStartX = useRef<number>(0);
   const resizeStartWidth = useRef<number>(0);
 
   // Add ref to prevent infinite loops in onViewChange
   const isCallingOnViewChange = useRef(false);
+
+  // Load sidebar widths from localStorage on client side only
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('cascade-visualizer-sidebar-widths');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setSidebarWidthsState({
+            leftWidth: Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed.leftWidth || DEFAULT_LEFT_SIDEBAR_WIDTH)),
+            rightWidth: Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed.rightWidth || DEFAULT_RIGHT_SIDEBAR_WIDTH))
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to load sidebar widths from localStorage:', error);
+      }
+    }
+  }, []);
 
   // Save sidebar widths to localStorage when they change
   useEffect(() => {
@@ -217,6 +256,24 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
       props.onModuleLoadError
     );
   }, [moduleRegistry, dslModuleRepresentations, selectedElement, currentFlowFqn, props.onSaveModule, props.onModuleLoadError]);
+
+  // Trace list service
+  const traceListService = useMemo(() => {
+    return new TraceListService({
+      fetchTraceList: props.fetchTraceList,
+      onTraceSelect: (traceId: string) => {
+        // This would typically trigger the host app to load trace data
+        console.log('Trace selected:', traceId);
+      }
+    });
+  }, [props.fetchTraceList]);
+
+  // Navigation service
+  const navigationService = useMemo(() => {
+    return new NavigationService({
+      onViewChange: props.onViewChange
+    });
+  }, [props.onViewChange]);
 
   // Generate graph data when dependencies change
   useEffect(() => {
@@ -330,15 +387,13 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
 
   // Flow navigation handler
   const handleFlowNavigation = useCallback((flowFqn: string) => {
-    setCurrentFlowFqn(flowFqn);
-    setSystemViewActive(false);
-  }, [setCurrentFlowFqn, setSystemViewActive]);
+    navigateToFlow(flowFqn);
+  }, [navigateToFlow]);
 
   // System view toggle
   const handleSystemViewToggle = useCallback(() => {
-    setSystemViewActive(!systemViewActive);
-    setCurrentFlowFqn(null);
-  }, [systemViewActive, setSystemViewActive, setCurrentFlowFqn]);
+    toggleSystemView();
+  }, [toggleSystemView]);
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
