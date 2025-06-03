@@ -62,6 +62,7 @@ const sampleComponentSchemas: Record<string, ComponentSchema> = {
   // Fix the StdLib:Manual schema to have undefined instead of null
   'StdLib:Manual': {
     fqn: 'StdLib:Manual',
+    // TODO: Use null instead because undefined is not serializable
     configSchema: undefined, // Changed from null to undefined
     outputSchema: {
       type: 'object',
@@ -491,7 +492,7 @@ const InspectorDebugTestTab: React.FC<{
 
   // Resolve input data and data lineage when selection changes
   React.useEffect(() => {
-    if (selectedElement && currentFlowFqn) {
+    if (selectedElement) {
       const resolveData = async () => {
         try {
           // Get component schema for the selected element
@@ -507,9 +508,55 @@ const InspectorDebugTestTab: React.FC<{
                                selectedElement.data?.triggerType ||
                                selectedElement.id === 'trigger';
 
+          // Determine the correct flow FQN for this step
+          let stepFlowFqn = currentFlowFqn;
+          
+          // If we have flow information in the selected element, use that
+          if (selectedElement.flowFqn) {
+            stepFlowFqn = selectedElement.flowFqn;
+          } else if (selectedElement.data?.flowFqn) {
+            stepFlowFqn = selectedElement.data.flowFqn;
+          } else if (selectedElement.data?.fqn && selectedElement.data.fqn.includes('.')) {
+            // For system nodes, the fqn might be the flow FQN
+            stepFlowFqn = selectedElement.data.fqn;
+          } else if (currentFlowFqn) {
+            // Fallback to current flow
+            stepFlowFqn = currentFlowFqn;
+          } else {
+            // Try to find the flow that contains this step by searching all modules
+            const allModules = moduleRegistry.getAllLoadedModules();
+            for (const module of allModules) {
+              if (module.definitions?.flows) {
+                for (const flow of module.definitions.flows) {
+                  const flowFqn = `${module.fqn}.${flow.name}`;
+                  if (flow.steps?.some((step: any) => step.step_id === selectedElement.id)) {
+                    stepFlowFqn = flowFqn;
+                    break;
+                  }
+                  // Check if this is the trigger for this flow
+                  if (isTriggerNode && flow.trigger) {
+                    stepFlowFqn = flowFqn;
+                    break;
+                  }
+                }
+                if (stepFlowFqn) break;
+              }
+            }
+          }
+
+          if (!stepFlowFqn) {
+            console.warn('Could not determine flow FQN for selected element:', selectedElement);
+            setInputData('{}');
+            setDataLineage(null);
+            setValidationResult(null);
+            return;
+          }
+
+          console.log(`🔍 Resolving data for step "${selectedElement.id}" in flow "${stepFlowFqn}"`);
+
           if (isTriggerNode) {
             // For trigger nodes: resolve input from trigger configuration
-            const flowDef = moduleRegistry.getFlowDefinition(currentFlowFqn);
+            const flowDef = moduleRegistry.getFlowDefinition(stepFlowFqn);
             if (flowDef?.trigger) {
               const triggerInputData = actions.resolveTriggerInputData(
                 flowDef.trigger,
@@ -520,25 +567,24 @@ const InspectorDebugTestTab: React.FC<{
               
               // For triggers, data lineage starts from the trigger itself
               setDataLineage({
-                targetStepId: 'trigger',
-                flowFqn: currentFlowFqn,
-                dataPath: [{
-                  stepId: 'trigger',
-                  stepType: 'trigger',
-                  componentFqn: flowDef.trigger.type,
-                  outputData: triggerInputData,
-                  executionOrder: 0
-                }],
-                availableInputs: triggerInputData,
-                contextVariables: {},
-                inputMappings: []
+                flowFqn: stepFlowFqn,
+                paths: [{
+                  targetStepId: 'trigger',
+                  targetInputField: 'triggerData',
+                  source: {
+                    sourceType: 'external',
+                    id: 'external-trigger',
+                    dataPath: 'triggerData'
+                  },
+                  transformationExpression: 'direct'
+                }]
               });
             }
           } else if (selectedElement.sourceType === 'flowNode' && selectedElement.data?.stepId) {
             // For step nodes: resolve input from flow structure and previous steps
             const resolvedInput = await actions.resolveStepInputData(
               selectedElement.data.stepId, 
-              currentFlowFqn
+              stepFlowFqn
             );
             
             setInputData(JSON.stringify(resolvedInput.actualInputData, null, 2));
@@ -546,7 +592,7 @@ const InspectorDebugTestTab: React.FC<{
             // Resolve data lineage
             const lineage = await actions.resolveDataLineage(
               selectedElement.data.stepId,
-              currentFlowFqn
+              stepFlowFqn
             );
             setDataLineage(lineage);
           }
@@ -868,18 +914,30 @@ const InspectorDebugTestTab: React.FC<{
                 backgroundColor: '#ffebee',
                 borderRadius: '3px'
               }}>
-                {validationResult.errors.map((error: any, index: number) => (
-                  <div key={index} style={{ 
+                {validationResult.errors && Array.isArray(validationResult.errors) ? (
+                  validationResult.errors.map((error: any, index: number) => (
+                    <div key={index} style={{ 
+                      fontSize: '11px', 
+                      color: '#f44336',
+                      padding: '2px 8px',
+                      backgroundColor: '#ffebee',
+                      borderRadius: '3px',
+                      marginBottom: '2px'
+                    }}>
+                      {error.fieldPath}: {error.message}
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ 
                     fontSize: '11px', 
                     color: '#f44336',
                     padding: '2px 8px',
                     backgroundColor: '#ffebee',
-                    borderRadius: '3px',
-                    marginBottom: '2px'
+                    borderRadius: '3px'
                   }}>
-                    {error.fieldPath}: {error.message}
+                    Validation failed
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
@@ -898,32 +956,38 @@ const InspectorDebugTestTab: React.FC<{
                 <div style={{ marginBottom: '8px' }}>
                   <strong>Flow Path:</strong>
                 </div>
-                {dataLineage.paths.map((path: any, index: number) => (
-                  <div key={`${path.targetStepId}-${path.targetInputField}`} style={{ 
-                    marginLeft: `${index * 16}px`,
-                    marginBottom: '4px',
-                    padding: '4px',
-                    backgroundColor: 'white',
-                    borderRadius: '3px',
-                    border: '1px solid #e0e0e0'
-                  }}>
-                    <div style={{ fontWeight: '600' }}>{path.targetStepId} → {path.targetInputField}</div>
-                    <div style={{ color: '#666' }}>Source: {path.source.sourceType}</div>
-                    {path.source.id && (
-                      <div style={{ color: '#666' }}>From: {path.source.id}</div>
-                    )}
-                    {path.source.dataPath && (
-                      <div style={{ color: '#666', fontSize: '11px' }}>
-                        Path: {path.source.dataPath}
-                      </div>
-                    )}
-                    {path.transformationExpression && (
-                      <div style={{ color: '#666', fontSize: '11px' }}>
-                        Expression: {path.transformationExpression}
-                      </div>
-                    )}
+                {dataLineage.paths && dataLineage.paths.length > 0 ? (
+                  dataLineage.paths.map((path: any, index: number) => (
+                    <div key={`${path.targetStepId}-${path.targetInputField}-${index}`} style={{ 
+                      marginLeft: `${index * 16}px`,
+                      marginBottom: '4px',
+                      padding: '4px',
+                      backgroundColor: 'white',
+                      borderRadius: '3px',
+                      border: '1px solid #e0e0e0'
+                    }}>
+                      <div style={{ fontWeight: '600' }}>{path.targetStepId} → {path.targetInputField}</div>
+                      <div style={{ color: '#666' }}>Source: {path.source?.sourceType || 'unknown'}</div>
+                      {path.source?.id && (
+                        <div style={{ color: '#666' }}>From: {path.source.id}</div>
+                      )}
+                      {path.source?.dataPath && (
+                        <div style={{ color: '#666', fontSize: '11px' }}>
+                          Path: {path.source.dataPath}
+                        </div>
+                      )}
+                      {path.transformationExpression && (
+                        <div style={{ color: '#666', fontSize: '11px' }}>
+                          Expression: {path.transformationExpression}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ color: '#666', fontStyle: 'italic' }}>
+                    No data lineage paths found for this step.
                   </div>
-                ))}
+                )}
               </div>
             </div>
           )}

@@ -14,14 +14,16 @@ service FlowSimulationService {
                 flowFqn: string,
                 triggerInput: any,
                 targetStepId?: string,
+                moduleRegistry: IModuleRegistry,
+                componentSchemas: Record<string, ComponentSchema>,
                 executionOptions?: FlowExecutionOptions
             ): Promise<FlowSimulationResult>
         `
         
         implementation: `
-            FUNCTION simulateFlowExecution(flowFqn, triggerInput, targetStepId, executionOptions) {
+            FUNCTION simulateFlowExecution(flowFqn, triggerInput, targetStepId, moduleRegistry, componentSchemas, executionOptions) {
                 // Get flow definition from module registry
-                DECLARE flowDef = CALL ModuleRegistryService.getFlowDefinition WITH flowFqn
+                DECLARE flowDef = CALL moduleRegistry.getFlowDefinition WITH flowFqn
                 IF NOT flowDef THEN
                     THROW new Error("Flow not found: " + flowFqn)
                 END_IF
@@ -39,13 +41,13 @@ service FlowSimulationService {
                 }
                 
                 // Load context variables from module
-                DECLARE moduleContext = CALL ModuleRegistryService.getModuleContext WITH flowDef.moduleFqn
+                DECLARE moduleContext = CALL moduleRegistry.getModuleContext WITH flowDef.moduleFqn
                 FOR_EACH contextVar IN moduleContext.contextVariables
                     ASSIGN executionContext.contextVariables.set(contextVar.name, contextVar.value)
                 END_FOR
                 
-                // Execute trigger
-                DECLARE triggerResult = CALL executeTrigger WITH flowDef.trigger, triggerInput, executionContext
+                // Execute trigger - CRITICAL: trigger must produce proper output data
+                DECLARE triggerResult = CALL ComponentExecutionService.executeTrigger WITH flowDef.trigger, triggerInput, executionContext
                 ASSIGN executionContext.stepResults.set('trigger', triggerResult)
                 
                 // Execute steps in order until target step (or all steps)
@@ -55,17 +57,19 @@ service FlowSimulationService {
                 
                 FOR_EACH step IN stepsToExecute
                     TRY {
+                        // CRITICAL: Resolve input data from previous step outputs
                         DECLARE stepInput = CALL resolveStepInput WITH step, executionContext
-                        DECLARE stepResult = CALL executeStep WITH step, stepInput, executionContext
+                        DECLARE stepResult = CALL ComponentExecutionService.executeStep WITH step, stepInput, executionContext, componentSchemas
                         ASSIGN executionContext.stepResults.set(step.id, stepResult)
                         
-                        // Log execution
+                        // Log execution with proper data lineage
                         ASSIGN executionContext.executionLog.push({
                             stepId: step.id,
                             timestamp: new Date().toISOString(),
                             input: stepInput,
                             output: stepResult,
-                            duration: stepResult.executionTime || 0
+                            duration: stepResult.executionTime || 0,
+                            dataLineage: stepInput.inputSources
                         })
                         
                         // Break if this is the target step
@@ -86,7 +90,7 @@ service FlowSimulationService {
                     }
                 END_FOR
                 
-                // Build final result
+                // Build final result with proper data propagation
                 DECLARE finalResult = {
                     executionId: executionContext.executionId,
                     flowFqn: flowFqn,
@@ -98,7 +102,8 @@ service FlowSimulationService {
                     stepResults: Object.fromEntries(executionContext.stepResults),
                     executionLog: executionContext.executionLog,
                     errors: executionContext.errors,
-                    contextVariables: Object.fromEntries(executionContext.contextVariables)
+                    contextVariables: Object.fromEntries(executionContext.contextVariables),
+                    resolvedStepInputs: CALL buildResolvedInputsMap WITH executionContext
                 }
                 
                 RETURN finalResult
@@ -114,29 +119,46 @@ service FlowSimulationService {
                 DECLARE resolvedInput = {}
                 DECLARE inputSources = []
                 
-                // Process inputs_map to resolve data sources
+                // Process inputs_map to resolve data sources - CRITICAL: must handle all DSL patterns
                 IF step.inputs_map IS_DEFINED THEN
                     FOR_EACH inputKey, inputSource IN step.inputs_map
                         DECLARE resolvedValue = null
                         DECLARE sourceInfo = null
                         
                         IF inputSource.startsWith('trigger.') THEN
-                            // Resolve from trigger output
+                            // Resolve from trigger output - CRITICAL: trigger must have proper outputData
                             DECLARE triggerResult = executionContext.stepResults.get('trigger')
                             DECLARE triggerPath = inputSource.substring(8) // Remove 'trigger.'
-                            ASSIGN resolvedValue = CALL getNestedValue WITH triggerResult, triggerPath
+                            ASSIGN resolvedValue = CALL getNestedValue WITH triggerResult.outputData, triggerPath
                             ASSIGN sourceInfo = { type: 'trigger', path: triggerPath }
                             
-                        ELSE_IF inputSource.startsWith('step.') THEN
-                            // Resolve from previous step output
-                            DECLARE stepRef = inputSource.substring(5) // Remove 'step.'
-                            DECLARE [stepId, outputPath] = stepRef.split('.', 2)
-                            DECLARE stepResult = executionContext.stepResults.get(stepId)
-                            IF stepResult THEN
-                                ASSIGN resolvedValue = outputPath ? 
-                                    CALL getNestedValue WITH stepResult, outputPath :
-                                    stepResult
-                                ASSIGN sourceInfo = { type: 'step', stepId: stepId, path: outputPath }
+                        ELSE_IF inputSource.startsWith('steps.') THEN
+                            // Resolve from previous step output - CRITICAL: handle "steps.stepId.outputs.field" pattern
+                            DECLARE stepsMatch = inputSource.match(/^steps\.([^.]+)\.(.+)$/)
+                            IF stepsMatch THEN
+                                DECLARE sourceStepId = stepsMatch[1]
+                                DECLARE outputPath = stepsMatch[2]
+                                DECLARE stepResult = executionContext.stepResults.get(sourceStepId)
+                                
+                                IF stepResult AND stepResult.outputData THEN
+                                    // Handle "outputs.field" pattern specifically
+                                    IF outputPath.startsWith('outputs.') THEN
+                                        DECLARE actualPath = outputPath.substring(8) // Remove 'outputs.'
+                                        ASSIGN resolvedValue = CALL getNestedValue WITH stepResult.outputData, actualPath
+                                    ELSE
+                                        // Direct field access for backward compatibility
+                                        ASSIGN resolvedValue = CALL getNestedValue WITH stepResult.outputData, outputPath
+                                    END_IF
+                                    ASSIGN sourceInfo = { type: 'step', stepId: sourceStepId, path: outputPath }
+                                ELSE
+                                    LOG "Warning: Source step " + sourceStepId + " not found or has no output data"
+                                    ASSIGN resolvedValue = null
+                                    ASSIGN sourceInfo = { type: 'step', stepId: sourceStepId, path: outputPath, error: 'step_not_found' }
+                                END_IF
+                            ELSE
+                                LOG "Warning: Invalid steps expression format: " + inputSource
+                                ASSIGN resolvedValue = null
+                                ASSIGN sourceInfo = { type: 'step', error: 'invalid_format', expression: inputSource }
                             END_IF
                             
                         ELSE_IF inputSource.startsWith('context.') THEN
@@ -162,69 +184,275 @@ service FlowSimulationService {
                 ELSE
                     // No inputs_map, use trigger output as default input
                     DECLARE triggerResult = executionContext.stepResults.get('trigger')
-                    ASSIGN resolvedInput = triggerResult
+                    ASSIGN resolvedInput = triggerResult?.outputData || {}
                     ASSIGN inputSources.push({
                         inputKey: 'default',
                         sourceExpression: 'trigger',
-                        resolvedValue: triggerResult,
+                        resolvedValue: triggerResult?.outputData,
                         sourceInfo: { type: 'trigger', path: null }
                     })
-                END_IF
-                
-                // Get component schema for validation
-                DECLARE componentSchema = CALL ComponentSchemaService.getComponentSchema WITH step.component
-                
-                // Validate input against schema if available
-                DECLARE validationResult = null
-                IF componentSchema?.inputSchema THEN
-                    ASSIGN validationResult = CALL validateAgainstSchema WITH resolvedInput, componentSchema.inputSchema
                 END_IF
                 
                 RETURN {
                     stepId: step.id,
                     resolvedInput: resolvedInput,
-                    inputSources: inputSources,
-                    validationResult: validationResult,
-                    componentSchema: componentSchema
+                    inputSources: inputSources
+                }
+            }
+        `
+    }
+}
+
+// --- COMPONENT EXECUTION SERVICE ---
+
+service ComponentExecutionService {
+    description: "Handles execution simulation for different component types with realistic data generation"
+    
+    method executeTrigger {
+        signature: `executeTrigger(trigger: any, triggerInput: any, executionContext: ExecutionContext): StepExecutionResult`
+        
+        implementation: `
+            FUNCTION executeTrigger(trigger, triggerInput, executionContext) {
+                // CRITICAL: Trigger must produce proper outputData that can be consumed by steps
+                DECLARE outputData = triggerInput
+                
+                // Enhance trigger output based on trigger type
+                IF trigger.type EQUALS 'StdLib.Trigger:Http' THEN
+                    // HTTP triggers provide body, headers, query params
+                    ASSIGN outputData = {
+                        body: triggerInput.body || triggerInput,
+                        headers: triggerInput.headers || {},
+                        query: triggerInput.query || {},
+                        method: trigger.config?.method || 'POST',
+                        path: trigger.config?.path || '/api/trigger'
+                    }
+                ELSE_IF trigger.type EQUALS 'StdLib.Trigger:EventBus' THEN
+                    // Event triggers provide event data
+                    ASSIGN outputData = {
+                        eventType: triggerInput.eventType || 'unknown',
+                        eventData: triggerInput.eventData || triggerInput,
+                        timestamp: new Date().toISOString(),
+                        source: triggerInput.source || 'system'
+                    }
+                ELSE
+                    // Generic trigger - pass through input data
+                    ASSIGN outputData = triggerInput
+                END_IF
+                
+                RETURN {
+                    stepId: 'trigger',
+                    componentType: trigger.type,
+                    inputData: triggerInput,
+                    outputData: outputData,
+                    executionTime: 0,
+                    timestamp: new Date().toISOString(),
+                    success: true
                 }
             }
         `
     }
     
     method executeStep {
-        signature: `executeStep(step: FlowStep, stepInput: ResolvedStepInput, executionContext: ExecutionContext): any`
+        signature: `executeStep(step: FlowStep, stepInput: ResolvedStepInput, executionContext: ExecutionContext, componentSchemas: Record<string, ComponentSchema>): StepExecutionResult`
         
         implementation: `
-            FUNCTION executeStep(step, stepInput, executionContext) {
+            FUNCTION executeStep(step, stepInput, executionContext, componentSchemas) {
                 DECLARE startTime = performance.now()
                 
-                // Get component definition and schema
-                DECLARE componentDef = CALL ModuleRegistryService.getComponentDefinition WITH step.component
-                DECLARE componentSchema = CALL ComponentSchemaService.getComponentSchema WITH step.component
+                // Get component schema for this step
+                DECLARE componentSchema = componentSchemas[step.component_ref] || null
                 
-                // Execute component with resolved input
-                DECLARE componentResult = CALL ComponentExecutionService.executeComponent WITH 
-                    step.component, 
+                // Execute component with resolved input - CRITICAL: must produce realistic outputs
+                DECLARE componentResult = CALL simulateComponentExecution WITH 
+                    step.component_ref, 
                     stepInput.resolvedInput, 
                     step.config,
                     componentSchema
                 
                 DECLARE endTime = performance.now()
                 
-                // Enhance result with execution metadata
-                DECLARE enhancedResult = {
-                    ...componentResult,
-                    executionMetadata: {
-                        stepId: step.id,
-                        componentType: step.component,
-                        executionTime: endTime - startTime,
-                        timestamp: new Date().toISOString(),
-                        inputSources: stepInput.inputSources,
-                        validationResult: stepInput.validationResult
-                    }
+                // Build execution result with proper metadata
+                DECLARE executionResult = {
+                    stepId: step.id,
+                    componentType: step.component_ref,
+                    inputData: stepInput.resolvedInput,
+                    outputData: componentResult,
+                    executionTime: endTime - startTime,
+                    timestamp: new Date().toISOString(),
+                    success: true,
+                    inputSources: stepInput.inputSources
                 }
                 
-                RETURN enhancedResult
+                RETURN executionResult
+            }
+        `
+    }
+    
+    method simulateComponentExecution {
+        signature: `simulateComponentExecution(componentType: string, inputData: any, config: any, componentSchema?: ComponentSchema): any`
+        
+        implementation: `
+            FUNCTION simulateComponentExecution(componentType, inputData, config, componentSchema) {
+                // CRITICAL: Generate realistic outputs that can be consumed by downstream steps
+                SWITCH componentType
+                    CASE 'StdLib:JsonSchemaValidator'
+                        // CRITICAL: Validator must output validData that downstream steps can use
+                        DECLARE validatedData = inputData?.data || inputData
+                        RETURN {
+                            isValid: true,
+                            validData: validatedData, // This is what downstream steps should reference
+                            validationResult: {
+                                passed: true,
+                                errors: [],
+                                schema: config?.schema,
+                                validatedFields: Object.keys(validatedData || {})
+                            }
+                        }
+                    
+                    CASE 'StdLib:Fork'
+                        // CRITICAL: Fork must create separate outputs for each branch
+                        DECLARE forkOutputs = {}
+                        IF config?.outputNames IS_DEFINED THEN
+                            FOR_EACH outputName IN config.outputNames
+                                ASSIGN forkOutputs[outputName] = inputData // Each branch gets copy of input data
+                            END_FOR
+                        ELSE
+                            // Default fork behavior
+                            ASSIGN forkOutputs.default = inputData
+                        END_IF
+                        RETURN forkOutputs
+                    
+                    CASE 'StdLib:MapData'
+                        // CRITICAL: Apply actual data transformations based on expression
+                        RETURN CALL evaluateMapDataExpression WITH config.expression, inputData
+                    
+                    CASE 'StdLib:HttpCall'
+                        // CRITICAL: HTTP calls must return response structure
+                        RETURN {
+                            status: 200,
+                            response: {
+                                body: CALL generateHttpResponseBody WITH componentType, inputData, config,
+                                headers: { 'content-type': 'application/json' },
+                                status: 200
+                            },
+                            requestData: inputData,
+                            requestConfig: config
+                        }
+                    
+                    CASE 'StdLib:SubFlowInvoker'
+                        // CRITICAL: SubFlow invokers must return result structure
+                        RETURN {
+                            result: {
+                                status: 'completed',
+                                data: inputData,
+                                flowFqn: config?.flowName,
+                                executionId: 'subflow-' + Math.random().toString(36).substr(2, 9)
+                            },
+                            success: true,
+                            executionTime: Math.random() * 1000 + 500
+                        }
+                    
+                    DEFAULT
+                        // Generic component execution
+                        RETURN {
+                            result: inputData,
+                            success: true,
+                            timestamp: new Date().toISOString(),
+                            componentType: componentType
+                        }
+                END_SWITCH
+            }
+        `
+    }
+    
+    method evaluateMapDataExpression {
+        signature: `evaluateMapDataExpression(expression: string, inputData: any): any`
+        
+        implementation: `
+            FUNCTION evaluateMapDataExpression(expression, inputData) {
+                // CRITICAL: Handle common expression patterns from casino example
+                IF expression.includes('canProceed') THEN
+                    // Handle compliance evaluation
+                    RETURN {
+                        canProceed: inputData.jurisdictionAllowed !== false && 
+                                   inputData.onSanctionsList !== true && 
+                                   inputData.ageEligible !== false,
+                        complianceFlags: {
+                            jurisdiction: inputData.jurisdictionAllowed !== false,
+                            sanctions: inputData.onSanctionsList !== true,
+                            age: inputData.ageEligible !== false
+                        },
+                        riskLevel: (inputData.jurisdictionAllowed !== false && 
+                                   inputData.onSanctionsList !== true && 
+                                   inputData.ageEligible !== false) ? 'low' : 'high'
+                    }
+                ELSE_IF expression.includes('age') AND expression.includes('isEligible') THEN
+                    // Handle age verification
+                    DECLARE age = inputData?.dateOfBirth ? 
+                        Math.floor((Date.now() - new Date(inputData.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 25
+                    RETURN {
+                        age: age,
+                        isEligible: age >= 18,
+                        jurisdiction: inputData?.country || 'US'
+                    }
+                ELSE_IF expression.includes('userTier') THEN
+                    // Handle tier classification
+                    DECLARE totalDeposits = inputData?.totalLifetimeDeposits || 0
+                    DECLARE tier = totalDeposits >= 250000 ? 'platinum' :
+                                  totalDeposits >= 50000 ? 'gold' :
+                                  totalDeposits >= 10000 ? 'silver' :
+                                  totalDeposits >= 1000 ? 'bronze' : 'standard'
+                    RETURN {
+                        userTier: tier,
+                        originalData: inputData
+                    }
+                ELSE
+                    // Generic transformation - enhance input data
+                    RETURN {
+                        result: inputData,
+                        processed: true,
+                        timestamp: new Date().toISOString()
+                    }
+                END_IF
+            }
+        `
+    }
+    
+    method generateHttpResponseBody {
+        signature: `generateHttpResponseBody(componentType: string, inputData: any, config: any): any`
+        
+        implementation: `
+            FUNCTION generateHttpResponseBody(componentType, inputData, config) {
+                // Generate realistic HTTP response bodies based on URL patterns
+                IF config?.url?.includes('jurisdiction-check') THEN
+                    RETURN {
+                        allowed: inputData?.country !== 'RESTRICTED',
+                        jurisdiction: inputData?.country || 'US',
+                        restrictions: [],
+                        checkId: 'jur-' + Math.random().toString(36).substr(2, 9)
+                    }
+                ELSE_IF config?.url?.includes('sanctions-screening') THEN
+                    RETURN {
+                        flagged: false, // Simulate clean screening
+                        riskScore: 0.1,
+                        screeningId: 'san-' + Math.random().toString(36).substr(2, 9),
+                        lastUpdated: new Date().toISOString()
+                    }
+                ELSE_IF config?.url?.includes('/users') AND config?.method === 'POST' THEN
+                    RETURN {
+                        userId: 'user-' + Math.random().toString(36).substr(2, 9),
+                        status: 'active',
+                        createdAt: new Date().toISOString(),
+                        profile: inputData?.userData || inputData
+                    }
+                ELSE
+                    // Generic HTTP response
+                    RETURN {
+                        success: true,
+                        data: inputData,
+                        timestamp: new Date().toISOString()
+                    }
+                END_IF
             }
         `
     }
