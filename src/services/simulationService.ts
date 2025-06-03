@@ -169,9 +169,15 @@ export class SimulationService {
             resolvedValue = contextState[contextVar];
             console.log(`    ✅ From context.${contextVar}:`, resolvedValue);
           } else {
-            // Direct value or constant
-            resolvedValue = sourceExpression;
-            console.log(`    ✅ Direct value:`, resolvedValue);
+            // Direct value or constant - check if it's a complex expression
+            if (typeof sourceExpression === 'string' && 
+                (sourceExpression.includes('{') || sourceExpression.includes('trigger.') || sourceExpression.includes('steps.'))) {
+              // This might be a complex expression like "{ sessionToken: trigger.headers.authorization, userId: trigger.body.userId }"
+              resolvedValue = this.evaluateComplexExpression(sourceExpression, stepResults, contextState);
+            } else {
+              resolvedValue = sourceExpression;
+            }
+            console.log(`    ✅ Direct/Complex value:`, resolvedValue);
           }
         } else {
           // Non-string values (constants, objects, etc.)
@@ -287,7 +293,7 @@ export class SimulationService {
         stepId: 'trigger',
         componentFqn: flowDef.trigger?.type || 'trigger',
         inputData: triggerData,
-        outputData: triggerData,
+        outputData: this.createTriggerOutputData(flowDef.trigger, triggerData),
         contextChanges: {},
         executionOrder: 0,
         simulationSuccess: true
@@ -375,5 +381,119 @@ export class SimulationService {
    */
   getFlowSimulationService(): FlowSimulationService {
     return this.flowSimulationService;
+  }
+
+  private createTriggerOutputData(trigger: any, triggerData: any): any {
+    // CRITICAL: Trigger must produce proper outputData that can be consumed by steps
+    // This should match what DataGenerationService.generateTriggerData produces
+    
+    // For HTTP triggers, the triggerData from DataGenerationService already has the correct structure
+    // We just need to ensure it's properly formatted for step consumption
+    if (trigger?.type === 'StdLib.Trigger:Http') {
+      // triggerData from DataGenerationService already has body, headers, etc.
+      // Just ensure we return it in the correct format
+      return {
+        body: triggerData.body || triggerData,
+        headers: triggerData.headers || {},
+        query: triggerData.query || {},
+        method: triggerData.method || 'POST',
+        url: triggerData.url || triggerData.path || '/webhook'
+      };
+    } else if (trigger?.type === 'StdLib.Trigger:Schedule' || trigger?.type === 'StdLib.Trigger:Scheduled') {
+      // Schedule triggers provide timestamp and config
+      return {
+        timestamp: triggerData.scheduledTime || new Date().toISOString(),
+        scheduledTime: triggerData.scheduledTime || new Date().toISOString(),
+        data: triggerData.data || {},
+        config: trigger.config || {}
+      };
+    } else if (trigger?.type === 'StdLib.Trigger:EventBus') {
+      // Event triggers provide event data
+      return {
+        event: triggerData.eventData || triggerData.data || {},
+        eventType: triggerData.eventType || trigger.config?.eventType || 'generic-event',
+        metadata: {
+          timestamp: triggerData.receivedAt || new Date().toISOString(),
+          eventId: triggerData.eventData?.eventId || 'event-' + Math.random().toString(36).substr(2, 9)
+        }
+      };
+    } else {
+      // Generic trigger - ensure we have a proper structure
+      return {
+        data: triggerData.data || triggerData,
+        timestamp: new Date().toISOString(),
+        source: 'trigger'
+      };
+    }
+  }
+
+  /**
+   * Evaluate complex expressions like object construction
+   */
+  private evaluateComplexExpression(expression: string, stepResults: Record<string, any>, contextState: Record<string, any>): any {
+    try {
+      // Handle object construction: { field1: trigger.field1, field2: steps.step1.outputs.field2 }
+      if (expression.trim().startsWith('{') && expression.trim().endsWith('}')) {
+        const result: any = {};
+        const content = expression.trim().slice(1, -1);
+        const pairs = content.split(',').map(p => p.trim());
+        
+        for (const pair of pairs) {
+          const colonIndex = pair.indexOf(':');
+          if (colonIndex === -1) continue;
+          
+          const key = pair.substring(0, colonIndex).trim().replace(/['"]/g, '');
+          const value = pair.substring(colonIndex + 1).trim();
+          
+          if (value.startsWith('"') && value.endsWith('"')) {
+            // String literal
+            result[key] = value.slice(1, -1);
+          } else if (value.startsWith('trigger.')) {
+            // Trigger reference
+            const triggerResult = stepResults['trigger'];
+            if (triggerResult) {
+              const dataPath = value.replace('trigger.', '');
+              result[key] = this.dataGenerationService.getNestedValue(triggerResult.outputData, dataPath);
+            }
+          } else if (value.startsWith('steps.')) {
+            // Step reference
+            const stepsMatch = value.match(/^steps\.([^.]+)\.(.+)$/);
+            if (stepsMatch) {
+              const sourceStepId = stepsMatch[1];
+              const outputPath = stepsMatch[2];
+              const sourceStepResult = stepResults[sourceStepId];
+              
+              if (sourceStepResult && sourceStepResult.outputData) {
+                if (outputPath.startsWith('outputs.')) {
+                  const actualPath = outputPath.replace('outputs.', '');
+                  result[key] = this.dataGenerationService.getNestedValue(sourceStepResult.outputData, actualPath);
+                } else {
+                  result[key] = this.dataGenerationService.getNestedValue(sourceStepResult.outputData, outputPath);
+                }
+              }
+            }
+          } else if (value.startsWith('context.')) {
+            // Context reference
+            const contextVar = value.replace('context.', '');
+            result[key] = contextState[contextVar];
+          } else {
+            // Try to parse as number or boolean, otherwise treat as string
+            if (value === 'true') result[key] = true;
+            else if (value === 'false') result[key] = false;
+            else if (!isNaN(Number(value))) result[key] = Number(value);
+            else result[key] = value;
+          }
+        }
+        
+        return result;
+      }
+      
+      // If not object construction, return as-is
+      return expression;
+      
+    } catch (error) {
+      console.warn('Complex expression evaluation failed:', expression, error);
+      return expression;
+    }
   }
 } 

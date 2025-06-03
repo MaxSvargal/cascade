@@ -86,10 +86,21 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
 
   // Debug test actions service
   const debugTestActionsService = useMemo(() => {
+    // Wrap onRunTestCase to handle null return type
+    const wrappedOnRunTestCase = props.onRunTestCase ? async (testCase: any) => {
+      const result = await props.onRunTestCase!(testCase);
+      return result || {
+        testCase,
+        passed: false,
+        assertionResults: [],
+        error: 'Test execution returned null'
+      };
+    } : undefined;
+
     return new DebugTestActionsService(
       moduleRegistry,
       componentSchemas,
-      props.onRunTestCase
+      wrappedOnRunTestCase
     );
   }, [moduleRegistry, componentSchemas, props.onRunTestCase]);
 

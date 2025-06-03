@@ -41,8 +41,8 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
   }
 
   async resolveStepInputData(
+    stepId: string,
     flowFqn: string, 
-    stepId: string, 
     triggerInputData?: any, 
     options?: ExecutionOptions
   ): Promise<ResolvedStepInput> {
@@ -133,7 +133,7 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
     if (flowDef.steps) {
       for (const step of flowDef.steps) {
         try {
-          const resolvedInput = await this.resolveStepInputData(flowFqn, step.step_id);
+          const resolvedInput = await this.resolveStepInputData(step.step_id, flowFqn);
           stepResults[step.step_id] = {
             input: resolvedInput,
             output: this.dataGenerationService.generateDataFromSchema(
@@ -414,7 +414,7 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
         stepId: 'trigger',
         componentFqn: flowDef.trigger?.type || 'trigger',
         inputData: triggerData,
-        outputData: triggerData,
+        outputData: this.createTriggerOutputData(flowDef.trigger, triggerData),
         contextChanges: {},
         executionOrder: 0,
         simulationSuccess: true
@@ -601,5 +601,50 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
         }
       ]
     };
+  }
+
+  private createTriggerOutputData(trigger: any, triggerData: any): any {
+    // CRITICAL: Trigger must produce proper outputData that can be consumed by steps
+    // This matches the logic in FlowSimulationService.executeTrigger()
+    let outputData = triggerData;
+
+    // Enhance trigger output based on trigger type
+    if (trigger?.type === 'StdLib.Trigger:Http') {
+      // HTTP triggers provide body, headers, query params
+      outputData = {
+        body: triggerData.body || triggerData,
+        headers: triggerData.headers || {},
+        query: triggerData.query || {},
+        method: triggerData.method || 'POST',
+        url: triggerData.url || triggerData.path || '/webhook'
+      };
+    } else if (trigger?.type === 'StdLib.Trigger:Schedule' || trigger?.type === 'StdLib.Trigger:Scheduled') {
+      // Schedule triggers provide timestamp and config
+      outputData = {
+        timestamp: new Date().toISOString(),
+        scheduledTime: triggerData.scheduledTime || new Date().toISOString(),
+        config: trigger.config || {}
+      };
+    } else if (trigger?.type === 'StdLib.Trigger:EventBus') {
+      // Event triggers provide event data
+      outputData = {
+        event: triggerData.eventData || triggerData,
+        metadata: {
+          messageId: triggerData.messageId || 'msg-' + Math.random().toString(36).substr(2, 9),
+          timestamp: new Date().toISOString(),
+          source: triggerData.source || 'system'
+        }
+      };
+    } else {
+      // Generic trigger - ensure we have a proper structure
+      outputData = {
+        data: triggerData,
+        timestamp: new Date().toISOString(),
+        source: 'trigger'
+      };
+    }
+
+    console.log(`🎯 Created trigger output data for ${trigger?.type}:`, outputData);
+    return outputData;
   }
 } 

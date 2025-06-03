@@ -76,7 +76,8 @@ export class DataGenerationService {
     console.log(`🎯 Generating trigger data for:`, trigger);
     
     switch (trigger.type) {
-      case 'StdLib:HttpTrigger':
+      case 'StdLib.Trigger:Http':
+      case 'StdLib:HttpTrigger': // Backward compatibility
         const path = trigger.config?.path || '/api/endpoint';
         const method = trigger.config?.method || 'POST';
         
@@ -85,18 +86,18 @@ export class DataGenerationService {
         
         if (path.includes('/users/onboard') || path.includes('/onboard')) {
           // User onboarding data - CRITICAL: This becomes the trigger output that flows to first step
+          // Put user data directly in body since steps expect trigger.body to contain the registration data
           body = {
-            userData: { // Structured data that components can reference
-              email: 'john.doe@example.com',
-              password: 'SecurePass123!',
-              firstName: 'John',
-              lastName: 'Doe',
-              dateOfBirth: '1990-01-15',
-              country: 'US',
-              phoneNumber: '+1234567890',
-              referralCode: 'REF123',
-              acceptedTerms: true
-            },
+            email: 'john.doe@example.com',
+            password: 'SecurePass123!',
+            firstName: 'John',
+            lastName: 'Doe',
+            dateOfBirth: '1990-01-15',
+            country: 'US',
+            phoneNumber: '+1234567890',
+            referralCode: 'REF123',
+            acceptedTerms: true,
+            // Additional metadata can be included alongside user data
             requestMetadata: {
               timestamp: new Date().toISOString(),
               requestId: 'req-' + Math.random().toString(36).substr(2, 9),
@@ -146,7 +147,7 @@ export class DataGenerationService {
           },
           body,
           // Additional trigger metadata
-          triggerType: 'StdLib:HttpTrigger',
+          triggerType: trigger.type, // Use the actual trigger type
           triggerConfig: trigger.config,
           receivedAt: new Date().toISOString()
         };
@@ -154,10 +155,12 @@ export class DataGenerationService {
         console.log(`🎯 Generated HttpTrigger output:`, triggerOutput);
         return triggerOutput;
         
-      case 'StdLib:ScheduledTrigger':
+      case 'StdLib.Trigger:Schedule':
+      case 'StdLib.Trigger:Scheduled':
+      case 'StdLib:ScheduledTrigger': // Backward compatibility
         const scheduledOutput = {
           scheduledTime: new Date().toISOString(),
-          triggerType: 'StdLib:ScheduledTrigger',
+          triggerType: trigger.type, // Use the actual trigger type
           data: { 
             batchId: 'batch123',
             scheduleName: trigger.config?.scheduleName || 'default-schedule'
@@ -168,7 +171,8 @@ export class DataGenerationService {
         console.log(`🎯 Generated ScheduledTrigger output:`, scheduledOutput);
         return scheduledOutput;
         
-      case 'StdLib:EventTrigger':
+      case 'StdLib.Trigger:EventBus':
+      case 'StdLib:EventTrigger': // Backward compatibility
         const eventOutput = {
           eventType: trigger.config?.eventType || 'generic-event',
           eventData: {
@@ -176,7 +180,7 @@ export class DataGenerationService {
             eventId: 'event-' + Math.random().toString(36).substr(2, 9),
             timestamp: new Date().toISOString()
           },
-          triggerType: 'StdLib:EventTrigger',
+          triggerType: trigger.type, // Use the actual trigger type
           triggerConfig: trigger.config,
           receivedAt: new Date().toISOString()
         };
@@ -302,7 +306,14 @@ export class DataGenerationService {
       case 'StdLib:Fork':
         // CRITICAL: Fork components run multiple branches and return combined results
         const forkResults: Record<string, any> = {};
-        if (config?.branches) {
+        if (config?.outputNames) {
+          // Use outputNames from config (correct DSL format)
+          config.outputNames.forEach((outputName: string) => {
+            // Fork duplicates input data to each named output port
+            forkResults[outputName] = inputData;
+          });
+        } else if (config?.branches) {
+          // Fallback for legacy config with branches
           config.branches.forEach((branch: any) => {
             if (branch.name === 'jurisdiction-check') {
               forkResults[branch.name] = { 
@@ -334,11 +345,9 @@ export class DataGenerationService {
           });
         }
         return {
-          branches: forkResults, // All branch results
+          ...forkResults, // Spread the fork results at the top level for easier access
           forkConfig: config, // Fork configuration
-          inputData: inputData, // Original input data
-          // Also spread the branch results at the top level for easier access
-          ...forkResults
+          inputData: inputData // Original input data for debugging
         };
       
       default:
