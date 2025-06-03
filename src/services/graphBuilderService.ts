@@ -187,7 +187,7 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
   // Apply automatic layout if requested
   if (useAutoLayout && nodes.length > 0) {
     try {
-      const layouted = await layoutNodes(nodes, edges, layoutPresets.flowDetail);
+      const layouted = await layoutNodes(nodes, edges, layoutPresets.flowDetail.options);
       
       // Apply trace enhancements if trace data is available
       if (traceData) {

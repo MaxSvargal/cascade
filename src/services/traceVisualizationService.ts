@@ -1,10 +1,10 @@
 // Trace Visualization Service
-// Enhances graph elements with execution trace data
+// Enhances graph elements with execution trace data, critical path analysis, and performance metrics
 
 import { Node, Edge } from 'reactflow';
 import { 
   FlowExecutionTrace, 
-  StepExecutionTrace, 
+  StepExecutionTrace,
   ExecutionStatusEnum 
 } from '@/models/cfv_models_generated';
 
@@ -13,294 +13,442 @@ export interface TraceVisualizationOptions {
   showDataFlow?: boolean;
   highlightCriticalPath?: boolean;
   showErrorDetails?: boolean;
-  animateExecution?: boolean;
-}
-
-export interface EnhancedNodeData {
-  // Original node data plus trace enhancements
-  [key: string]: any;
-  traceOverlay?: {
-    executionOrder?: number;
-    startTime?: string;
-    endTime?: string;
-    duration?: number;
-    status?: ExecutionStatusEnum;
-    isOnCriticalPath?: boolean;
-    inputDataSummary?: string;
-    outputDataSummary?: string;
-    errorDetails?: string;
-    performanceMetrics?: {
-      cpuTime?: number;
-      memoryUsage?: number;
-      ioOperations?: number;
-    };
+  showExecutionOrder?: boolean;
+  performanceThresholds?: {
+    fast: number;    // ms
+    normal: number;  // ms
+    slow: number;    // ms
   };
 }
 
-export interface EnhancedEdgeData {
-  // Original edge data plus trace enhancements
-  [key: string]: any;
-  traceOverlay?: {
-    wasExecuted?: boolean;
-    executionTime?: string;
-    dataTransferred?: any;
-    transferSize?: number;
-    isOnCriticalPath?: boolean;
+export interface CriticalPathAnalysis {
+  criticalSteps: Set<string>;
+  totalDuration: number;
+  criticalPathDuration: number;
+  bottleneckSteps: string[];
+  performanceMetrics: {
+    stepId: string;
+    duration: number;
+    percentOfTotal: number;
+    isBottleneck: boolean;
+  }[];
+}
+
+export interface TraceVisualizationService {
+  enhanceNodesWithTrace(
+    nodes: Node[], 
+    traceData: FlowExecutionTrace, 
+    options?: TraceVisualizationOptions
+  ): Node[];
+  
+  enhanceEdgesWithTrace(
+    edges: Edge[], 
+    traceData: FlowExecutionTrace, 
+    options?: TraceVisualizationOptions
+  ): Edge[];
+  
+  calculateCriticalPath(traceData: FlowExecutionTrace): CriticalPathAnalysis;
+  
+  getExecutionMetrics(traceData: FlowExecutionTrace): {
+    totalDuration: number;
+    stepCount: number;
+    successfulSteps: number;
+    failedSteps: number;
+    averageStepDuration: number;
+    longestStep: { stepId: string; duration: number };
+    shortestStep: { stepId: string; duration: number };
   };
 }
 
-/**
- * Enhance nodes with trace data overlays
- */
-export function enhanceNodesWithTrace(
-  nodes: Node[],
-  traceData: FlowExecutionTrace,
-  options: TraceVisualizationOptions = {}
-): Node<EnhancedNodeData>[] {
-  const {
-    showTimings = true,
-    showDataFlow = true,
-    highlightCriticalPath = true,
-    showErrorDetails = true
-  } = options;
+export class TraceVisualizationServiceImpl implements TraceVisualizationService {
+  private defaultOptions: Required<TraceVisualizationOptions> = {
+    showTimings: true,
+    showDataFlow: true,
+    highlightCriticalPath: true,
+    showErrorDetails: true,
+    showExecutionOrder: true,
+    performanceThresholds: {
+      fast: 100,    // < 100ms
+      normal: 1000, // 100ms - 1s
+      slow: 1000    // > 1s
+    }
+  };
 
-  // Calculate critical path if requested
-  const criticalPath = highlightCriticalPath ? calculateCriticalPath(traceData) : new Set();
-
-  return nodes.map(node => {
-    // Find corresponding step trace
-    const stepTrace = traceData.steps.find(step => step.stepId === node.id);
+  enhanceNodesWithTrace(
+    nodes: Node[], 
+    traceData: FlowExecutionTrace, 
+    options: TraceVisualizationOptions = {}
+  ): Node[] {
+    const opts = { ...this.defaultOptions, ...options };
+    const criticalPath = opts.highlightCriticalPath ? this.calculateCriticalPath(traceData) : null;
     
-    if (!stepTrace) {
-      return node;
-    }
+    return nodes.map(node => {
+      const stepTrace = this.findStepTrace(node.id, traceData);
+      
+      if (!stepTrace) {
+        // Node not executed - mark as pending/not executed
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            executionStatus: 'not_executed',
+            traceEnhanced: true
+          },
+          style: {
+            ...node.style,
+            opacity: 0.6,
+            border: '2px solid #ccc'
+          }
+        };
+      }
 
-    // Build trace overlay
-    const traceOverlay: EnhancedNodeData['traceOverlay'] = {};
+      // Calculate performance classification
+      const duration = stepTrace.endTime && stepTrace.startTime 
+        ? new Date(stepTrace.endTime).getTime() - new Date(stepTrace.startTime).getTime()
+        : stepTrace.durationMs || 0;
+      
+      const performanceClass = this.classifyPerformance(duration, opts.performanceThresholds);
+      const isCritical = criticalPath?.criticalSteps.has(node.id) || false;
+      const isBottleneck = criticalPath?.bottleneckSteps.includes(node.id) || false;
 
-    if (showTimings) {
-      traceOverlay.startTime = stepTrace.startTime;
-      traceOverlay.endTime = stepTrace.endTime;
-      traceOverlay.duration = stepTrace.durationMs;
-    }
+      // Calculate execution order from trace
+      const executionOrder = traceData.steps.findIndex(step => step.stepId === stepTrace.stepId) + 1;
 
-    traceOverlay.status = stepTrace.status;
-    traceOverlay.executionOrder = getExecutionOrder(stepTrace, traceData);
-
-    if (highlightCriticalPath) {
-      traceOverlay.isOnCriticalPath = criticalPath.has(node.id);
-    }
-
-    if (showDataFlow) {
-      traceOverlay.inputDataSummary = summarizeData(stepTrace.inputData);
-      traceOverlay.outputDataSummary = summarizeData(stepTrace.outputData);
-    }
-
-    if (showErrorDetails && stepTrace.status === 'FAILURE') {
-      traceOverlay.errorDetails = extractErrorDetails(stepTrace);
-    }
-
-    // Enhanced styling based on trace data
-    const enhancedStyle = {
-      ...node.style,
-      ...getTraceBasedStyling(stepTrace, traceOverlay)
-    };
-
-    return {
-      ...node,
-      data: {
+      // Enhanced node data
+      const enhancedData = {
         ...node.data,
-        traceOverlay
-      },
-      style: enhancedStyle
-    };
-  });
-}
+        executionStatus: stepTrace.status,
+        executionTime: duration,
+        executionTimestamp: stepTrace.startTime,
+        executionError: stepTrace.errorData,
+        executionOutput: stepTrace.outputData,
+        executionInput: stepTrace.inputData,
+        traceId: traceData.traceId,
+        executionOrder,
+        performanceClass,
+        isCritical,
+        isBottleneck,
+        traceEnhanced: true
+      };
 
-/**
- * Enhance edges with trace data overlays
- */
-export function enhanceEdgesWithTrace(
-  edges: Edge[],
-  traceData: FlowExecutionTrace,
-  options: TraceVisualizationOptions = {}
-): Edge<EnhancedEdgeData>[] {
-  const {
-    showDataFlow = true,
-    highlightCriticalPath = true
-  } = options;
+      // Enhanced styling based on execution status and performance
+      const enhancedStyle = {
+        ...node.style,
+        ...this.getNodeStyleForStatus(stepTrace.status, performanceClass, isCritical, isBottleneck)
+      };
 
-  const criticalPath = highlightCriticalPath ? calculateCriticalPath(traceData) : new Set();
-  const executedEdges = getExecutedEdges(traceData);
+      return {
+        ...node,
+        data: enhancedData,
+        style: enhancedStyle
+      };
+    });
+  }
 
-  return edges.map(edge => {
-    const wasExecuted = executedEdges.has(edge.id);
+  enhanceEdgesWithTrace(
+    edges: Edge[], 
+    traceData: FlowExecutionTrace, 
+    options: TraceVisualizationOptions = {}
+  ): Edge[] {
+    const opts = { ...this.defaultOptions, ...options };
+    const criticalPath = opts.highlightCriticalPath ? this.calculateCriticalPath(traceData) : null;
     
-    if (!wasExecuted) {
+    return edges.map(edge => {
+      const sourceTrace = this.findStepTrace(edge.source, traceData);
+      const targetTrace = this.findStepTrace(edge.target, traceData);
+      
+      // Determine if this edge is part of the execution path - ensure boolean result
+      const wasExecuted = Boolean(sourceTrace && targetTrace && 
+        sourceTrace.status === 'SUCCESS' && 
+        (targetTrace.status === 'SUCCESS' || targetTrace.status === 'FAILURE' || targetTrace.status === 'RUNNING'));
+      
+      // Fix: Properly handle null criticalPath to ensure boolean result
+      const isCriticalPath = Boolean(criticalPath !== null && 
+        criticalPath.criticalSteps.has(edge.source) && 
+        criticalPath.criticalSteps.has(edge.target));
+
+      // Calculate data flow information
+      let dataFlowInfo = null;
+      if (opts.showDataFlow && sourceTrace && targetTrace) {
+        dataFlowInfo = this.analyzeDataFlow(sourceTrace, targetTrace);
+      }
+
+      // Calculate execution orders
+      const sourceExecutionOrder = sourceTrace ? traceData.steps.findIndex(step => step.stepId === sourceTrace.stepId) + 1 : undefined;
+      const targetExecutionOrder = targetTrace ? traceData.steps.findIndex(step => step.stepId === targetTrace.stepId) + 1 : undefined;
+
+      // Now both wasExecuted and isCriticalPath are guaranteed to be boolean
+      const enhancedStyle = {
+        ...edge.style,
+        ...this.getEdgeStyleForExecution(wasExecuted, isCriticalPath, sourceTrace?.status)
+      };
+
       return {
         ...edge,
-        style: {
-          ...edge.style,
-          opacity: 0.3,
-          strokeDasharray: '5,5'
-        }
+        data: {
+          ...edge.data,
+          wasExecuted,
+          isCriticalPath,
+          dataFlowInfo,
+          sourceExecutionOrder,
+          targetExecutionOrder,
+          traceEnhanced: true
+        },
+        style: enhancedStyle
       };
-    }
+    });
+  }
 
-    const traceOverlay: EnhancedEdgeData['traceOverlay'] = {
-      wasExecuted: true
+  calculateCriticalPath(traceData: FlowExecutionTrace): CriticalPathAnalysis {
+    const stepDurations = new Map<string, number>();
+    const stepConnections = new Map<string, string[]>();
+    
+    // Calculate step durations
+    traceData.steps.forEach(step => {
+      if (step.startTime && step.endTime) {
+        const duration = new Date(step.endTime).getTime() - new Date(step.startTime).getTime();
+        stepDurations.set(step.stepId, duration);
+      }
+    });
+
+    // Build step dependency graph (simplified - would need actual flow definition)
+    traceData.steps.forEach((step, index) => {
+      if (index > 0) {
+        const prevStep = traceData.steps[index - 1];
+        if (!stepConnections.has(prevStep.stepId)) {
+          stepConnections.set(prevStep.stepId, []);
+        }
+        stepConnections.get(prevStep.stepId)!.push(step.stepId);
+      }
+    });
+
+    // Find critical path using longest path algorithm
+    const criticalSteps = new Set<string>();
+    const longestPaths = new Map<string, number>();
+    
+    // Calculate longest path to each step
+    const calculateLongestPath = (stepId: string, visited: Set<string>): number => {
+      if (visited.has(stepId)) return 0; // Avoid cycles
+      if (longestPaths.has(stepId)) return longestPaths.get(stepId)!;
+      
+      visited.add(stepId);
+      const stepDuration = stepDurations.get(stepId) || 0;
+      const dependencies = Array.from(stepConnections.entries())
+        .filter(([_, targets]) => targets.includes(stepId))
+        .map(([source, _]) => source);
+      
+      let maxPredecessorPath = 0;
+      dependencies.forEach(dep => {
+        const depPath = calculateLongestPath(dep, new Set(visited));
+        maxPredecessorPath = Math.max(maxPredecessorPath, depPath);
+      });
+      
+      const totalPath = maxPredecessorPath + stepDuration;
+      longestPaths.set(stepId, totalPath);
+      visited.delete(stepId);
+      
+      return totalPath;
     };
 
-    if (highlightCriticalPath) {
-      traceOverlay.isOnCriticalPath = criticalPath.has(edge.source) && criticalPath.has(edge.target);
-    }
+    // Calculate longest paths for all steps
+    traceData.steps.forEach(step => {
+      calculateLongestPath(step.stepId, new Set());
+    });
 
-    if (showDataFlow && edge.data?.type === 'dataFlow') {
-      const dataTransfer = getDataTransferInfo(edge, traceData);
-      traceOverlay.dataTransferred = dataTransfer.data;
-      traceOverlay.transferSize = dataTransfer.size;
-    }
+    // Find the critical path (steps with longest total path)
+    const maxPath = Math.max(...Array.from(longestPaths.values()));
+    longestPaths.forEach((pathLength, stepId) => {
+      if (pathLength === maxPath) {
+        criticalSteps.add(stepId);
+      }
+    });
 
-    // Enhanced styling for executed edges
-    const enhancedStyle = {
-      ...edge.style,
-      stroke: traceOverlay.isOnCriticalPath ? '#FF5722' : '#4CAF50',
-      strokeWidth: traceOverlay.isOnCriticalPath ? 4 : 2,
-      opacity: 1
-    };
+    // Identify bottlenecks (steps taking > 20% of total time)
+    const totalDuration = Array.from(stepDurations.values()).reduce((sum, duration) => sum + duration, 0);
+    const bottleneckThreshold = totalDuration * 0.2;
+    const bottleneckSteps = Array.from(stepDurations.entries())
+      .filter(([_, duration]) => duration > bottleneckThreshold)
+      .map(([stepId, _]) => stepId);
+
+    // Generate performance metrics
+    const performanceMetrics = Array.from(stepDurations.entries()).map(([stepId, duration]) => ({
+      stepId,
+      duration,
+      percentOfTotal: (duration / totalDuration) * 100,
+      isBottleneck: bottleneckSteps.includes(stepId)
+    }));
 
     return {
-      ...edge,
-      data: {
-        ...edge.data,
-        traceOverlay
-      },
-      style: enhancedStyle
+      criticalSteps,
+      totalDuration,
+      criticalPathDuration: maxPath,
+      bottleneckSteps,
+      performanceMetrics
     };
-  });
-}
-
-/**
- * Calculate the critical path through the execution
- */
-function calculateCriticalPath(traceData: FlowExecutionTrace): Set<string> {
-  const criticalPath = new Set<string>();
-  
-  // Find the longest execution path by duration
-  const stepsByDuration = [...traceData.steps].sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0));
-  
-  // Add the top 20% longest-running steps to critical path
-  const criticalCount = Math.max(1, Math.ceil(stepsByDuration.length * 0.2));
-  for (let i = 0; i < criticalCount; i++) {
-    criticalPath.add(stepsByDuration[i].stepId);
   }
-  
-  return criticalPath;
-}
 
-/**
- * Get execution order for a step
- */
-function getExecutionOrder(stepTrace: StepExecutionTrace, traceData: FlowExecutionTrace): number {
-  if (!stepTrace.startTime) return 0;
-  
-  const sortedSteps = [...traceData.steps]
-    .filter(s => s.startTime)
-    .sort((a, b) => new Date(a.startTime!).getTime() - new Date(b.startTime!).getTime());
-  
-  return sortedSteps.findIndex(s => s.stepId === stepTrace.stepId) + 1;
-}
+  getExecutionMetrics(traceData: FlowExecutionTrace) {
+    const durations = traceData.steps
+      .filter(step => step.startTime && step.endTime)
+      .map(step => ({
+        stepId: step.stepId,
+        duration: new Date(step.endTime!).getTime() - new Date(step.startTime!).getTime()
+      }));
 
-/**
- * Summarize data for display
- */
-function summarizeData(data: any): string {
-  if (!data) return 'No data';
-  
-  if (typeof data === 'string') {
-    return data.length > 50 ? `${data.substring(0, 47)}...` : data;
+    const totalDuration = durations.reduce((sum, { duration }) => sum + duration, 0);
+    const successfulSteps = traceData.steps.filter(step => step.status === 'SUCCESS').length;
+    const failedSteps = traceData.steps.filter(step => step.status === 'FAILURE').length;
+
+    const sortedDurations = durations.sort((a, b) => b.duration - a.duration);
+
+    return {
+      totalDuration,
+      stepCount: traceData.steps.length,
+      successfulSteps,
+      failedSteps,
+      averageStepDuration: durations.length > 0 ? totalDuration / durations.length : 0,
+      longestStep: sortedDurations[0] || { stepId: '', duration: 0 },
+      shortestStep: sortedDurations[sortedDurations.length - 1] || { stepId: '', duration: 0 }
+    };
   }
-  
-  if (typeof data === 'object') {
-    const keys = Object.keys(data);
-    if (keys.length === 0) return 'Empty object';
-    if (keys.length === 1) return `{${keys[0]}: ...}`;
-    return `{${keys.slice(0, 2).join(', ')}${keys.length > 2 ? ', ...' : ''}}`;
-  }
-  
-  return String(data);
-}
 
-/**
- * Extract error details from step trace
- */
-function extractErrorDetails(stepTrace: StepExecutionTrace): string {
-  // This would extract error information from the step trace
-  // Implementation depends on how errors are stored in the trace
-  return 'Execution failed - check logs for details';
-}
-
-/**
- * Get trace-based styling for nodes
- */
-function getTraceBasedStyling(stepTrace: StepExecutionTrace, traceOverlay: any): any {
-  const baseStyle: any = {};
-  
-  // Status-based border colors
-  switch (stepTrace.status) {
-    case 'SUCCESS':
-      baseStyle.borderColor = '#4CAF50';
-      baseStyle.backgroundColor = '#E8F5E8';
-      break;
-    case 'FAILURE':
-      baseStyle.borderColor = '#F44336';
-      baseStyle.backgroundColor = '#FFEBEE';
-      break;
-    case 'RUNNING':
-      baseStyle.borderColor = '#FF9800';
-      baseStyle.backgroundColor = '#FFF3E0';
-      break;
-    case 'SKIPPED':
-      baseStyle.borderColor = '#9E9E9E';
-      baseStyle.backgroundColor = '#F5F5F5';
-      break;
+  private findStepTrace(stepId: string, traceData: FlowExecutionTrace): StepExecutionTrace | null {
+    return traceData.steps.find(step => step.stepId === stepId) || null;
   }
-  
-  // Critical path highlighting
-  if (traceOverlay.isOnCriticalPath) {
-    baseStyle.borderWidth = '3px';
-    baseStyle.boxShadow = '0 0 10px rgba(255, 87, 34, 0.5)';
-  }
-  
-  return baseStyle;
-}
 
-/**
- * Get executed edges from trace data
- */
-function getExecutedEdges(traceData: FlowExecutionTrace): Set<string> {
-  const executedEdges = new Set<string>();
-  
-  // This is a simplified implementation
-  // In reality, you'd need to track which edges were actually traversed
-  traceData.steps.forEach(step => {
-    if (step.status === 'SUCCESS' || step.status === 'FAILURE') {
-      // Add edges that would have been traversed to reach this step
-      // This requires knowledge of the flow structure
+  private classifyPerformance(duration: number, thresholds: { fast: number; normal: number; slow: number }): 'fast' | 'normal' | 'slow' {
+    if (duration < thresholds.fast) return 'fast';
+    if (duration < thresholds.slow) return 'normal';
+    return 'slow';
+  }
+
+  private getNodeStyleForStatus(
+    status: ExecutionStatusEnum, 
+    performanceClass: 'fast' | 'normal' | 'slow',
+    isCritical: boolean,
+    isBottleneck: boolean
+  ): any {
+    const baseStyle: any = {};
+
+    // Status-based styling
+    switch (status) {
+      case 'SUCCESS':
+        baseStyle.backgroundColor = '#e8f5e8';
+        baseStyle.border = '2px solid #4caf50';
+        break;
+      case 'FAILURE':
+        baseStyle.backgroundColor = '#ffebee';
+        baseStyle.border = '2px solid #f44336';
+        break;
+      case 'RUNNING':
+        baseStyle.backgroundColor = '#fff3e0';
+        baseStyle.border = '2px solid #ff9800';
+        baseStyle.animation = 'pulse 1.5s infinite';
+        break;
+      case 'PENDING':
+        baseStyle.backgroundColor = '#f5f5f5';
+        baseStyle.border = '2px solid #9e9e9e';
+        break;
+      case 'SKIPPED':
+        baseStyle.backgroundColor = '#f5f5f5';
+        baseStyle.border = '2px solid #9e9e9e';
+        baseStyle.opacity = 0.7;
+        break;
     }
-  });
-  
-  return executedEdges;
+
+    // Performance-based border styling
+    if (performanceClass === 'slow') {
+      baseStyle.borderWidth = '3px';
+      baseStyle.borderStyle = 'dashed';
+    }
+
+    // Critical path highlighting
+    if (isCritical) {
+      baseStyle.boxShadow = '0 0 10px #2196f3';
+    }
+
+    // Bottleneck highlighting
+    if (isBottleneck) {
+      baseStyle.boxShadow = '0 0 15px #ff5722';
+      baseStyle.borderColor = '#ff5722';
+    }
+
+    return baseStyle;
+  }
+
+  private getEdgeStyleForExecution(
+    wasExecuted: boolean, 
+    isCriticalPath: boolean, 
+    sourceStatus?: ExecutionStatusEnum
+  ): any {
+    const baseStyle: any = {};
+
+    if (wasExecuted) {
+      baseStyle.stroke = '#4caf50';
+      baseStyle.strokeWidth = 2;
+      
+      if (isCriticalPath) {
+        baseStyle.stroke = '#2196f3';
+        baseStyle.strokeWidth = 3;
+        baseStyle.strokeDasharray = 'none';
+      }
+    } else {
+      baseStyle.stroke = '#ccc';
+      baseStyle.strokeWidth = 1;
+      baseStyle.opacity = 0.5;
+    }
+
+    // Animate edges for running steps
+    if (sourceStatus === 'RUNNING') {
+      baseStyle.strokeDasharray = '5,5';
+      baseStyle.animation = 'dash 1s linear infinite';
+    }
+
+    return baseStyle;
+  }
+
+  private analyzeDataFlow(sourceTrace: StepExecutionTrace, targetTrace: StepExecutionTrace): any {
+    // Simplified data flow analysis
+    return {
+      hasDataTransfer: !!(sourceTrace.outputData && targetTrace.inputData),
+      outputSize: sourceTrace.outputData ? JSON.stringify(sourceTrace.outputData).length : 0,
+      inputSize: targetTrace.inputData ? JSON.stringify(targetTrace.inputData).length : 0,
+      transferTime: sourceTrace.endTime && targetTrace.startTime 
+        ? new Date(targetTrace.startTime).getTime() - new Date(sourceTrace.endTime).getTime()
+        : 0
+    };
+  }
 }
 
 /**
- * Get data transfer information for an edge
+ * Factory function to create trace visualization service
  */
-function getDataTransferInfo(edge: Edge, traceData: FlowExecutionTrace): { data: any; size: number } {
-  // Extract data that flowed through this edge
-  // This requires correlating edge source/target with step inputs/outputs
-  return {
-    data: null,
-    size: 0
-  };
+export function createTraceVisualizationService(): TraceVisualizationService {
+  return new TraceVisualizationServiceImpl();
+}
+
+/**
+ * Convenience functions for direct use
+ */
+export function enhanceNodesWithTrace(
+  nodes: Node[], 
+  traceData: FlowExecutionTrace, 
+  options?: TraceVisualizationOptions
+): Node[] {
+  const service = createTraceVisualizationService();
+  return service.enhanceNodesWithTrace(nodes, traceData, options);
+}
+
+export function enhanceEdgesWithTrace(
+  edges: Edge[], 
+  traceData: FlowExecutionTrace, 
+  options?: TraceVisualizationOptions
+): Edge[] {
+  const service = createTraceVisualizationService();
+  return service.enhanceEdgesWithTrace(edges, traceData, options);
+}
+
+export function calculateCriticalPath(traceData: FlowExecutionTrace): CriticalPathAnalysis {
+  const service = createTraceVisualizationService();
+  return service.calculateCriticalPath(traceData);
 } 

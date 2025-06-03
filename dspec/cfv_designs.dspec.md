@@ -200,6 +200,46 @@ design cfv_designs.TraceVisualizationService {
     source: "New implementation for advanced trace visualization"
 }
 
+design cfv_designs.InspectorTabSelectionBehavior {
+    title: "Inspector Tab Selection Behavior"
+    description: "Defines the behavior for inspector tab selection with manual-only tab switching to prevent flickering and preserve user intent."
+    part_of: cfv_designs.InspectorStateService
+    responsibilities: [
+        "Maintain user's active tab selection as persistent state.",
+        "Only change tabs when user explicitly clicks on a tab.",
+        "Never auto-switch tabs based on component selection or changes.",
+        "Preserve tab state across all component switches and navigation.",
+        "Handle tab availability gracefully without forced switching."
+    ]
+    behavioral_rules: [
+        "NEVER auto-switch tabs for any reason",
+        "ONLY change tabs on explicit user tab click",
+        "ALWAYS preserve user's tab choice across component changes",
+        "ALWAYS maintain tab state across navigation and mode changes",
+        "GRACEFULLY handle unavailable tabs by showing empty state"
+    ]
+    tab_availability_rules: [
+        "Source tab: Available when any element is selected",
+        "Properties tab: Available when element has configurable schema",
+        "Debug & Test tab: Available when flow context exists or element is executable"
+    ]
+    implementation_approach: [
+        "Use simple atom state for active tab (default: 'source')",
+        "Only update atom on manual tab click via switchInspectorTabAtom",
+        "Show tab content only when tab is both active AND available",
+        "Show 'not available' message when active tab is unavailable for current element",
+        "No automatic tab selection logic - purely manual control"
+    ]
+    user_experience: [
+        "User clicks Source tab -> always shows Source tab (if available)",
+        "User clicks Properties tab -> always shows Properties tab (if available)", 
+        "User clicks Debug & Test tab -> always shows Debug & Test tab (if available)",
+        "User selects different component -> tab stays the same, content updates",
+        "If current tab not available for element -> show 'not available' message"
+    ]
+    source: "Simplified tab behavior to prevent flickering and preserve user intent"
+}
+
 design cfv_designs.YamlReconstructionService {
     title: "YamlReconstructionService (Module Save Operations)"
     description: "Reconstructs YAML content from DSL module representations and handles configuration changes for save operations."
@@ -591,19 +631,29 @@ design cfv_designs.SourceTabService {
 }
 
 design cfv_designs.PropertiesTabService {
-    title: "Properties Tab Service"
-    description: "Manages the Properties tab with schema-driven form generation for component configuration editing."
+    title: "Properties Tab Service - Primary Component Configuration Editor"
+    description: "The ONLY interface for component configuration editing. Manages the Properties tab with schema-driven form generation for all component configuration editing needs. This tab replaces any separate edit dialogs or modals."
     part_of: cfv_designs.ConsolidatedInspectorTabsService
     responsibilities: [
+        "Serve as the primary and only interface for editing component configurations",
         "Generate dynamic forms from component schemas using @rjsf/core",
-        "Pre-populate forms with current configuration values",
-        "Validate configuration changes using Zod schemas",
+        "Pre-populate forms with current configuration values from selected elements",
+        "Validate configuration changes using component schemas in real-time",
         "Provide live YAML preview of configuration changes",
-        "Handle save operations with proper error handling"
+        "Handle all save operations with proper error handling and validation",
+        "Support both step node configurations and named component definitions",
+        "Eliminate need for separate edit dialogs or modals"
+    ]
+    design_principles: [
+        "Single source of truth for component configuration editing",
+        "No separate edit dialogs - all editing happens in this tab",
+        "Schema-driven forms ensure consistency and validation",
+        "Real-time preview and validation for immediate feedback"
     ]
     dependencies: [
         cfv_designs.ComponentSchemaService,
         cfv_designs.YamlReconstructionService,
+        cfv_designs.SchemaBasedFormGenerationService,
         "@rjsf/core",
         "zod"
     ]
@@ -611,13 +661,23 @@ design cfv_designs.PropertiesTabService {
         generateConfigForm: "(componentType: string, currentConfig: any) => JSONSchema",
         validateConfig: "(config: any, schema: ComponentSchema) => ValidationResult",
         previewYamlChanges: "(newConfig: any) => string",
-        saveConfiguration: "(stepId: string, newConfig: any) => Promise<boolean>"
+        saveConfiguration: "(stepId: string, newConfig: any) => Promise<boolean>",
+        isConfigurable: "(selectedElement: SelectedElement) => boolean"
     }
     api_contract: {
-        renderInspectorPropertiesTab: "Required consumer function for rendering properties tab content",
-        requestSave: "Required consumer function for handling save operations"
+        renderInspectorPropertiesTab: "Required consumer function for rendering ALL component configuration editing",
+        requestSave: "Required consumer function for handling ALL save operations"
     }
-    source: "New properties tab implementation with schema-driven forms"
+    interaction_flow: [
+        "User clicks on step node or component",
+        "If element has configurable schema, Properties tab becomes available",
+        "User switches to Properties tab to edit configuration",
+        "Form is generated from component schema with current values",
+        "User edits configuration with real-time validation",
+        "User saves changes through requestSave action",
+        "Changes are applied via YamlReconstructionService"
+    ]
+    source: "Consolidated properties tab implementation - the only component editing interface"
 }
 
 design cfv_designs.DebugTestTabService {

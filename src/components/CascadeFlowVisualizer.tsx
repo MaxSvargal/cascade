@@ -30,10 +30,12 @@ import {
   toggleSystemViewAtom
 } from '@/state/navigationAtoms';
 import { 
-  selectedElementAtom 
+  selectedElementAtom
 } from '@/state/selectionAtoms';
 import { 
-  activeInspectorTabAtom 
+  activeInspectorTabAtom,
+  switchInspectorTabAtom,
+  currentTabAvailabilityAtom
 } from '@/state/inspectorAtoms';
 import { 
   traceListSummariesAtom 
@@ -117,6 +119,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   const navigateToFlow = useSetAtom(navigateToFlowAtom);
   const navigateToSystemOverview = useSetAtom(navigateToSystemOverviewAtom);
   const toggleSystemView = useSetAtom(toggleSystemViewAtom);
+  const switchInspectorTab = useSetAtom(switchInspectorTabAtom);
 
   // React Flow state management
   const [nodes, setNodes] = React.useState<Node[]>([]);
@@ -360,7 +363,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
 
   // Node click handler
   const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    // Prevent default navigation for step nodes - they should open edit dialog instead
+    // Handle step nodes - select element without auto-switching tabs
     if (node.type === 'stepNode' || node.type === 'triggerNode') {
       const newSelectedElement: SelectedElement = {
         sourceType: 'flowNode',
@@ -414,31 +417,20 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   );
 
   // Tab Navigation with proper visibility logic
+  const tabAvailability = useAtomValue(currentTabAvailabilityAtom);
   const tabVisibility = useMemo(() => {
-    const visibility = consolidatedInspectorTabsService.getTabVisibility(selectedElement, currentFlowFqn);
-    console.log('🔍 Debug: Tab visibility:', {
-      selectedElement: selectedElement?.id,
-      selectedElementType: selectedElement?.sourceType,
-      currentFlowFqn,
-      visibility
-    });
-    return visibility;
-  }, [selectedElement, currentFlowFqn]);
+    return tabAvailability.availableTabs;
+  }, [tabAvailability.availableTabs]);
 
   const availableTabs = useMemo(() => {
-    return [
+    const tabs: Array<{ id: 'source' | 'properties' | 'debugtest'; label: string; visible: boolean }> = [
       { id: 'source' as const, label: 'Source', visible: tabVisibility.source },
       { id: 'properties' as const, label: 'Properties', visible: tabVisibility.properties },
       { id: 'debugtest' as const, label: 'Debug & Test', visible: tabVisibility.debugtest }
-    ].filter(tab => tab.visible);
-  }, [tabVisibility]);
+    ];
 
-  // Auto-select first available tab if current tab is not visible
-  useEffect(() => {
-    if (availableTabs.length > 0 && !availableTabs.some(tab => tab.id === activeInspectorTab)) {
-      setActiveInspectorTab(availableTabs[0].id);
-    }
-  }, [availableTabs, activeInspectorTab, setActiveInspectorTab]);
+    return tabs;
+  }, [tabVisibility]);
 
   // Debug logging for module loading
   useEffect(() => {
@@ -723,18 +715,20 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
             {availableTabs.map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveInspectorTab(tab.id)}
+                onClick={() => switchInspectorTab(tab.id)}
                 style={{
                   padding: '8px 12px',
                   border: 'none',
                   backgroundColor: activeInspectorTab === tab.id ? '#1976D2' : 'transparent',
-                  color: activeInspectorTab === tab.id ? 'white' : '#666',
+                  color: activeInspectorTab === tab.id ? 'white' : (tab.visible ? '#666' : '#ccc'),
                   cursor: 'pointer',
                   fontSize: '12px',
                   borderRadius: '4px 4px 0 0',
                   marginRight: '4px',
-                  textTransform: 'capitalize'
+                  textTransform: 'capitalize',
+                  opacity: tab.visible ? 1 : 0.5
                 }}
+                title={!tab.visible ? 'Not available for current selection' : ''}
               >
                 {tab.label}
               </button>
@@ -754,175 +748,199 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                 <div style={{ fontSize: '12px', color: '#666' }}>Type: {selectedElement.sourceType}</div>
               </div>
               
-              {/* Properties Tab */}
-              {activeInspectorTab === 'properties' && props.renderInspectorPropertiesTab && (
-                <div style={{ marginBottom: '16px' }}>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Properties</h4>
-                  <div style={{ 
-                    backgroundColor: 'white', 
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '4px',
-                    padding: '12px'
-                  }}>
-                    {props.renderInspectorPropertiesTab({
-                      selectedElement,
-                      actions: inspectorActions,
-                      moduleRegistry
-                    })}
-                  </div>
-                </div>
-              )}
+              {/* Show content only if current tab is available, otherwise show not available message */}
+              {tabAvailability.isAvailable ? (
+                <>
+                  {/* Properties Tab */}
+                  {activeInspectorTab === 'properties' && props.renderInspectorPropertiesTab && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Properties</h4>
+                      <div style={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '4px',
+                        padding: '12px'
+                      }}>
+                        {props.renderInspectorPropertiesTab({
+                          selectedElement,
+                          actions: inspectorActions,
+                          moduleRegistry
+                        })}
+                      </div>
+                    </div>
+                  )}
 
-              {/* Source Tab */}
-              {activeInspectorTab === 'source' && props.renderInspectorSourceTab && (
-                <div style={{ marginBottom: '16px' }}>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Source</h4>
-                  <div style={{ 
-                    backgroundColor: 'white', 
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '4px',
-                    padding: '12px'
-                  }}>
-                    {props.renderInspectorSourceTab({
-                      selectedElement,
-                      moduleRegistry
-                    })}
-                  </div>
-                </div>
-              )}
+                  {/* Source Tab */}
+                  {activeInspectorTab === 'source' && props.renderInspectorSourceTab && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Source</h4>
+                      <div style={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '4px',
+                        padding: '12px'
+                      }}>
+                        {props.renderInspectorSourceTab({
+                          selectedElement,
+                          moduleRegistry
+                        })}
+                      </div>
+                    </div>
+                  )}
 
-              {/* Unified DebugTest Tab */}
-              {activeInspectorTab === 'debugtest' && props.renderInspectorDebugTestTab && (
-                <div style={{ marginBottom: '16px' }}>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Debug & Test</h4>
-                  <div style={{ 
-                    backgroundColor: 'white', 
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '4px',
-                    padding: '12px'
-                  }}>
-                    {props.renderInspectorDebugTestTab({
-                      currentFlowFqn: currentFlowFqn || '',
-                      selectedElement,
-                      actions: debugTestActionsService,
-                      moduleRegistry
-                    })}
-                  </div>
-                </div>
-              )}
+                  {/* Unified DebugTest Tab */}
+                  {activeInspectorTab === 'debugtest' && props.renderInspectorDebugTestTab && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Debug & Test</h4>
+                      <div style={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '4px',
+                        padding: '12px'
+                      }}>
+                        {props.renderInspectorDebugTestTab({
+                          currentFlowFqn: currentFlowFqn || '',
+                          selectedElement,
+                          actions: debugTestActionsService,
+                          moduleRegistry
+                        })}
+                      </div>
+                    </div>
+                  )}
 
-              {/* Fallback DebugTest Tab - for backward compatibility */}
-              {activeInspectorTab === 'debugtest' && !props.renderInspectorDebugTestTab && (
-                <div style={{ marginBottom: '16px' }}>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Debug & Test</h4>
-                  <div style={{ 
-                    backgroundColor: 'white', 
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '4px',
-                    padding: '12px'
-                  }}>
-                    {currentFlowFqn ? (
-                      <div>
-                        <div style={{ marginBottom: '12px' }}>
-                          <div style={{ fontWeight: '500', marginBottom: '8px' }}>Test Cases for {currentFlowFqn}</div>
-                          <button
-                            style={{
-                              width: '100%',
-                              padding: '8px',
-                              backgroundColor: '#4CAF50',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              marginBottom: '8px'
-                            }}
-                            onClick={() => {
-                              // Generate default test cases
-                              console.log('Generating test cases for:', currentFlowFqn);
-                            }}
-                          >
-                            Generate Default Test Cases
-                          </button>
-                        </div>
-                        
-                        <div style={{ marginBottom: '12px' }}>
-                          <div style={{ fontWeight: '500', marginBottom: '4px' }}>Default Test Templates</div>
-                          {['Happy Path', 'Error Handling', 'Performance'].map(testType => (
-                            <div key={testType} style={{ 
-                              padding: '8px', 
-                              marginBottom: '4px',
-                              backgroundColor: '#f5f5f5',
-                              border: '1px solid #e0e0e0',
-                              borderRadius: '4px',
-                              fontSize: '12px',
-                              cursor: 'pointer'
-                            }}
-                            onClick={() => {
-                              console.log('Creating test case:', testType, 'for', currentFlowFqn);
-                            }}
-                            >
-                              <div style={{ fontWeight: '500' }}>{testType} Test</div>
-                              <div style={{ color: '#666' }}>
-                                {testType === 'Happy Path' && 'Tests normal execution flow with valid inputs'}
-                                {testType === 'Error Handling' && 'Tests error scenarios and edge cases'}
-                                {testType === 'Performance' && 'Tests execution timing and resource usage'}
+                  {/* Fallback DebugTest Tab - for backward compatibility */}
+                  {activeInspectorTab === 'debugtest' && !props.renderInspectorDebugTestTab && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>Debug & Test</h4>
+                      <div style={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '4px',
+                        padding: '12px'
+                      }}>
+                        {currentFlowFqn ? (
+                          <div>
+                            <div style={{ marginBottom: '12px' }}>
+                              <div style={{ fontWeight: '500', marginBottom: '8px' }}>Test Cases for {currentFlowFqn}</div>
+                              <button
+                                style={{
+                                  width: '100%',
+                                  padding: '8px',
+                                  backgroundColor: '#4CAF50',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '12px',
+                                  marginBottom: '8px'
+                                }}
+                                onClick={() => {
+                                  // Generate default test cases
+                                  console.log('Generating test cases for:', currentFlowFqn);
+                                }}
+                              >
+                                Generate Default Test Cases
+                              </button>
+                            </div>
+                            
+                            <div style={{ marginBottom: '12px' }}>
+                              <div style={{ fontWeight: '500', marginBottom: '4px' }}>Default Test Templates</div>
+                              {['Happy Path', 'Error Handling', 'Performance'].map(testType => (
+                                <div key={testType} style={{ 
+                                  padding: '8px', 
+                                  marginBottom: '4px',
+                                  backgroundColor: '#f5f5f5',
+                                  border: '1px solid #e0e0e0',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  cursor: 'pointer'
+                                }}
+                                onClick={() => {
+                                  console.log('Creating test case:', testType, 'for', currentFlowFqn);
+                                }}
+                                >
+                                  <div style={{ fontWeight: '500' }}>{testType} Test</div>
+                                  <div style={{ color: '#666' }}>
+                                    {testType === 'Happy Path' && 'Tests normal execution flow with valid inputs'}
+                                    {testType === 'Error Handling' && 'Tests error scenarios and edge cases'}
+                                    {testType === 'Performance' && 'Tests execution timing and resource usage'}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            
+                            <div style={{ marginBottom: '12px' }}>
+                              <div style={{ fontWeight: '500', marginBottom: '4px' }}>Test Execution</div>
+                              <button
+                                style={{
+                                  width: '100%',
+                                  padding: '8px',
+                                  backgroundColor: '#2196F3',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '12px'
+                                }}
+                                onClick={() => {
+                                  if (props.onRunTestCase) {
+                                    // Create a sample test case
+                                    const testCase = {
+                                      id: 'test-' + Date.now(),
+                                      flowFqn: currentFlowFqn,
+                                      description: 'Sample test case',
+                                      triggerInput: {},
+                                      assertions: []
+                                    };
+                                    props.onRunTestCase(testCase);
+                                  }
+                                }}
+                              >
+                                Run Test Cases
+                              </button>
+                            </div>
+                            
+                            <div>
+                              <div style={{ fontWeight: '500', marginBottom: '4px' }}>Test Results</div>
+                              <div style={{ 
+                                padding: '8px',
+                                backgroundColor: '#f9f9f9',
+                                border: '1px solid #e0e0e0',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                color: '#666'
+                              }}>
+                                No test results yet. Run tests to see results here.
                               </div>
                             </div>
-                          ))}
-                        </div>
-                        
-                        <div style={{ marginBottom: '12px' }}>
-                          <div style={{ fontWeight: '500', marginBottom: '4px' }}>Test Execution</div>
-                          <button
-                            style={{
-                              width: '100%',
-                              padding: '8px',
-                              backgroundColor: '#2196F3',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '12px'
-                            }}
-                            onClick={() => {
-                              if (props.onRunTestCase) {
-                                // Create a sample test case
-                                const testCase = {
-                                  id: 'test-' + Date.now(),
-                                  flowFqn: currentFlowFqn,
-                                  description: 'Sample test case',
-                                  triggerInput: {},
-                                  assertions: []
-                                };
-                                props.onRunTestCase(testCase);
-                              }
-                            }}
-                          >
-                            Run Test Cases
-                          </button>
-                        </div>
-                        
-                        <div>
-                          <div style={{ fontWeight: '500', marginBottom: '4px' }}>Test Results</div>
-                          <div style={{ 
-                            padding: '8px',
-                            backgroundColor: '#f9f9f9',
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '4px',
-                            fontSize: '12px',
-                            color: '#666'
-                          }}>
-                            No test results yet. Run tests to see results here.
                           </div>
-                        </div>
+                        ) : (
+                          <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+                            Select a flow to create and run test cases.
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-                        Select a flow to create and run test cases.
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ 
+                  padding: '20px', 
+                  textAlign: 'center', 
+                  color: '#666',
+                  backgroundColor: 'white',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '4px'
+                }}>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>
+                    {tabAvailability.activeTab.charAt(0).toUpperCase() + tabAvailability.activeTab.slice(1)} Tab
+                  </h4>
+                  <p>This tab is not available for the current selection.</p>
+                  <p style={{ fontSize: '12px', color: '#999' }}>
+                    {tabAvailability.activeTab === 'properties' && 'Properties tab is only available for configurable components.'}
+                    {tabAvailability.activeTab === 'debugtest' && 'Debug & Test tab is only available when a flow is selected or for executable elements.'}
+                    {tabAvailability.activeTab === 'source' && 'Source tab is only available when an element is selected.'}
+                  </p>
                 </div>
               )}
             </div>

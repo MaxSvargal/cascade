@@ -15,10 +15,10 @@ import {
   IModuleRegistry
 } from '@/models/cfv_models_generated';
 
-// Active inspector tab
+// Active inspector tab - consolidated architecture with three main tabs
 export const activeInspectorTabAtom = atom<'source' | 'properties' | 'debugtest'>('source');
 
-// Inspector tab visibility rules
+// Inspector tab visibility rules based on consolidated architecture
 export const inspectorTabVisibilityAtom = atom((get) => {
   const selectedElement = get(selectedElementAtom);
   const currentFlowFqn = get(currentFlowFqnAtom);
@@ -91,16 +91,27 @@ export const inspectorErrorStateAtom = atom<{
   debugtest: null
 });
 
-// Action atom for switching tabs
+// Action atom for manually switching tabs (only way to change tabs)
 export const switchInspectorTabAtom = atom(
   null,
   (get, set, tabId: 'source' | 'properties' | 'debugtest') => {
-    const visibility = get(inspectorTabVisibilityAtom);
-    if (visibility[tabId]) {
-      set(activeInspectorTabAtom, tabId);
-    }
+    // Always switch to the requested tab - no availability checking
+    // The UI will handle showing "not available" message if needed
+    set(activeInspectorTabAtom, tabId);
   }
 );
+
+// Derived atom for whether current tab is available for selected element
+export const currentTabAvailabilityAtom = atom((get) => {
+  const activeTab = get(activeInspectorTabAtom);
+  const visibility = get(inspectorTabVisibilityAtom);
+  
+  return {
+    activeTab,
+    isAvailable: visibility[activeTab],
+    availableTabs: visibility
+  };
+});
 
 // Action atom for setting loading state
 export const setInspectorLoadingAtom = atom(
@@ -169,7 +180,7 @@ export const refreshInspectorTabAtom = atom(
   }
 );
 
-// Derived atom for inspector tab order and defaults
+// Derived atom for inspector tab configuration - consolidated architecture
 export const inspectorTabConfigAtom = atom((get) => {
   const visibility = get(inspectorTabVisibilityAtom);
   
@@ -177,13 +188,10 @@ export const inspectorTabConfigAtom = atom((get) => {
     { id: 'source' as const, label: 'Source', visible: visibility.source },
     { id: 'properties' as const, label: 'Properties', visible: visibility.properties },
     { id: 'debugtest' as const, label: 'Debug & Test', visible: visibility.debugtest }
-  ].filter(tab => tab.visible);
-  
-  const defaultTab = availableTabs.length > 0 ? availableTabs[0].id : 'source';
+  ];
   
   return {
     availableTabs,
-    defaultTab,
     tabOrder: ['source', 'properties', 'debugtest'] as const
   };
 }); 
