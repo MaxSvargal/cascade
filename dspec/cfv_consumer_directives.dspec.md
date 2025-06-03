@@ -1,7 +1,9 @@
 // cfv_consumer_directives.dspec
+// Refined according to DefinitiveSpec methodology with qualified names and stable IDs
 // Provides directives and best practice guidance for applications consuming the CascadeFlowVisualizer library.
 
 directive cfv_consumer_directives.CustomNodeRendering {
+    id: "CFV_DIR_NODE_001"
     title: "Directive for Implementing Custom Node Renderers"
     target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer"
     description: "Provides best practices and expected patterns for creating custom node components to be used with the `customNodeTypes` prop of CascadeFlowVisualizer."
@@ -14,18 +16,18 @@ directive cfv_consumer_directives.CustomNodeRendering {
             "data.resolvedComponentFqn: string (e.g., 'StdLib:HttpCall')",
             "data.componentSchema: cfv_models.ComponentSchema | null (for understanding config/ports)",
             "data.isNamedComponent: boolean",
-            "data.namedComponentFqn: string (if applicable)",
+            "data.namedComponentFqn?: string (if applicable)",
             "data.contextVarUsages: string[] (list of context variables used)",
             "data.error: cfv_models.NodeError | undefined (for visual error indication on the node)"
         ],
         trace_mode_fields: [
-            "data.executionStatus: cfv_models.ExecutionStatusEnum (for styling based on SUCCESS/FAILURE/SKIPPED/RUNNING/PENDING)",
-            "data.executionDurationMs: number (for display)",
-            "data.executionInputData: any (available for tooltip or condensed display)",
-            "data.executionOutputData: any"
+            "data.executionStatus?: cfv_models.ExecutionStatusEnum (for styling based on SUCCESS/FAILURE/SKIPPED/RUNNING/PENDING)",
+            "data.executionDurationMs?: number (for display)",
+            "data.executionInputData?: any (available for tooltip or condensed display)",
+            "data.executionOutputData?: any"
         ],
         subflow_invoker_specific_fields: [
-            "data.invokedFlowFqn: string (for creating navigation links/buttons)"
+            "data.invokedFlowFqn: string (for creating navigation links/buttons, specific to cfv_models.SubFlowInvokerNodeData)"
         ]
     }
 
@@ -48,6 +50,7 @@ directive cfv_consumer_directives.CustomNodeRendering {
 }
 
 directive cfv_consumer_directives.CustomEdgeRendering {
+    id: "CFV_DIR_EDGE_001"
     title: "Directive for Implementing Custom Edge Renderers"
     target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer"
     description: "Provides best practices for creating custom edge components for `customEdgeTypes`."
@@ -55,13 +58,13 @@ directive cfv_consumer_directives.CustomEdgeRendering {
 
     edge_data_access: {
         flow_edge_fields: [
-            "data.type: 'dataFlow' | 'controlFlow' (for distinct styling)",
-            "data.isExecutedPath: boolean (in trace/test_result mode, for highlighting active paths)",
-            "data.sourceHandle: string (specific output handle on source node)",
-            "data.targetHandle: string (specific input handle on target node)"
+            "data.type: 'dataFlow' | 'controlFlow' (for distinct styling, from cfv_models.FlowEdgeTypeEnum)",
+            "data.isExecutedPath?: boolean (in trace/test_result mode, for highlighting active paths)",
+            "data.sourceHandle?: string (specific output handle on source node)",
+            "data.targetHandle?: string (specific input handle on target node)"
         ],
         system_edge_fields: [
-            "data.type: 'invocationEdge' | 'triggerLinkEdge'"
+            "data.type: 'invocationEdge' | 'triggerLinkEdge' (from cfv_models.SystemEdgeTypeEnum)"
         ]
     }
 
@@ -71,28 +74,24 @@ directive cfv_consumer_directives.CustomEdgeRendering {
 }
 
 directive cfv_consumer_directives.InspectorTabImplementation {
+    id: "CFV_DIR_INSP_001"
     title: "Directive for Implementing Consolidated Inspector Tab Renderers"
     target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer"
-    description: "Guidance for implementing the consolidated inspector tab architecture with better separation of concerns."
+    description: "Guidance for implementing the consolidated inspector tabs: Source, Properties, and Debug & Test, using their respective props (cfv_models.InspectorSourceTabProps, cfv_models.InspectorPropertiesTabProps, cfv_models.InspectorDebugTestTabProps)."
     default_language: "TypeScriptReact"
-
-    common_props_usage: {
-        selectedElement: "Access `selectedElement: cfv_models.SelectedElement | null` to get context. Check `selectedElement.sourceType` and `selectedElement.data` for specific content.",
-        moduleRegistry: "Use `moduleRegistry: cfv_models.IModuleRegistry` for synchronous lookups: `getLoadedModule`, `getComponentSchema`, `resolveComponentTypeInfo` etc. Do not attempt to modify registry state directly."
-    }
 
     tab_priority_and_defaults: {
         default_tab: "Source tab should be the default active tab when an element is selected.",
-        tab_order: "Tabs should appear in order: Source, Properties, Debug & Test",
-        visibility_rules: "Source tab always visible when element selected. Properties tab visible for component nodes. Debug & Test tab visible when trace data available or in test mode."
+        tab_order: "Tabs should appear in order: Source, Properties, Debug & Test.",
+        visibility_rules: "Source tab: Always visible when an element (node, edge, list item with module context) is selected. Properties tab: Visible for step/trigger nodes that have a `componentSchema.configSchema`. Debug & Test tab: Visible when `props.currentFlowFqn` is set, allowing flow-level operations, or when an executable element (trigger, step) within that flow is selected."
     }
 
     source_tab_guidance: {
-        // For renderInspectorSourceTab - Full module YAML source viewer with syntax highlighting
-        purpose: "Primary tab showing full module YAML context with syntax highlighting and selected element highlighting.",
-        content_scope: "Display the complete module YAML that contains the selected element, with the selected element highlighted.",
+        // Props received: cfv_models.InspectorSourceTabProps (selectedElement, moduleRegistry)
+        purpose: "Primary tab showing full module YAML content with syntax highlighting and selected element highlighting.",
+        content_scope: "Display the complete `rawContent` of the module identified by `props.selectedElement.moduleFqn` (fetched via `props.moduleRegistry.getLoadedModule`).",
         syntax_highlighting: "Use highlight.js with YAML syntax highlighting for professional code display.",
-        highlighting: "Highlight the selected element's section within the full module YAML for context using highlight.js line highlighting or custom CSS.",
+        highlighting: "Highlight the section of YAML corresponding to `props.selectedElement.data.dslObject` within the full module content. This might involve parsing `props.selectedElement.data.dslObject` to get line numbers if the DSL object itself doesn't contain them, or using a YAML library that supports source mapping.",
         navigation: "Provide navigation within the YAML (line numbers, search, folding) for large modules.",
         diff_view: "When in editing mode, show diff between original and modified YAML.",
         export_options: "Provide options to copy YAML sections or export the full module.",
@@ -102,16 +101,16 @@ directive cfv_consumer_directives.InspectorTabImplementation {
     }
 
     properties_tab_guidance: {
-        // For renderInspectorPropertiesTab - Component-level configuration editor with proper form generation
-        purpose: "Interactive form-based editor for component configurations using schema-driven form generation.",
+        // Props received: cfv_models.InspectorPropertiesTabProps (selectedElement, actions, moduleRegistry)
+        purpose: "Interactive form-based editor for a selected element's `config` block (or other designated editable parts of its `dslObject`), using schema-driven form generation.",
         form_generation_libraries: "Use @rjsf/core (React JSON Schema Form) with @rjsf/validator-ajv8 for form generation from component schemas.",
         validation_libraries: "Use Zod for runtime validation and type safety of form data.",
-        schema_integration: "Use `props.selectedElement.data.componentSchema.configSchema` to generate forms dynamically for component `config` blocks.",
+        schema_integration: "Use `props.selectedElement.data.componentSchema.configSchema` to generate forms for the `config` block. The `dslObject` for a step node is the step definition itself from the DSL.",
         form_structure: "Generate forms with proper field types (text, number, boolean, select, object, array) based on JSON schema.",
-        default_values: "Pre-populate form with current configuration values from `props.selectedElement.data.dslObject.config`.",
-        validation: "Validate form inputs against component schema using Zod schemas derived from JSON schema. Show validation errors inline.",
+        default_values: "Pre-populate form with current configuration values from `props.selectedElement.data.dslObject.config` (or other path as appropriate for the selected element type).",
+        validation: "Validate form inputs against the `configSchema` using Zod (or AJV with @rjsf/validator-ajv8). Show validation errors inline.",
         state_management: "Manage local form state within tab component. Use React Hook Form for form state management.",
-        save_workflow: "Only call `props.actions.requestSave(newConfigValue, pathToConfig)` on explicit user action (Save button click). `pathToConfig` should point to the 'config' key within the dslObject, e.g., ['config'].",
+        save_workflow: "On explicit user 'Save' action, call `props.actions.requestSave(newConfigValue, ['config'])`. The `pathToConfig` is relative to the `dslObject` of the `selectedElement`. For a step, this is typically `['config']` to replace the whole config block.",
         yaml_preview: "Show live YAML preview of changes in a collapsible section. Use yaml library to stringify form data.",
         context_variables: "Display and allow editing of context variable usages found in `props.selectedElement.data.contextVarUsages`.",
         ui_layout: "Use clean form layout with proper spacing, labels, help text, and error display.",
@@ -120,8 +119,8 @@ directive cfv_consumer_directives.InspectorTabImplementation {
     }
 
     debug_test_tab_guidance: {
-        // For renderInspectorDebugTestTab - Enhanced unified debugging and testing interface
-        purpose: "Comprehensive debugging and testing interface with schema-based input forms, execution capabilities, and detailed results analysis.",
+        // Props received: cfv_models.InspectorDebugTestTabProps (currentFlowFqn, selectedElement?, traceData?, testResultData?, actions, moduleRegistry)
+        purpose: "Comprehensive debugging and testing interface for the `props.currentFlowFqn` or `props.selectedElement` within that flow."
         
         debug_section: {
             scope: "Focuses on understanding and executing the *current* flow or a *selected step* within it.",
@@ -144,34 +143,34 @@ directive cfv_consumer_directives.InspectorTabImplementation {
             
             results_display: {
                 trace_visualization: "If `props.traceData` (from a full run or simulation) is available, display it. This might involve highlighting paths on the main graph or showing a summary here.",
-                step_i_o_data: "For a selected step after execution/simulation, display its `executionInputData` and `executionOutputData` (from `FlowSimulationResult.resolvedStepInputs`/`simulatedStepOutputs` or `StepExecutionTrace`). Use `react-json-view`.",
-                logs: "Display logs from `FlowExecutionTrace.steps[].logs` or `StepExecutionTrace.logs`.",
-                errors: "Clearly display any `ExecutionError` from results."
+                step_i_o_data: "For a selected step after execution/simulation, display its `executionInputData` and `executionOutputData` (from `cfv_models.FlowSimulationResult.resolvedStepInputs`/`simulatedStepOutputs` or `cfv_models.StepExecutionTrace`). Use `react-json-view`.",
+                logs: "Display logs from `cfv_models.FlowExecutionTrace.steps[].logs` or `cfv_models.StepExecutionTrace.logs`.",
+                errors: "Clearly display any `cfv_models.ExecutionError` from results."
             },
             
             data_lineage_visualization: {
-                guidance: "Optionally, use `props.actions.resolveStepInputData` which returns `ResolvedStepInput` containing data lineage information to visualize how a step's input is constructed."
+                guidance: "Optionally, use `props.actions.resolveStepInputData` which returns `cfv_models.ResolvedStepInput` containing data lineage information to visualize how a step's input is constructed."
             }
         },
         
         test_section: {
-            scope: "Focuses on managing and running persisted `FlowTestCase` definitions for the `props.currentFlowFqn`.",
+            scope: "Focuses on managing and running persisted `cfv_models.FlowTestCase` definitions for the `props.currentFlowFqn`.",
             
             test_case_management: {
                 list_display: "Display existing test cases for the `props.currentFlowFqn` (host app needs to provide these, perhaps via a new prop or fetched via an action).",
-                creation_ui: "UI to create a new `FlowTestCase`. Use `props.actions.generateTestCaseTemplate` to pre-fill. Use schema-based forms for `triggerInput` based on the flow's trigger schema.",
-                editing_ui: "UI to edit an existing `FlowTestCase`."
+                creation_ui: "UI to create a new `cfv_models.FlowTestCase`. Use `props.actions.generateTestCaseTemplate` to pre-fill. Use schema-based forms for `triggerInput` based on the flow's trigger schema.",
+                editing_ui: "UI to edit an existing `cfv_models.FlowTestCase`."
             },
             
             test_execution_controls: {
-                run_single_test_case: "Button to run a selected `FlowTestCase`. Calls `props.actions.runTestCase(testCase)`.",
+                run_single_test_case: "Button to run a selected `cfv_models.FlowTestCase`. Calls `props.actions.runTestCase(testCase)`.",
                 run_all_tests_for_flow: "Button to run all test cases for the `props.currentFlowFqn`."
             },
             
             test_results_display: {
                 summary: "Display overall pass/fail for test runs.",
-                assertion_details: "For each `AssertionResult` in `TestRunResult.assertionResults`, show targetPath, expected, actual, comparison, and passed status.",
-                trace_link: "If `TestRunResult.trace` is available, provide a way to view this trace in the visualizer (host app would set `props.traceData` and `props.mode`)."
+                assertion_details: "For each `cfv_models.AssertionResult` in `cfv_models.TestRunResult.assertionResults`, show targetPath, expected, actual, comparison, and passed status.",
+                trace_link: "If `cfv_models.TestRunResult.trace` is available, provide a way to view this trace in the visualizer (host app would set `props.traceData` and `props.mode`)."
             }
         },
         
@@ -187,11 +186,11 @@ directive cfv_consumer_directives.InspectorTabImplementation {
         },
         
         integration_requirements: {
-            trace_data_dependency: "Debug section requires `props.traceData: FlowExecutionTrace | null` to be available.",
+            trace_data_dependency: "Debug section requires `props.traceData: cfv_models.FlowExecutionTrace | null` to be available.",
             test_execution_dependency: "Test section requires `props.actions.runTestCase` callback to be implemented.",
             flow_context_dependency: "Both sections require `props.currentFlowFqn: string | null` for flow context.",
-            module_registry_dependency: "Use `props.moduleRegistry: IModuleRegistry` for flow definition and schema lookups.",
-            enhanced_actions_dependency: "Requires `props.actions: UnifiedDebugTestActions` with schema-based input resolution capabilities.",
+            module_registry_dependency: "Use `props.moduleRegistry: cfv_models.IModuleRegistry` for flow definition and schema lookups.",
+            enhanced_actions_dependency: "Requires `props.actions: cfv_models.UnifiedDebugTestActions` with schema-based input resolution capabilities.",
             component_schema_dependency: "Requires access to component schemas for input/output structure resolution."
         },
         
@@ -223,6 +222,7 @@ directive cfv_consumer_directives.InspectorTabImplementation {
 }
 
 directive cfv_consumer_directives.CallbackPropHandling {
+    id: "CFV_DIR_CALLBACK_001"
     title: "Directive for Handling Library Callback Props"
     target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer"
     description: "Best practices for implementing and managing props like `requestModule`, `onSaveModule`, `fetchTraceList`, `onRunTestCase` in the consuming application."
@@ -233,7 +233,7 @@ directive cfv_consumer_directives.CallbackPropHandling {
     }
 
     onSaveModule_implementation: {
-        persistence: "The consuming application is responsible for actually persisting the `newContent` (e.g., saving to a file, sending to a backend API). The `SaveModulePayload` includes `pathToConfig`, `oldConfigValue`, and `newConfigValue` for more contextual saves if needed.",
+        persistence: "The consuming application is responsible for actually persisting the `newContent` from `cfv_models.SaveModulePayload`. The payload also includes `pathToConfig`, `oldConfigValue`, `newConfigValue` if the save was initiated from the Properties tab for a specific config change, allowing for more granular backend updates if supported.",
         feedback_to_visualizer: "If the save operation can fail, the Promise should reject or return `false`. The visualizer does not inherently provide UI feedback for save success/failure beyond the Promise resolution; the host app may need to.",
         optimistic_updates: "For a smoother UX, the host application might optimistically update the `initialModules` prop immediately and then handle potential save failures, or wait for `onSaveModule` to resolve."
     }
@@ -243,6 +243,13 @@ directive cfv_consumer_directives.CallbackPropHandling {
     }
 
     onRunTestCase_implementation: {
-        execution_logic: "The host application is responsible for taking the `FlowTestCase` (including `triggerInput`, `initialContext`, and `componentMocks`), executing the target flow (potentially in a sandboxed environment or against a test runtime), and returning a `cfv_models.TestRunResult`. The result must include detailed `assertionResults` and optionally a `FlowExecutionTrace`."
+        execution_logic: "The host application is responsible for taking the `cfv_models.FlowTestCase` (including `triggerInput`, `initialContext`, and `componentMocks`), executing the target flow (potentially in a sandboxed environment or against a test runtime by loading the DSL and using a Cascade-compatible engine), and returning a `Promise<cfv_models.TestRunResult>`. The result must include detailed `assertionResults` and optionally a `cfv_models.FlowExecutionTrace` of the test run."
+    }
+
+    parseContextVariables_implementation: {
+        purpose: "Extract context variable names from DSL strings containing template expressions like '{{context.varName}}'.",
+        signature: "Function signature: `(value: string) => string[]`",
+        implementation_guidance: "Parse the input string to identify context variable references and return an array of variable names. Handle various template syntaxes and edge cases gracefully.",
+        example_usage: "Input: 'Hello {{context.userName}}, your balance is {{context.balance}}' should return ['userName', 'balance']."
     }
 }
