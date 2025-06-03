@@ -1,10 +1,14 @@
 // Module Registry Initializer Hook
-// From cfv_internal_code.ModuleRegistryService_InitializeFromProps
+// Generated from cfv_internal_code.ModuleRegistryService_InitializeFromProps
 
 import { useEffect } from 'react';
-import { useSetAtom } from 'jotai';
-import { dslModuleRepresentationsAtom, componentSchemasAtom } from '@/state/moduleRegistryAtoms';
+import { useSetAtom, useAtomValue } from 'jotai';
 import { DslModuleInput, ComponentSchema } from '@/models/cfv_models_generated';
+import { 
+  dslModuleRepresentationsAtom, 
+  componentSchemasAtom,
+  activeModuleLoadRequestsAtom 
+} from '@/state/moduleRegistryAtoms';
 import { processSingleModuleInput } from '@/services/moduleRegistryService';
 
 interface UseModuleRegistryInitializerProps {
@@ -15,51 +19,68 @@ interface UseModuleRegistryInitializerProps {
 export function useModuleRegistryInitializer(props: UseModuleRegistryInitializerProps) {
   const setDslModuleRepresentations = useSetAtom(dslModuleRepresentationsAtom);
   const setComponentSchemas = useSetAtom(componentSchemasAtom);
+  const setActiveModuleLoadRequests = useSetAtom(activeModuleLoadRequestsAtom);
+  
+  const currentModules = useAtomValue(dslModuleRepresentationsAtom);
+  const currentSchemas = useAtomValue(componentSchemasAtom);
 
   useEffect(() => {
-    // 1. Initialize ComponentSchemasAtom from props.componentSchemas
-    if (props.componentSchemas) {
+    // Initialize ComponentSchemasAtom from props.componentSchemas
+    if (props.componentSchemas && Object.keys(props.componentSchemas).length > 0) {
       setComponentSchemas(props.componentSchemas);
     }
   }, [props.componentSchemas, setComponentSchemas]);
 
   useEffect(() => {
-    // 2. Process initialModules from props.initialModules
-    if (props.initialModules) {
-      const initialModuleReps: Record<string, any> = {};
+    // Process initialModules from props.initialModules
+    if (props.initialModules && props.initialModules.length > 0) {
+      console.log('🔍 Debug: Processing initial modules:', props.initialModules.length);
       
-      props.initialModules.forEach(moduleInput => {
-        // Simple get/set functions for the processing function
-        const getAtoms = (atomName: string) => {
-          // This is a simplified implementation - in a real scenario,
-          // we'd need proper atom access
-          return {};
-        };
-        
-        const setAtoms = (atomName: string, value: any) => {
-          // This will be handled by the processSingleModuleInput function
-          // which will call setDslModuleRepresentations
-        };
+      const getAtoms = (atom: any) => {
+        if (atom === dslModuleRepresentationsAtom || atom === 'dslModuleRepresentationsAtom') return currentModules;
+        if (atom === componentSchemasAtom || atom === 'componentSchemasAtom') return currentSchemas;
+        if (atom === activeModuleLoadRequestsAtom || atom === 'activeModuleLoadRequestsAtom') return {};
+        return {};
+      };
 
-        const processedModuleRep = processSingleModuleInput(
-          moduleInput, 
-          true, 
-          getAtoms, 
-          (atomName: string, updater: any) => {
-            if (atomName === 'dslModuleRepresentationsAtom') {
-              if (typeof updater === 'function') {
-                setDslModuleRepresentations(prev => updater(prev));
-              } else {
-                setDslModuleRepresentations(updater);
-              }
-            }
+      const setAtoms = (atom: any, value: any) => {
+        if (atom === dslModuleRepresentationsAtom || atom === 'dslModuleRepresentationsAtom') {
+          if (typeof value === 'function') {
+            setDslModuleRepresentations(value);
+          } else {
+            setDslModuleRepresentations(value);
           }
-        );
-
-        if (processedModuleRep) {
-          initialModuleReps[moduleInput.fqn] = processedModuleRep;
+        } else if (atom === componentSchemasAtom || atom === 'componentSchemasAtom') {
+          if (typeof value === 'function') {
+            setComponentSchemas(value);
+          } else {
+            setComponentSchemas(value);
+          }
+        } else if (atom === activeModuleLoadRequestsAtom || atom === 'activeModuleLoadRequestsAtom') {
+          if (typeof value === 'function') {
+            setActiveModuleLoadRequests(value);
+          } else {
+            setActiveModuleLoadRequests(value);
+          }
         }
-      });
+      };
+
+      // Process each initial module
+      for (const moduleInput of props.initialModules) {
+        // Only process if not already loaded
+        if (!currentModules[moduleInput.fqn]) {
+          console.log('🔍 Debug: Processing module:', moduleInput.fqn);
+          try {
+            processSingleModuleInput(moduleInput, true, getAtoms, setAtoms);
+          } catch (error) {
+            console.error(`Failed to process initial module ${moduleInput.fqn}:`, error);
+          }
+        } else {
+          console.log('🔍 Debug: Module already loaded:', moduleInput.fqn);
+        }
+      }
+    } else {
+      console.log('🔍 Debug: No initial modules provided');
     }
-  }, [props.initialModules, setDslModuleRepresentations]);
-} 
+  }, [props.initialModules, currentModules, currentSchemas, setDslModuleRepresentations, setComponentSchemas, setActiveModuleLoadRequests]);
+}

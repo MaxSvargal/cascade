@@ -112,12 +112,27 @@ export function processSingleModuleInput(
     // Parse YAML content
     const parsedContent = yamlParse(moduleInput.content);
     
+    // Debug logging
+    console.log('🔍 Debug: Parsed content for', moduleInput.fqn, ':', {
+      hasDefinitions: !!parsedContent?.definitions,
+      hasFlowsInDefinitions: !!parsedContent?.definitions?.flows,
+      hasFlowsAtRoot: !!parsedContent?.flows,
+      flowsInDefinitions: parsedContent?.definitions?.flows?.length || 0,
+      flowsAtRoot: parsedContent?.flows?.length || 0
+    });
+    
     // Extract definitions (simplified for now)
     const definitions = {
       context: parsedContent?.definitions?.context || [],
       components: parsedContent?.definitions?.components || [],
       flows: parsedContent?.definitions?.flows || parsedContent?.flows || []
     };
+
+    console.log('🔍 Debug: Extracted definitions for', moduleInput.fqn, ':', {
+      contextCount: definitions.context.length,
+      componentsCount: definitions.components.length,
+      flowsCount: definitions.flows.length
+    });
 
     // Extract imports
     const imports = parsedContent?.imports || [];

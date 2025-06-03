@@ -186,7 +186,7 @@ const sampleTraceData: FlowExecutionTrace = {
   ]
 };
 
-// Custom node types
+// Custom node types - moved outside component to prevent recreation
 const nodeTypes = {
   stepNode: StepNode,
   triggerNode: TriggerNode,
@@ -195,7 +195,7 @@ const nodeTypes = {
   systemTriggerNode: SystemTriggerNode
 };
 
-// Custom edge types
+// Custom edge types - moved outside component to prevent recreation
 const edgeTypes = {
   flowEdge: FlowEdge,
   systemEdge: SystemEdge

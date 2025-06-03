@@ -48,6 +48,7 @@ import { DebugTestActionsService } from '@/services/debugTestActionsService';
 import { createInspectorActions } from '@/services/inspectorActionsService';
 import { TraceListService } from '@/services/traceListService';
 import { NavigationService } from '@/services/navigationService';
+import { consolidatedInspectorTabsService } from '@/services/consolidatedInspectorTabsService';
 
 import 'reactflow/dist/style.css';
 
@@ -220,10 +221,10 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   const moduleRegistry = useMemo(() => {
     return createModuleRegistryInterface((atomRef) => {
       if (atomRef === 'dslModuleRepresentationsAtom') return dslModuleRepresentations;
-      if (atomRef === 'componentSchemasAtom') return props.componentSchemas || {};
+      if (atomRef === 'componentSchemasAtom') return componentSchemas;
       return {};
     });
-  }, [dslModuleRepresentations, props.componentSchemas]);
+  }, [dslModuleRepresentations, componentSchemas]);
 
   // Debug test actions service
   const debugTestActionsService = useMemo(() => {
@@ -323,7 +324,9 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   // Initialize from design data
   useEffect(() => {
     if (props.designData) {
+      console.log('🔍 Debug: Initializing from design data:', props.designData);
       if (props.designData.initialFlowFqn) {
+        console.log('🔍 Debug: Setting initial flow FQN:', props.designData.initialFlowFqn);
         setCurrentFlowFqn(props.designData.initialFlowFqn);
       }
       if (props.designData.initialViewMode) {
@@ -409,6 +412,46 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
     (connection) => setEdges((eds) => addEdge(connection, eds)),
     []
   );
+
+  // Tab Navigation with proper visibility logic
+  const tabVisibility = useMemo(() => {
+    const visibility = consolidatedInspectorTabsService.getTabVisibility(selectedElement, currentFlowFqn);
+    console.log('🔍 Debug: Tab visibility:', {
+      selectedElement: selectedElement?.id,
+      selectedElementType: selectedElement?.sourceType,
+      currentFlowFqn,
+      visibility
+    });
+    return visibility;
+  }, [selectedElement, currentFlowFqn]);
+
+  const availableTabs = useMemo(() => {
+    return [
+      { id: 'source' as const, label: 'Source', visible: tabVisibility.source },
+      { id: 'properties' as const, label: 'Properties', visible: tabVisibility.properties },
+      { id: 'debugtest' as const, label: 'Debug & Test', visible: tabVisibility.debugtest }
+    ].filter(tab => tab.visible);
+  }, [tabVisibility]);
+
+  // Auto-select first available tab if current tab is not visible
+  useEffect(() => {
+    if (availableTabs.length > 0 && !availableTabs.some(tab => tab.id === activeInspectorTab)) {
+      setActiveInspectorTab(availableTabs[0].id);
+    }
+  }, [availableTabs, activeInspectorTab, setActiveInspectorTab]);
+
+  // Debug logging for module loading
+  useEffect(() => {
+    console.log('🔍 Debug: Module representations updated:', {
+      moduleCount: Object.keys(dslModuleRepresentations).length,
+      modules: Object.keys(dslModuleRepresentations),
+      moduleDetails: Object.values(dslModuleRepresentations).map(m => ({
+        fqn: m.fqn,
+        status: m.status,
+        flowCount: m.definitions?.flows?.length || 0
+      }))
+    });
+  }, [dslModuleRepresentations]);
 
   return (
     <div className={props.className} style={props.style}>
@@ -677,15 +720,15 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
             borderBottom: '1px solid #e0e0e0',
             flexWrap: 'wrap'
           }}>
-            {['properties', 'source', 'debugtest'].map(tab => (
+            {availableTabs.map(tab => (
               <button
-                key={tab}
-                onClick={() => setActiveInspectorTab(tab as any)}
+                key={tab.id}
+                onClick={() => setActiveInspectorTab(tab.id)}
                 style={{
                   padding: '8px 12px',
                   border: 'none',
-                  backgroundColor: activeInspectorTab === tab ? '#1976D2' : 'transparent',
-                  color: activeInspectorTab === tab ? 'white' : '#666',
+                  backgroundColor: activeInspectorTab === tab.id ? '#1976D2' : 'transparent',
+                  color: activeInspectorTab === tab.id ? 'white' : '#666',
                   cursor: 'pointer',
                   fontSize: '12px',
                   borderRadius: '4px 4px 0 0',
@@ -693,7 +736,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                   textTransform: 'capitalize'
                 }}
               >
-                {tab === 'debugtest' ? 'Debug & Test' : tab}
+                {tab.label}
               </button>
             ))}
           </div>
