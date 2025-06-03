@@ -3,24 +3,23 @@
 
 directive cfv_consumer_directives.CustomNodeRendering {
     title: "Directive for Implementing Custom Node Renderers"
-    target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer" // Indicates guidance for human developers
+    target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer"
     description: "Provides best practices and expected patterns for creating custom node components to be used with the `customNodeTypes` prop of CascadeFlowVisualizer."
     default_language: "TypeScriptReact"
 
     node_data_access: {
-        // Guidance on accessing fields from the 'data' prop passed to custom node components.
-        // e.g., Node<cfv_models.StepNodeData>, Node<cfv_models.SubFlowInvokerNodeData>, etc.
         core_fields_to_utilize: [
             "data.label: string (for display)",
             "data.dslObject: any (original DSL snippet, useful for context or advanced display)",
             "data.resolvedComponentFqn: string (e.g., 'StdLib:HttpCall')",
             "data.componentSchema: cfv_models.ComponentSchema | null (for understanding config/ports)",
             "data.isNamedComponent: boolean",
+            "data.namedComponentFqn: string (if applicable)",
             "data.contextVarUsages: string[] (list of context variables used)",
             "data.error: cfv_models.NodeError | undefined (for visual error indication on the node)"
         ],
         trace_mode_fields: [
-            "data.executionStatus: cfv_models.ExecutionStatusEnum (for styling based on SUCCESS/FAILURE/SKIPPED)",
+            "data.executionStatus: cfv_models.ExecutionStatusEnum (for styling based on SUCCESS/FAILURE/SKIPPED/RUNNING/PENDING)",
             "data.executionDurationMs: number (for display)",
             "data.executionInputData: any (available for tooltip or condensed display)",
             "data.executionOutputData: any"
@@ -35,7 +34,7 @@ directive cfv_consumer_directives.CustomNodeRendering {
     }
 
     visual_trace_status_pattern: {
-        recommendation: "Use `data.executionStatus` to apply distinct styles: e.g., green for SUCCESS, red for FAILURE, gray for SKIPPED. Consider animations for RUNNING."
+        recommendation: "Use `data.executionStatus` to apply distinct styles: e.g., green for SUCCESS, red for FAILURE, gray for SKIPPED, blue for RUNNING, yellow for PENDING. Consider animations for RUNNING."
     }
 
     react_flow_integration: {
@@ -55,11 +54,11 @@ directive cfv_consumer_directives.CustomEdgeRendering {
     default_language: "TypeScriptReact"
 
     edge_data_access: {
-        // Guidance on accessing fields from the 'data' prop passed to custom edge components.
-        // e.g., Edge<cfv_models.FlowEdgeData>, Edge<cfv_models.SystemEdgeData>
         flow_edge_fields: [
             "data.type: 'dataFlow' | 'controlFlow' (for distinct styling)",
-            "data.isExecutedPath: boolean (in trace/test_result mode, for highlighting active paths)"
+            "data.isExecutedPath: boolean (in trace/test_result mode, for highlighting active paths)",
+            "data.sourceHandle: string (specific output handle on source node)",
+            "data.targetHandle: string (specific input handle on target node)"
         ],
         system_edge_fields: [
             "data.type: 'invocationEdge' | 'triggerLinkEdge'"
@@ -67,7 +66,7 @@ directive cfv_consumer_directives.CustomEdgeRendering {
     }
 
     visual_styling_pattern: {
-        recommendation: "Style 'dataFlow' edges differently from 'controlFlow' edges (e.g., solid vs. dashed). Highlight edges where `data.isExecutedPath` is true."
+        recommendation: "Style 'dataFlow' edges differently from 'controlFlow' edges (e.g., solid vs. dashed). Highlight edges where `data.isExecutedPath` is true with enhanced styling (e.g., thicker line, different color)."
     }
 }
 
@@ -98,7 +97,8 @@ directive cfv_consumer_directives.InspectorTabImplementation {
         diff_view: "When in editing mode, show diff between original and modified YAML.",
         export_options: "Provide options to copy YAML sections or export the full module.",
         implementation_libraries: "Use highlight.js for syntax highlighting, react-highlight for React integration.",
-        styling: "Use professional code editor styling with proper indentation, line numbers, and syntax colors."
+        styling: "Use professional code editor styling with proper indentation, line numbers, and syntax colors.",
+        implementation_notes: "Use `props.selectedElement.moduleFqn` to fetch module content via `props.moduleRegistry.getLoadedModule`. Highlight the section corresponding to `props.selectedElement.data.dslObject`."
     }
 
     properties_tab_guidance: {
@@ -106,16 +106,17 @@ directive cfv_consumer_directives.InspectorTabImplementation {
         purpose: "Interactive form-based editor for component configurations using schema-driven form generation.",
         form_generation_libraries: "Use @rjsf/core (React JSON Schema Form) with @rjsf/validator-ajv8 for form generation from component schemas.",
         validation_libraries: "Use Zod for runtime validation and type safety of form data.",
-        schema_integration: "Use `selectedElement.data.componentSchema.configSchema` to generate forms dynamically for component `config` blocks.",
+        schema_integration: "Use `props.selectedElement.data.componentSchema.configSchema` to generate forms dynamically for component `config` blocks.",
         form_structure: "Generate forms with proper field types (text, number, boolean, select, object, array) based on JSON schema.",
-        default_values: "Pre-populate form with current configuration values from `selectedElement.data.dslObject.config`.",
+        default_values: "Pre-populate form with current configuration values from `props.selectedElement.data.dslObject.config`.",
         validation: "Validate form inputs against component schema using Zod schemas derived from JSON schema. Show validation errors inline.",
         state_management: "Manage local form state within tab component. Use React Hook Form for form state management.",
-        save_workflow: "Only call `actions.requestSave(newConfigValue, pathToConfig)` on explicit user action (Save button click).",
+        save_workflow: "Only call `props.actions.requestSave(newConfigValue, pathToConfig)` on explicit user action (Save button click). `pathToConfig` should point to the 'config' key within the dslObject, e.g., ['config'].",
         yaml_preview: "Show live YAML preview of changes in a collapsible section. Use yaml library to stringify form data.",
-        context_variables: "Display and allow editing of context variable usages found in `selectedElement.data.contextVarUsages`.",
+        context_variables: "Display and allow editing of context variable usages found in `props.selectedElement.data.contextVarUsages`.",
         ui_layout: "Use clean form layout with proper spacing, labels, help text, and error display.",
-        implementation_libraries: "Use @rjsf/core, @rjsf/validator-ajv8, zod, react-hook-form, yaml for implementation."
+        implementation_libraries: "Use @rjsf/core, @rjsf/validator-ajv8, zod, react-hook-form, yaml for implementation.",
+        implementation_notes: "Ensure `pathToConfig` is correctly constructed for `requestSave`. For a step node, if editing `step.config.timeout`, `pathToConfig` relative to the step's dslObject would be `['config', 'timeout']`."
     }
 
     debug_test_tab_guidance: {
@@ -123,41 +124,60 @@ directive cfv_consumer_directives.InspectorTabImplementation {
         purpose: "Comprehensive debugging and testing interface with schema-based input forms, execution capabilities, and detailed results analysis.",
         
         debug_section: {
-            schema_based_input_interface: "Provide input forms based on component input schemas with proper data type handling and validation.",
-            contextual_input_display: "Display input forms based on selected element - trigger schema for triggers, component input schema for steps.",
-            component_config_interface: "Provide separate config forms based on component config schemas. Components receive BOTH input data AND config data during execution.",
-            input_data_resolution: "Resolve input data from trigger and all previous step outputs using component output schemas and inputs_map configuration. Show ACTUAL data that would be passed to the selected step, not mock placeholders.",
-            config_data_resolution: "Resolve config data from the component's config block in the DSL. Show the actual configuration that would be passed to the component.",
-            flow_execution_simulation: "Simulate complete flow execution from trigger through all steps preceding the selected step to generate realistic input data. Pass both resolved input data AND component config to each step.",
-            schema_driven_defaults: "Use component schema default values when previous step data is unavailable or incomplete.",
-            data_lineage_visualization: "Show data flow path from trigger through all previous steps to the selected component with actual data values.",
-            input_validation: "Validate input data against component input schema before execution with clear error messages.",
-            config_validation: "Validate config data against component config schema before execution with clear error messages.",
-            realistic_data_generation: "Generate realistic test data based on schema constraints (types, min/max, patterns, enums) and flow context rather than generic placeholders.",
-            execution_from_selection: "Execute flow from selected step or trigger with schema-validated input data, component config, and execution options.",
-            dual_input_interface: "Provide TWO separate input areas: 1) Input Data (from previous steps/trigger) and 2) Component Config (from DSL config block). Both are required for proper component execution.",
-            execution_overview: "Show flow execution summary: status, duration, step count, success/failure rates when trace data available.",
-            step_details: "Display detailed step execution information: input/output data, config used, timing, status, errors.",
-            data_inspection: "Provide JSON/YAML formatted display of step data with search and filtering capabilities.",
-            error_analysis: "Show detailed error information for failed executions with stack traces and context.",
-            performance_metrics: "Display execution timing, critical path analysis, and performance bottlenecks.",
-            execution_timeline: "Visual timeline of step execution with duration bars and status indicators.",
-            results_display: "Show comprehensive execution results including logs, final output, and system triggers."
+            scope: "Focuses on understanding and executing the *current* flow or a *selected step* within it.",
+            
+            input_data_interface: {
+                guidance: "Provide UI for viewing and editing the `triggerInputData` for the current flow (if `props.selectedElement` is the flow or trigger) or the `actualInputData` for a selected step. This data can be sourced from `props.actions.resolveStepInputData` or `props.actions.simulateFlowExecution`.",
+                form_generation: "If editing, use `props.selectedElement.data.componentSchema.inputSchema` (for steps) or `props.selectedElement.data.componentSchema.triggerOutputSchema` (for triggers) to generate an input form with `@rjsf/core`.",
+                validation: "Validate user-provided input data using `props.actions.validateDataAgainstSchema` before execution."
+            },
+            
+            component_config_display: {
+                guidance: "Display the *actual* `dslConfig` for the selected step (from `props.selectedElement.data.dslObject.config`). This config is passed to `props.actions.runDebugStep` along with input data. Configuration is *used* in debug, but *edited* in Properties tab."
+            },
+            
+            execution_controls: {
+                run_flow_from_trigger: "Button to execute the entire `props.currentFlowFqn` using provided/generated trigger input. Calls `props.actions.simulateFlowExecution(props.currentFlowFqn, null, triggerInputData)`.",
+                run_flow_up_to_step: "Button to simulate execution up to the `props.selectedElement` (if it's a step). Calls `props.actions.simulateFlowExecution(props.currentFlowFqn, props.selectedElement.id, triggerInputData)`.",
+                run_selected_step: "Button to execute only the `props.selectedElement` (if it's a step) with provided `inputData` and its `dslConfig`. Calls `props.actions.runDebugStep(props.currentFlowFqn, props.selectedElement.id, stepInputData, stepDslConfig)`."
+            },
+            
+            results_display: {
+                trace_visualization: "If `props.traceData` (from a full run or simulation) is available, display it. This might involve highlighting paths on the main graph or showing a summary here.",
+                step_i_o_data: "For a selected step after execution/simulation, display its `executionInputData` and `executionOutputData` (from `FlowSimulationResult.resolvedStepInputs`/`simulatedStepOutputs` or `StepExecutionTrace`). Use `react-json-view`.",
+                logs: "Display logs from `FlowExecutionTrace.steps[].logs` or `StepExecutionTrace.logs`.",
+                errors: "Clearly display any `ExecutionError` from results."
+            },
+            
+            data_lineage_visualization: {
+                guidance: "Optionally, use `props.actions.resolveStepInputData` which returns `ResolvedStepInput` containing data lineage information to visualize how a step's input is constructed."
+            }
         },
         
         test_section: {
-            test_case_management: "Interface for creating, editing, and managing test cases for the current flow.",
-            schema_based_templates: "Generate test case templates based on component schemas for realistic test scenarios.",
-            test_execution: "Execute test cases using `actions.runTestCase(testCase: cfv_models.FlowTestCase)` and display results.",
-            assertion_builder: "UI for building test assertions with JMESPath selectors and comparison operators.",
-            mock_configuration: "Interface for configuring component mocks for isolated testing.",
-            test_results_display: "Show test execution results with pass/fail status, assertion outcomes, and detailed logs.",
-            coverage_analysis: "Display test coverage metrics for flow paths and component configurations."
+            scope: "Focuses on managing and running persisted `FlowTestCase` definitions for the `props.currentFlowFqn`.",
+            
+            test_case_management: {
+                list_display: "Display existing test cases for the `props.currentFlowFqn` (host app needs to provide these, perhaps via a new prop or fetched via an action).",
+                creation_ui: "UI to create a new `FlowTestCase`. Use `props.actions.generateTestCaseTemplate` to pre-fill. Use schema-based forms for `triggerInput` based on the flow's trigger schema.",
+                editing_ui: "UI to edit an existing `FlowTestCase`."
+            },
+            
+            test_execution_controls: {
+                run_single_test_case: "Button to run a selected `FlowTestCase`. Calls `props.actions.runTestCase(testCase)`.",
+                run_all_tests_for_flow: "Button to run all test cases for the `props.currentFlowFqn`."
+            },
+            
+            test_results_display: {
+                summary: "Display overall pass/fail for test runs.",
+                assertion_details: "For each `AssertionResult` in `TestRunResult.assertionResults`, show targetPath, expected, actual, comparison, and passed status.",
+                trace_link: "If `TestRunResult.trace` is available, provide a way to view this trace in the visualizer (host app would set `props.traceData` and `props.mode`)."
+            }
         },
         
         enhanced_schema_features: {
-            input_structure_generation: "Generate input structure templates from component input schemas with proper data types.",
-            schema_validation: "Validate input data against component schemas with detailed error reporting.",
+            input_structure_generation: "Generate input structure templates from component input schemas with proper data types using `props.actions.generateSchemaBasedInput`.",
+            schema_validation: "Validate input data against component schemas with detailed error reporting using `props.actions.validateDataAgainstSchema`.",
             data_type_conversion: "Handle data type conversion based on schema types (string, number, boolean, object, array).",
             nested_object_support: "Support complex nested objects and arrays based on JSON schema structure.",
             required_field_handling: "Distinguish between required and optional fields based on schema definitions.",
@@ -167,11 +187,11 @@ directive cfv_consumer_directives.InspectorTabImplementation {
         },
         
         integration_requirements: {
-            trace_data_dependency: "Debug section requires `traceData: FlowExecutionTrace | null` to be available.",
-            test_execution_dependency: "Test section requires `actions.runTestCase` callback to be implemented.",
-            flow_context_dependency: "Both sections require `currentFlowFqn: string | null` for flow context.",
-            module_registry_dependency: "Use `moduleRegistry: IModuleRegistry` for flow definition and schema lookups.",
-            enhanced_actions_dependency: "Requires `actions: UnifiedDebugTestActions` with schema-based input resolution capabilities.",
+            trace_data_dependency: "Debug section requires `props.traceData: FlowExecutionTrace | null` to be available.",
+            test_execution_dependency: "Test section requires `props.actions.runTestCase` callback to be implemented.",
+            flow_context_dependency: "Both sections require `props.currentFlowFqn: string | null` for flow context.",
+            module_registry_dependency: "Use `props.moduleRegistry: IModuleRegistry` for flow definition and schema lookups.",
+            enhanced_actions_dependency: "Requires `props.actions: UnifiedDebugTestActions` with schema-based input resolution capabilities.",
             component_schema_dependency: "Requires access to component schemas for input/output structure resolution."
         },
         
@@ -180,7 +200,6 @@ directive cfv_consumer_directives.InspectorTabImplementation {
     }
 
     migration_guidance: {
-        // For migrating from old tab structure
         deprecated_tabs: "The following tabs are deprecated: DataIOTab, ContextVarsTab, TestDefinitionTab, AssertionResultsTab.",
         migration_path: {
             DataIOTab: "Functionality moved to Debug & Test tab debug section with enhanced data inspection.",
@@ -209,25 +228,21 @@ directive cfv_consumer_directives.CallbackPropHandling {
     description: "Best practices for implementing and managing props like `requestModule`, `onSaveModule`, `fetchTraceList`, `onRunTestCase` in the consuming application."
 
     requestModule_implementation: {
-        // For props.requestModule
         return_value: "Ensure the Promise resolves to `cfv_models.RequestModuleResult` or `null`. Handle errors gracefully (e.g., network errors) and consider returning `null` or throwing an error that `onModuleLoadError` can catch.",
         caching: "Consider implementing client-side caching of module content in the host application to avoid redundant requests for the same FQN if appropriate."
     }
 
     onSaveModule_implementation: {
-        // For props.onSaveModule
-        persistence: "The consuming application is responsible for actually persisting the `newContent` (e.g., saving to a file, sending to a backend API).",
+        persistence: "The consuming application is responsible for actually persisting the `newContent` (e.g., saving to a file, sending to a backend API). The `SaveModulePayload` includes `pathToConfig`, `oldConfigValue`, and `newConfigValue` for more contextual saves if needed.",
         feedback_to_visualizer: "If the save operation can fail, the Promise should reject or return `false`. The visualizer does not inherently provide UI feedback for save success/failure beyond the Promise resolution; the host app may need to.",
         optimistic_updates: "For a smoother UX, the host application might optimistically update the `initialModules` prop immediately and then handle potential save failures, or wait for `onSaveModule` to resolve."
     }
 
     fetchTraceList_implementation: {
-        // For props.fetchTraceList
         return_value: "Ensure the Promise resolves to `cfv_models.HistoricalFlowInstanceSummary[]`."
     }
 
     onRunTestCase_implementation: {
-        // For props.onRunTestCase
-        execution_logic: "The host application is responsible for taking the `FlowTestCase`, executing the target flow (potentially in a sandboxed environment or against a test runtime), and returning a `cfv_models.TestRunResult`."
+        execution_logic: "The host application is responsible for taking the `FlowTestCase` (including `triggerInput`, `initialContext`, and `componentMocks`), executing the target flow (potentially in a sandboxed environment or against a test runtime), and returning a `cfv_models.TestRunResult`. The result must include detailed `assertionResults` and optionally a `FlowExecutionTrace`."
     }
 }

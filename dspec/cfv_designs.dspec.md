@@ -533,3 +533,245 @@ design cfv_designs.CollapsibleModuleListService {
     }
     source: "Enhanced implementation for improved module list UI"
 }
+
+// --- CONSOLIDATED INSPECTOR TAB DESIGNS ---
+
+design cfv_designs.ConsolidatedInspectorTabsService {
+    title: "Consolidated Inspector Tabs Service"
+    description: "Manages the three consolidated inspector tabs: Source, Properties, and Debug & Test with enhanced functionality."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Manage tab state and switching between Source, Properties, and Debug & Test tabs",
+        "Coordinate data flow between tabs and maintain consistency",
+        "Handle tab-specific loading states and error handling",
+        "Provide unified interface for tab content rendering",
+        "Support tab-specific actions and operations"
+    ]
+    dependencies: [
+        cfv_designs.SourceTabService,
+        cfv_designs.PropertiesTabService,
+        cfv_designs.DebugTestTabService,
+        cfv_designs.InspectorStateService
+    ]
+    exposes_interface: {
+        switchToTab: "(tabId: 'source' | 'properties' | 'debug-test') => void",
+        getCurrentTab: "() => string",
+        getTabData: "(tabId: string) => any",
+        refreshTabContent: "(tabId: string) => void"
+    }
+    source: "New consolidated inspector tab architecture"
+}
+
+design cfv_designs.SourceTabService {
+    title: "Source Tab Service"
+    description: "Manages the Source tab with full module YAML display, syntax highlighting, and element highlighting."
+    part_of: cfv_designs.ConsolidatedInspectorTabsService
+    responsibilities: [
+        "Display complete module YAML source with syntax highlighting",
+        "Highlight selected element within the YAML context",
+        "Provide line numbers and professional code editor styling",
+        "Support copy and export functionality",
+        "Handle large YAML files with performance optimization"
+    ]
+    dependencies: [
+        cfv_designs.ModuleRegistryService,
+        "highlight.js",
+        "react-syntax-highlighter"
+    ]
+    exposes_interface: {
+        displayModuleSource: "(moduleFqn: string, selectedElementPath?: string[]) => void",
+        highlightElement: "(elementPath: string[]) => void",
+        copySource: "() => void",
+        exportSource: "(format: 'yaml' | 'json') => void"
+    }
+    api_contract: {
+        renderInspectorSourceTab: "Required consumer function for rendering source tab content"
+    }
+    source: "New source tab implementation with enhanced YAML display"
+}
+
+design cfv_designs.PropertiesTabService {
+    title: "Properties Tab Service"
+    description: "Manages the Properties tab with schema-driven form generation for component configuration editing."
+    part_of: cfv_designs.ConsolidatedInspectorTabsService
+    responsibilities: [
+        "Generate dynamic forms from component schemas using @rjsf/core",
+        "Pre-populate forms with current configuration values",
+        "Validate configuration changes using Zod schemas",
+        "Provide live YAML preview of configuration changes",
+        "Handle save operations with proper error handling"
+    ]
+    dependencies: [
+        cfv_designs.ComponentSchemaService,
+        cfv_designs.YamlReconstructionService,
+        "@rjsf/core",
+        "zod"
+    ]
+    exposes_interface: {
+        generateConfigForm: "(componentType: string, currentConfig: any) => JSONSchema",
+        validateConfig: "(config: any, schema: ComponentSchema) => ValidationResult",
+        previewYamlChanges: "(newConfig: any) => string",
+        saveConfiguration: "(stepId: string, newConfig: any) => Promise<boolean>"
+    }
+    api_contract: {
+        renderInspectorPropertiesTab: "Required consumer function for rendering properties tab content",
+        requestSave: "Required consumer function for handling save operations"
+    }
+    source: "New properties tab implementation with schema-driven forms"
+}
+
+design cfv_designs.DebugTestTabService {
+    title: "Debug & Test Tab Service"
+    description: "Manages the unified Debug & Test tab with flow simulation, input forms, and comprehensive testing interface."
+    part_of: cfv_designs.ConsolidatedInspectorTabsService
+    responsibilities: [
+        "Provide schema-based input forms for flow and component testing",
+        "Execute flow simulation from selected steps with realistic data resolution",
+        "Display comprehensive execution results with logs and data flow",
+        "Manage test case creation, execution, and results",
+        "Support random data generation for different testing scenarios",
+        "Show execution timeline with performance metrics"
+    ]
+    dependencies: [
+        cfv_designs.FlowSimulationService,
+        cfv_designs.TestCaseService,
+        cfv_designs.DataGenerationService,
+        cfv_designs.ComponentSchemaService,
+        "@rjsf/core"
+    ]
+    exposes_interface: {
+        generateInputForm: "(selectedElement: SelectedElement) => JSONSchema",
+        resolveInputData: "(selectedElement: SelectedElement) => ResolvedStepInput",
+        executeFromStep: "(stepId: string, inputData: any) => Promise<FlowSimulationResult>",
+        generateTestData: "(schema: JSONSchema, scenario: TestScenario) => any",
+        createTestCase: "(flowFqn: string, testData: TestCaseData) => TestCase",
+        executeTestCase: "(testCase: TestCase) => Promise<TestExecutionResult>"
+    }
+    api_contract: {
+        renderInspectorDebugTestTab: "Required consumer function for rendering debug & test tab content"
+    }
+    source: "New unified debug & test tab implementation"
+}
+
+design cfv_designs.FlowSimulationService {
+    title: "Flow Simulation Service"
+    description: "Provides realistic flow execution simulation with proper data propagation and component execution."
+    part_of: cfv_designs.DebugTestTabService
+    responsibilities: [
+        "Execute complete flow simulation from trigger through all steps",
+        "Resolve input data for each step based on inputs_map and data lineage",
+        "Execute components with realistic output generation based on schemas",
+        "Handle context variables and data transformations",
+        "Provide execution timeline and performance metrics",
+        "Support partial flow execution from selected steps"
+    ]
+    dependencies: [
+        cfv_designs.ModuleRegistryService,
+        cfv_designs.ComponentSchemaService,
+        cfv_designs.ComponentExecutionService
+    ]
+    exposes_interface: {
+        simulateFlowExecution: "(flowFqn: string, triggerInput: any, targetStepId?: string) => Promise<FlowSimulationResult>",
+        resolveStepInput: "(step: FlowStep, executionContext: ExecutionContext) => ResolvedStepInput",
+        executeStep: "(step: FlowStep, stepInput: ResolvedStepInput, executionContext: ExecutionContext) => any"
+    }
+    source: "New flow simulation service for realistic execution testing"
+}
+
+design cfv_designs.SchemaBasedFormGenerationService {
+    title: "Schema-Based Form Generation Service"
+    description: "Generates dynamic forms from JSON schemas with proper validation and UI hints."
+    part_of: cfv_designs.PropertiesTabService
+    responsibilities: [
+        "Convert component schemas to JSON Schema format for form generation",
+        "Generate UI schema hints for better form rendering",
+        "Handle complex form fields (nested objects, arrays, conditionals)",
+        "Provide form validation with real-time error display",
+        "Support custom form widgets and field types"
+    ]
+    dependencies: [
+        "@rjsf/core",
+        "@rjsf/validator-ajv8",
+        "zod"
+    ]
+    exposes_interface: {
+        generateFormSchema: "(componentSchema: ComponentSchema) => { schema: JSONSchema, uiSchema: UISchema }",
+        validateFormData: "(data: any, schema: JSONSchema) => ValidationResult",
+        generateUISchema: "(componentSchema: ComponentSchema) => UISchema"
+    }
+    source: "New schema-based form generation service"
+}
+
+design cfv_designs.DataLineageVisualizationService {
+    title: "Data Lineage Visualization Service"
+    description: "Visualizes data flow and lineage in the Debug & Test tab to show how data propagates through the flow."
+    part_of: cfv_designs.DebugTestTabService
+    responsibilities: [
+        "Display data lineage diagrams showing input sources for selected steps",
+        "Visualize data transformations between steps",
+        "Show context variable usage and resolution",
+        "Highlight data dependencies and relationships",
+        "Provide interactive data flow exploration"
+    ]
+    dependencies: [
+        cfv_designs.FlowSimulationService,
+        "react-flow-renderer"
+    ]
+    exposes_interface: {
+        generateDataLineage: "(stepId: string, executionContext: ExecutionContext) => DataLineageGraph",
+        visualizeDataFlow: "(fromStep: string, toStep: string) => DataFlowVisualization",
+        showInputSources: "(stepId: string) => InputSourceMapping[]"
+    }
+    source: "New data lineage visualization service"
+}
+
+design cfv_designs.ExecutionResultsDisplayService {
+    title: "Execution Results Display Service"
+    description: "Displays comprehensive execution results with logs, outputs, and system triggers in the Debug & Test tab."
+    part_of: cfv_designs.DebugTestTabService
+    responsibilities: [
+        "Display execution logs with timestamps and severity levels",
+        "Show step outputs with JSON/YAML formatting",
+        "Display system triggers generated during execution",
+        "Provide execution timeline with performance metrics",
+        "Show error details and stack traces for failed executions",
+        "Support result export and sharing"
+    ]
+    dependencies: [
+        "react-json-view",
+        "highlight.js"
+    ]
+    exposes_interface: {
+        displayExecutionResults: "(simulationResult: FlowSimulationResult) => void",
+        showExecutionTimeline: "(executionLog: ExecutionLogEntry[]) => void",
+        displayStepOutput: "(stepId: string, output: any) => void",
+        exportResults: "(format: 'json' | 'yaml' | 'csv') => void"
+    }
+    source: "New execution results display service"
+}
+
+// --- MIGRATION AND DEPRECATION DESIGNS ---
+
+design cfv_designs.LegacyTabMigrationService {
+    title: "Legacy Tab Migration Service"
+    description: "Handles migration from old individual tabs to new consolidated tab architecture."
+    part_of: cfv_designs.ConsolidatedInspectorTabsService
+    responsibilities: [
+        "Map legacy tab functionality to new consolidated tabs",
+        "Provide backward compatibility during transition period",
+        "Handle deprecation warnings and migration guidance",
+        "Ensure smooth transition for existing consumers"
+    ]
+    deprecated_mappings: {
+        "renderInspectorDataIOTab": "Functionality moved to Debug & Test tab",
+        "renderInspectorContextVarsTab": "Functionality moved to Properties tab",
+        "renderInspectorTestDefinitionTab": "Functionality moved to Debug & Test tab",
+        "renderInspectorAssertionResultsTab": "Functionality moved to Debug & Test tab"
+    }
+    migration_timeline: {
+        "Phase 1": "Introduce new consolidated tabs alongside legacy tabs",
+        "Phase 2": "Add deprecation warnings to legacy tab props",
+        "Phase 3": "Remove legacy tab support in next major version"
+    }
+    source: "Migration support for consolidated inspector tab architecture"
+}
