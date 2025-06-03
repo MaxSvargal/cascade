@@ -90,6 +90,11 @@ model cfv_models.UnifiedDebugTestActions {
         required: true;
         description: "Validates provided data against a JSON schema. Signature: (data: cfv_models.Any, schema: cfv_models.JsonSchemaObject) => cfv_models.ValidationResult";
     }
+    // Execution State Management
+    updateExecutionState: cfv_models.Function {
+        required: true;
+        description: "Update the visualizer with execution results to show node states. Signature: (flowFqn: string, executionResults: cfv_models.FlowSimulationResult | cfv_models.FlowExecutionTrace) => void";
+    }
 }
 
 model cfv_models.DslModuleRepresentation {
@@ -247,10 +252,12 @@ model cfv_models.BaseNodeData {
     contextVarUsages?: List<String> { description: "Context variable names used (e.g., '{{context.varName}}')." }
     error?: cfv_models.NodeError { description: "Error info if this element has a validation/resolution error." }
     // Fields for trace/debug mode, populated by GraphBuilderService from traceData or simulation results
-    executionStatus?: cfv_models.ExecutionStatusEnum
-    executionDurationMs?: Number
-    executionInputData?: cfv_models.Any { description: "Actual input data passed during execution/simulation." }
-    executionOutputData?: cfv_models.Any { description: "Actual output data from execution/simulation." }
+    // CRITICAL: These fields should ONLY be populated when trace data is available or after debug/test execution
+    // In design mode without trace data, these fields should be undefined/null to show clean nodes
+    executionStatus?: cfv_models.ExecutionStatusEnum { description: "Only populated when trace data is available or after execution." }
+    executionDurationMs?: Number { description: "Only populated when trace data is available or after execution." }
+    executionInputData?: cfv_models.Any { description: "Actual input data passed during execution/simulation. Only populated when trace data is available." }
+    executionOutputData?: cfv_models.Any { description: "Actual output data from execution/simulation. Only populated when trace data is available." }
 }
 
 model cfv_models.NodeError {
@@ -778,6 +785,148 @@ model cfv_models.CascadeFlowVisualizerProps {
     // Styling & Dimensions
     className?: String
     style?: cfv_models.Any { description: "React.CSSProperties" }
+    
+    // UI Customization Options (New)
+    uiOptions?: cfv_models.UICustomizationOptions { description: "Customization options for UI appearance and behavior." }
+}
+
+model cfv_models.UICustomizationOptions {
+    id: "CFV_MOD_UI_001"
+    description: "Customization options for UI appearance, dimensions, and behavior."
+    
+    // Sidebar Configuration
+    sidebarOptions?: cfv_models.SidebarOptions
+    
+    // Color Theme
+    colorTheme?: cfv_models.ColorTheme
+    
+    // Node Styling
+    nodeStyleOptions?: cfv_models.NodeStyleOptions
+    
+    // Edge Styling  
+    edgeStyleOptions?: cfv_models.EdgeStyleOptions
+    
+    // Interaction Options
+    interactionOptions?: cfv_models.InteractionOptions
+}
+
+model cfv_models.SidebarOptions {
+    id: "CFV_MOD_UI_002"
+    description: "Configuration options for sidebar appearance and behavior."
+    
+    defaultLeftWidth?: Number { default: 300; description: "Default width of left sidebar in pixels." }
+    defaultRightWidth?: Number { default: 300; description: "Default width of right sidebar in pixels." }
+    minWidth?: Number { default: 20; description: "Minimum sidebar width in pixels." }
+    maxWidth?: Number { default: 900; description: "Maximum sidebar width in pixels." }
+    resizable?: Boolean { default: true; description: "Whether sidebars can be resized." }
+    collapsible?: Boolean { default: false; description: "Whether sidebars can be collapsed." }
+}
+
+model cfv_models.ColorTheme {
+    id: "CFV_MOD_UI_003"
+    description: "Color theme configuration for the visualizer."
+    
+    // Primary Colors
+    primaryColor?: String { default: "#1976D2"; description: "Primary accent color." }
+    secondaryColor?: String { default: "#4CAF50"; description: "Secondary accent color." }
+    
+    // Node Colors
+    nodeColors?: cfv_models.NodeColors
+    
+    // Edge Colors
+    edgeColors?: cfv_models.EdgeColors
+    
+    // Background Colors
+    backgroundColor?: String { default: "#f5f5f5"; description: "Main background color." }
+    sidebarBackgroundColor?: String { default: "#fafafa"; description: "Sidebar background color." }
+}
+
+model cfv_models.NodeColors {
+    id: "CFV_MOD_UI_004"
+    description: "Color configuration for different node types and states."
+    
+    // Execution Status Colors
+    successColor?: String { default: "#4CAF50"; description: "Color for successful execution." }
+    failureColor?: String { default: "#F44336"; description: "Color for failed execution." }
+    runningColor?: String { default: "#FF9800"; description: "Color for running execution." }
+    skippedColor?: String { default: "#9E9E9E"; description: "Color for skipped execution." }
+    notExecutedColor?: String { default: "#E0E0E0"; description: "Color for not executed nodes." }
+    
+    // Node Type Colors
+    stepNodeColor?: String { default: "#2196F3"; description: "Default color for step nodes." }
+    triggerNodeColor?: String { default: "#4CAF50"; description: "Default color for trigger nodes." }
+    subFlowInvokerColor?: String { default: "#9C27B0"; description: "Default color for sub-flow invoker nodes." }
+}
+
+model cfv_models.EdgeColors {
+    id: "CFV_MOD_UI_005"
+    description: "Color configuration for different edge types and states."
+    
+    // Flow Edge Colors
+    dataFlowColor?: String { default: "#81C784"; description: "Color for data flow edges (pastel green)." }
+    controlFlowColor?: String { default: "#666"; description: "Color for control flow edges." }
+    
+    // System Edge Colors
+    invocationEdgeColor?: String { default: "#FF9800"; description: "Color for invocation edges." }
+    triggerLinkEdgeColor?: String { default: "#4CAF50"; description: "Color for trigger link edges." }
+    
+    // Execution State Colors
+    executedPathColor?: String { default: "#4CAF50"; description: "Color for executed paths." }
+    notExecutedPathColor?: String { default: "#ccc"; description: "Color for not executed paths." }
+}
+
+model cfv_models.NodeStyleOptions {
+    id: "CFV_MOD_UI_006"
+    description: "Styling options for nodes."
+    
+    // Border Options
+    defaultBorderWidth?: Number { default: 2; description: "Default border width in pixels." }
+    selectedBorderWidth?: Number { default: 3; description: "Border width for selected nodes." }
+    notExecutedBorderWidth?: Number { default: 2; description: "Border width for not executed nodes." }
+    
+    // Border Styles
+    defaultBorderStyle?: String { default: "solid"; description: "Default border style." }
+    notExecutedBorderStyle?: String { default: "solid"; description: "Border style for not executed nodes." }
+    
+    // Opacity Options
+    notExecutedOpacity?: Number { default: 0.7; description: "Opacity for not executed nodes." }
+    
+    // Shadow Options
+    enableShadows?: Boolean { default: true; description: "Whether to show node shadows." }
+    shadowColor?: String { default: "rgba(0,0,0,0.1)"; description: "Shadow color for nodes." }
+}
+
+model cfv_models.EdgeStyleOptions {
+    id: "CFV_MOD_UI_007"
+    description: "Styling options for edges."
+    
+    // Line Styles
+    defaultStrokeWidth?: Number { default: 2; description: "Default edge stroke width." }
+    selectedStrokeWidth?: Number { default: 3; description: "Stroke width for selected edges." }
+    
+    // Dash Patterns
+    useDashedLines?: Boolean { default: false; description: "Whether to use dashed lines for data flow edges." }
+    dashPattern?: String { default: "5,5"; description: "Dash pattern for dashed edges." }
+    
+    // Labels
+    showEdgeLabels?: Boolean { default: false; description: "Whether to show labels on edges." }
+    edgeLabelFontSize?: Number { default: 10; description: "Font size for edge labels." }
+}
+
+model cfv_models.InteractionOptions {
+    id: "CFV_MOD_UI_008"
+    description: "Configuration for user interaction behavior."
+    
+    // Navigation Options
+    enableDoubleClickNavigation?: Boolean { default: true; description: "Enable double-click navigation for SubFlowInvoker nodes." }
+    enableHoverEffects?: Boolean { default: true; description: "Enable hover effects on nodes and edges." }
+    
+    // Selection Options
+    multiSelectEnabled?: Boolean { default: false; description: "Enable multi-selection of nodes." }
+    
+    // Animation Options
+    enableAnimations?: Boolean { default: true; description: "Enable animations for state changes." }
+    animationDuration?: Number { default: 200; description: "Animation duration in milliseconds." }
 }
 
 // --- Interaction Message Models ---

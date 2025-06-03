@@ -36,7 +36,7 @@ directive cfv_consumer_directives.CustomNodeRendering {
     }
 
     visual_trace_status_pattern: {
-        recommendation: "Use `data.executionStatus` to apply distinct styles: e.g., green for SUCCESS, red for FAILURE, gray for SKIPPED, blue for RUNNING, yellow for PENDING. Consider animations for RUNNING."
+        recommendation: "CRITICAL: Only display execution status when `data.executionStatus` is defined. In design mode (no trace data), nodes should have NO status indicator - no 'Not Executed', no status badges, no execution-related UI elements. Use `data.executionStatus` to apply distinct styles: green for SUCCESS, red for FAILURE, gray for SKIPPED, blue for RUNNING, yellow for PENDING. Consider animations for RUNNING. Nodes without executionStatus should appear in clean design mode styling."
     }
 
     react_flow_integration: {
@@ -136,9 +136,10 @@ directive cfv_consumer_directives.InspectorTabImplementation {
             },
             
             execution_controls: {
-                run_flow_from_trigger: "Button to execute the entire `props.currentFlowFqn` using provided/generated trigger input. Calls `props.actions.simulateFlowExecution(props.currentFlowFqn, null, triggerInputData)`.",
-                run_flow_up_to_step: "Button to simulate execution up to the `props.selectedElement` (if it's a step). Calls `props.actions.simulateFlowExecution(props.currentFlowFqn, props.selectedElement.id, triggerInputData)`.",
-                run_selected_step: "Button to execute only the `props.selectedElement` (if it's a step) with provided `inputData` and its `dslConfig`. Calls `props.actions.runDebugStep(props.currentFlowFqn, props.selectedElement.id, stepInputData, stepDslConfig)`."
+                run_flow_from_trigger: "Button to execute the entire `props.currentFlowFqn` using provided/generated trigger input. Calls `props.actions.simulateFlowExecution(props.currentFlowFqn, null, triggerInputData)`. CRITICAL: Execution results must update the visualizer nodes with execution status and data. Nodes should show SUCCESS/FAILURE/RUNNING states, NOT reset to 'not executed'.",
+                run_flow_up_to_step: "Button to simulate execution up to the `props.selectedElement` (if it's a step). Calls `props.actions.simulateFlowExecution(props.currentFlowFqn, props.selectedElement.id, triggerInputData)`. CRITICAL: Execution results must update the visualizer nodes with execution status and data. Nodes should show SUCCESS/FAILURE/RUNNING states, NOT reset to 'not executed'.",
+                run_selected_step: "Button to execute only the `props.selectedElement` (if it's a step) with provided `inputData` and its `dslConfig`. Calls `props.actions.runDebugStep(props.currentFlowFqn, props.selectedElement.id, stepInputData, stepDslConfig)`. CRITICAL: Execution results must update the visualizer nodes with execution status and data. Nodes should show SUCCESS/FAILURE/RUNNING states, NOT reset to 'not executed'.",
+                execution_state_management: "All execution actions must propagate results back to the main visualizer to update node execution states. Nodes should start with no execution status in design mode and only show execution status after debug/test execution. Execution status should be SUCCESS, FAILURE, RUNNING, SKIPPED, or PENDING - never 'not executed'."
             },
             
             results_display: {
@@ -190,66 +191,4 @@ directive cfv_consumer_directives.InspectorTabImplementation {
             test_execution_dependency: "Test section requires `props.actions.runTestCase` callback to be implemented.",
             flow_context_dependency: "Both sections require `props.currentFlowFqn: string | null` for flow context.",
             module_registry_dependency: "Use `props.moduleRegistry: cfv_models.IModuleRegistry` for flow definition and schema lookups.",
-            enhanced_actions_dependency: "Requires `props.actions: cfv_models.UnifiedDebugTestActions` with schema-based input resolution capabilities.",
-            component_schema_dependency: "Requires access to component schemas for input/output structure resolution."
-        },
-        
-        ui_layout: "Use tabbed layout to separate debug and test sections. Provide schema-driven input forms, execution controls, and comprehensive results display.",
-        implementation_libraries: "Use react-json-view for data inspection, monaco-editor for JSON input, recharts for timeline visualization, ajv for schema validation, @rjsf/core for schema-based forms."
-    }
-
-    migration_guidance: {
-        deprecated_tabs: "The following tabs are deprecated: DataIOTab, ContextVarsTab, TestDefinitionTab, AssertionResultsTab.",
-        migration_path: {
-            DataIOTab: "Functionality moved to Debug & Test tab debug section with enhanced data inspection.",
-            ContextVarsTab: "Context variables now shown in Properties tab alongside component configuration.",
-            TestDefinitionTab: "Functionality consolidated into Debug & Test tab test section with enhanced test management.",
-            AssertionResultsTab: "Assertion results now shown in Debug & Test tab test section alongside test definitions."
-        },
-        backward_compatibility: "Legacy tab renderers are still supported but deprecated. Plan migration to new consolidated tabs.",
-        feature_parity: "New tabs provide all functionality of deprecated tabs plus enhanced features."
-    }
-
-    ui_layout_recommendations: {
-        responsive_design: "Design tabs to work well in the 300px right sidebar width.",
-        progressive_disclosure: "Use collapsible sections and progressive disclosure for complex information.",
-        consistent_styling: "Maintain consistent styling with the main visualizer component.",
-        keyboard_navigation: "Support keyboard navigation for accessibility.",
-        loading_states: "Show appropriate loading states for async operations (save, test execution).",
-        error_handling: "Display clear error messages and recovery options for failed operations.",
-        professional_appearance: "Use professional code editor styling, proper typography, and clean layouts."
-    }
-}
-
-directive cfv_consumer_directives.CallbackPropHandling {
-    id: "CFV_DIR_CALLBACK_001"
-    title: "Directive for Handling Library Callback Props"
-    target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer"
-    description: "Best practices for implementing and managing props like `requestModule`, `onSaveModule`, `fetchTraceList`, `onRunTestCase` in the consuming application."
-
-    requestModule_implementation: {
-        return_value: "Ensure the Promise resolves to `cfv_models.RequestModuleResult` or `null`. Handle errors gracefully (e.g., network errors) and consider returning `null` or throwing an error that `onModuleLoadError` can catch.",
-        caching: "Consider implementing client-side caching of module content in the host application to avoid redundant requests for the same FQN if appropriate."
-    }
-
-    onSaveModule_implementation: {
-        persistence: "The consuming application is responsible for actually persisting the `newContent` from `cfv_models.SaveModulePayload`. The payload also includes `pathToConfig`, `oldConfigValue`, `newConfigValue` if the save was initiated from the Properties tab for a specific config change, allowing for more granular backend updates if supported.",
-        feedback_to_visualizer: "If the save operation can fail, the Promise should reject or return `false`. The visualizer does not inherently provide UI feedback for save success/failure beyond the Promise resolution; the host app may need to.",
-        optimistic_updates: "For a smoother UX, the host application might optimistically update the `initialModules` prop immediately and then handle potential save failures, or wait for `onSaveModule` to resolve."
-    }
-
-    fetchTraceList_implementation: {
-        return_value: "Ensure the Promise resolves to `cfv_models.HistoricalFlowInstanceSummary[]`."
-    }
-
-    onRunTestCase_implementation: {
-        execution_logic: "The host application is responsible for taking the `cfv_models.FlowTestCase` (including `triggerInput`, `initialContext`, and `componentMocks`), executing the target flow (potentially in a sandboxed environment or against a test runtime by loading the DSL and using a Cascade-compatible engine), and returning a `Promise<cfv_models.TestRunResult>`. The result must include detailed `assertionResults` and optionally a `cfv_models.FlowExecutionTrace` of the test run."
-    }
-
-    parseContextVariables_implementation: {
-        purpose: "Extract context variable names from DSL strings containing template expressions like '{{context.varName}}'.",
-        signature: "Function signature: `(value: string) => string[]`",
-        implementation_guidance: "Parse the input string to identify context variable references and return an array of variable names. Handle various template syntaxes and edge cases gracefully.",
-        example_usage: "Input: 'Hello {{context.userName}}, your balance is {{context.balance}}' should return ['userName', 'balance']."
-    }
-}
+            enhanced_actions_dependency: "Requires `props.actions: cfv_models.UnifiedDebugTestActions`

@@ -26,28 +26,65 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
     }
   };
 
-  return (
-    <div
-      style={{
-        padding: '12px 16px',
+  // Enhanced styling for clean design mode vs execution mode
+  const getNodeStyle = () => {
+    const baseStyle = {
+      padding: '12px 16px',
+      borderRadius: '12px',
+      minWidth: '200px',
+      maxWidth: '320px',
+      transition: 'all 0.2s ease',
+      boxSizing: 'border-box' as const,
+      overflow: 'hidden' as const,
+      display: 'flex' as const,
+      flexDirection: 'column' as const,
+      position: 'relative' as const,
+      cursor: 'pointer' as const // Indicate it's clickable for navigation
+    };
+
+    if (!data.executionStatus) {
+      // Clean design mode - no execution status
+      return {
+        ...baseStyle,
         border: `2px solid ${selected ? '#1976D2' : '#9C27B0'}`,
-        borderRadius: '12px',
         backgroundColor: '#F3E5F5',
-        minWidth: '200px',
-        maxWidth: '320px',
+        color: '#7B1FA2',
         boxShadow: selected 
           ? '0 4px 12px rgba(25, 118, 210, 0.3)' 
-          : '0 2px 8px rgba(156, 39, 176, 0.2)',
-        transition: 'all 0.2s ease',
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative'
-      }}
+          : '0 2px 8px rgba(156, 39, 176, 0.2)'
+      };
+    } else {
+      // Has execution status - show execution styling
+      return {
+        ...baseStyle,
+        border: `2px solid ${selected ? '#1976D2' : getStatusColor()}`,
+        backgroundColor: '#F3E5F5',
+        boxShadow: selected 
+          ? '0 4px 12px rgba(25, 118, 210, 0.3)' 
+          : `0 2px 8px ${getStatusColor()}20`
+      };
+    }
+  };
+
+  return (
+    <div 
+      style={getNodeStyle()}
+      title="Double-click to navigate to invoked flow"
     >
       {/* Left handle for inputs (from previous steps) */}
       <Handle type="target" position={Position.Left} />
+      
+      {/* Navigation indicator */}
+      <div style={{
+        position: 'absolute',
+        top: '4px',
+        right: '4px',
+        fontSize: '12px',
+        color: '#9C27B0',
+        fontWeight: 'bold'
+      }}>
+        ⤴
+      </div>
       
       <div style={{ 
         fontWeight: 'bold', 
@@ -63,7 +100,7 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
       
       <div style={{ 
         fontSize: '11px', 
-        color: '#9C27B0', 
+        color: '#9C27B0',
         marginBottom: '8px',
         textAlign: 'center',
         fontWeight: '500',
@@ -78,7 +115,7 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
       {data.resolvedComponentFqn && (
         <div style={{ 
           fontSize: '10px', 
-          color: '#666', 
+          color: '#666',
           marginBottom: '6px',
           textAlign: 'center',
           wordWrap: 'break-word',

@@ -26,26 +26,47 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
     }
   };
 
-  return (
-    <div
-      style={{
-        padding: '12px 16px',
+  // Enhanced styling for clean design mode vs execution mode
+  const getNodeStyle = () => {
+    const baseStyle = {
+      padding: '12px 16px',
+      borderRadius: '12px',
+      minWidth: '180px',
+      maxWidth: '280px',
+      transition: 'all 0.2s ease',
+      boxSizing: 'border-box' as const,
+      overflow: 'hidden' as const,
+      display: 'flex' as const,
+      flexDirection: 'column' as const,
+      position: 'relative' as const
+    };
+
+    if (!data.executionStatus) {
+      // Clean design mode - no execution status
+      return {
+        ...baseStyle,
         border: `2px solid ${selected ? '#1976D2' : '#E0E0E0'}`,
-        borderRadius: '12px',
         backgroundColor: 'white',
-        minWidth: '180px',
-        maxWidth: '280px',
+        color: '#333',
         boxShadow: selected 
           ? '0 4px 12px rgba(25, 118, 210, 0.3)' 
-          : '0 2px 8px rgba(0,0,0,0.1)',
-        transition: 'all 0.2s ease',
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative'
-      }}
-    >
+          : '0 2px 8px rgba(0,0,0,0.1)'
+      };
+    } else {
+      // Has execution status - show execution styling
+      return {
+        ...baseStyle,
+        border: `2px solid ${selected ? '#1976D2' : getStatusColor()}`,
+        backgroundColor: 'white',
+        boxShadow: selected 
+          ? '0 4px 12px rgba(25, 118, 210, 0.3)' 
+          : `0 2px 8px ${getStatusColor()}20`
+      };
+    }
+  };
+
+  return (
+    <div style={getNodeStyle()}>
       {/* Left handle for inputs (from previous steps) */}
       <Handle type="target" position={Position.Left} />
       
@@ -64,7 +85,7 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
       {data.resolvedComponentFqn && (
         <div style={{ 
           fontSize: '11px', 
-          color: '#666', 
+          color: '#666',
           marginBottom: '6px',
           textAlign: 'center',
           wordWrap: 'break-word',

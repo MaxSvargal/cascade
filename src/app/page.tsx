@@ -20,7 +20,9 @@ import {
   SaveModulePayload,
   FlowTestCase,
   TestRunResult,
-  UnifiedDebugTestActions
+  UnifiedDebugTestActions,
+  AssertionComparisonEnum,
+  ExecutionStatusEnum
 } from '@/models/cfv_models_generated';
 import { generateTestCaseTemplates, createTestCaseFromTemplate } from '@/services/testCaseService';
 import { casinoPlatformModules, casinoPlatformComponentSchemas } from '@/examples/casinoPlatformRefinedExample';
@@ -493,6 +495,13 @@ const InspectorDebugTestTab: React.FC<{
   const [isExecuting, setIsExecuting] = React.useState(false);
   const [dataLineage, setDataLineage] = React.useState<any>(null);
   const [validationResult, setValidationResult] = React.useState<any>(null);
+  
+  // Test interface state
+  const [testCases, setTestCases] = React.useState<FlowTestCase[]>([]);
+  const [selectedTestCase, setSelectedTestCase] = React.useState<FlowTestCase | null>(null);
+  const [testResults, setTestResults] = React.useState<Record<string, TestRunResult>>({});
+  const [isExecutingTest, setIsExecutingTest] = React.useState(false);
+  const [isExecutingAllTests, setIsExecutingAllTests] = React.useState(false);
 
   // Resolve input data and data lineage when selection changes
   React.useEffect(() => {
@@ -706,14 +715,95 @@ const InspectorDebugTestTab: React.FC<{
       return;
     }
 
-    if (!selectedElement) return;
+    if (!selectedElement || !currentFlowFqn) return;
 
     setIsExecuting(true);
     try {
-      const result = await actions.runDebugExecution(selectedElement.id, validation.data, {
-        useMocks: true,
-        timeoutMs: 30000
-      });
+      // Check if this is a trigger node
+      const isTriggerNode = selectedElement.data?.stepId === 'trigger' || 
+                           selectedElement.data?.triggerType ||
+                           selectedElement.id === 'trigger';
+      
+      let result;
+      
+      if (isTriggerNode) {
+        // For trigger execution, run the entire flow from the beginning
+        console.log('🎯 Executing entire flow from trigger with input:', validation.data);
+        const simulationResult = await actions.simulateFlowExecution(
+          currentFlowFqn,
+          undefined, // No target step - run entire flow
+          validation.data,
+          {
+            useMocks: true,
+            timeoutMs: 30000
+          }
+        );
+        
+        // Convert simulation result to execution result format
+        result = {
+          executionId: `flow-exec-${Date.now()}`,
+          status: simulationResult.status === 'COMPLETED' ? 'SUCCESS' : 'FAILURE',
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          durationMs: 2000,
+          logs: [
+            {
+              stepId: 'trigger',
+              timestamp: new Date().toISOString(),
+              level: 'info',
+              message: 'Flow execution completed from trigger',
+              data: { simulationResult }
+            }
+          ],
+          finalOutput: simulationResult.simulatedStepOutputs,
+          trace: {
+            traceId: `flow-trace-${Date.now()}`,
+            flowFqn: currentFlowFqn,
+            status: simulationResult.status,
+            startTime: new Date().toISOString(),
+            endTime: new Date().toISOString(),
+            durationMs: 2000,
+            triggerData: validation.data,
+            steps: [
+              // Add trigger step
+              {
+                stepId: 'trigger',
+                componentFqn: 'trigger',
+                status: 'SUCCESS' as ExecutionStatusEnum,
+                startTime: new Date().toISOString(),
+                endTime: new Date().toISOString(),
+                durationMs: 50,
+                inputData: validation.data,
+                outputData: simulationResult.triggerInputData
+              },
+              // Add executed steps
+              ...Object.entries(simulationResult.resolvedStepInputs).map(([stepId, stepInputData]) => ({
+                stepId,
+                componentFqn: 'unknown',
+                status: 'SUCCESS' as ExecutionStatusEnum,
+                startTime: new Date().toISOString(),
+                endTime: new Date().toISOString(),
+                durationMs: 100,
+                inputData: stepInputData,
+                outputData: simulationResult.simulatedStepOutputs[stepId] || { result: 'completed' }
+              }))
+            ]
+          }
+        };
+        
+        // Update the execution state in the visualizer
+        if (result.trace) {
+          actions.updateExecutionState(currentFlowFqn, result.trace);
+        }
+      } else {
+        // For step execution, run debug execution up to that step
+        console.log('🎯 Executing step:', selectedElement.id, 'with input:', validation.data);
+        result = await actions.runDebugExecution(selectedElement.id, validation.data, {
+          useMocks: true,
+          timeoutMs: 30000
+        });
+      }
+      
       setExecutionResults(result);
     } catch (error) {
       console.error('Execution failed:', error);
@@ -1171,9 +1261,558 @@ const InspectorDebugTestTab: React.FC<{
 
       {activeSection === 'test' && (
         <div>
-          <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-            Test case management functionality coming soon...
+          {/* Test Case Management Section */}
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginBottom: '12px'
+            }}>
+              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>Test Cases</h4>
+              <button
+                onClick={() => {
+                  if (currentFlowFqn) {
+                    const template = actions.generateTestCaseTemplate(currentFlowFqn, 'happyPath');
+                    setTestCases(prev => [...prev, template]);
+                  }
+                }}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                + New Test Case
+              </button>
+            </div>
+
+            {/* Test Cases List */}
+            <div style={{ 
+              backgroundColor: '#f9f9f9',
+              border: '1px solid #e0e0e0',
+              borderRadius: '4px',
+              maxHeight: '200px',
+              overflowY: 'auto'
+            }}>
+              {testCases.length === 0 ? (
+                <div style={{ 
+                  padding: '16px', 
+                  textAlign: 'center', 
+                  color: '#666',
+                  fontSize: '12px'
+                }}>
+                  No test cases created yet. Click "New Test Case" to get started.
+                </div>
+              ) : (
+                testCases.map((testCase, index) => (
+                  <div 
+                    key={testCase.id}
+                    style={{ 
+                      padding: '8px 12px',
+                      borderBottom: index < testCases.length - 1 ? '1px solid #e0e0e0' : 'none',
+                      backgroundColor: selectedTestCase?.id === testCase.id ? '#e3f2fd' : 'transparent',
+                      cursor: 'pointer',
+                      fontSize: '12px'
+                    }}
+                    onClick={() => setSelectedTestCase(testCase)}
+                  >
+                    <div style={{ fontWeight: '500', marginBottom: '2px' }}>
+                      {testCase.description || `Test Case ${index + 1}`}
+                    </div>
+                    <div style={{ color: '#666', fontSize: '11px' }}>
+                      {testCase.assertions.length} assertion(s)
+                      {testResults[testCase.id] && (
+                        <span style={{ 
+                          marginLeft: '8px',
+                          color: testResults[testCase.id].passed ? '#4CAF50' : '#f44336',
+                          fontWeight: '500'
+                        }}>
+                          • {testResults[testCase.id].passed ? 'PASSED' : 'FAILED'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
+
+          {/* Selected Test Case Details */}
+          {selectedTestCase && (
+            <div style={{ marginBottom: '16px' }}>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600' }}>
+                Test Case Details
+              </h4>
+              
+              {/* Test Case Description */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>
+                  Description:
+                </label>
+                <input
+                  type="text"
+                  value={selectedTestCase.description || ''}
+                  onChange={(e) => {
+                    const updated = { ...selectedTestCase, description: e.target.value };
+                    setSelectedTestCase(updated);
+                    setTestCases(prev => prev.map(tc => tc.id === updated.id ? updated : tc));
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '6px 8px',
+                    fontSize: '12px',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '3px'
+                  }}
+                  placeholder="Enter test case description..."
+                />
+              </div>
+
+              {/* Trigger Input */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>
+                  Trigger Input:
+                </label>
+                <textarea
+                  value={JSON.stringify(selectedTestCase.triggerInput, null, 2)}
+                  onChange={(e) => {
+                    try {
+                      const parsed = JSON.parse(e.target.value);
+                      const updated = { ...selectedTestCase, triggerInput: parsed };
+                      setSelectedTestCase(updated);
+                      setTestCases(prev => prev.map(tc => tc.id === updated.id ? updated : tc));
+                    } catch (error) {
+                      // Invalid JSON, don't update
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    height: '80px',
+                    fontFamily: 'monospace',
+                    fontSize: '11px',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '3px',
+                    padding: '6px 8px',
+                    resize: 'vertical'
+                  }}
+                  placeholder="Enter trigger input JSON..."
+                />
+              </div>
+
+              {/* Assertions */}
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '8px'
+                }}>
+                  <label style={{ fontSize: '12px', fontWeight: '500' }}>
+                    Assertions:
+                  </label>
+                  <button
+                    onClick={() => {
+                      const newAssertion = {
+                        id: `assertion-${Date.now()}`,
+                        targetPath: 'status',
+                        expectedValue: 'COMPLETED',
+                        comparison: 'equals' as AssertionComparisonEnum
+                      };
+                      const updated = { 
+                        ...selectedTestCase, 
+                        assertions: [...selectedTestCase.assertions, newAssertion] 
+                      };
+                      setSelectedTestCase(updated);
+                      setTestCases(prev => prev.map(tc => tc.id === updated.id ? updated : tc));
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: '11px',
+                      backgroundColor: '#2196F3',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '3px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    + Add Assertion
+                  </button>
+                </div>
+
+                <div style={{ 
+                  backgroundColor: '#f9f9f9',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '4px',
+                  padding: '8px'
+                }}>
+                  {selectedTestCase.assertions.length === 0 ? (
+                    <div style={{ 
+                      textAlign: 'center', 
+                      color: '#666',
+                      fontSize: '11px',
+                      padding: '8px'
+                    }}>
+                      No assertions defined. Click "Add Assertion" to create one.
+                    </div>
+                  ) : (
+                    selectedTestCase.assertions.map((assertion, index) => (
+                      <div 
+                        key={assertion.id}
+                        style={{ 
+                          backgroundColor: 'white',
+                          border: '1px solid #e0e0e0',
+                          borderRadius: '3px',
+                          padding: '8px',
+                          marginBottom: index < selectedTestCase.assertions.length - 1 ? '8px' : '0',
+                          fontSize: '11px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
+                          <input
+                            type="text"
+                            value={assertion.targetPath}
+                            onChange={(e) => {
+                              const updatedAssertions = selectedTestCase.assertions.map(a => 
+                                a.id === assertion.id ? { ...a, targetPath: e.target.value } : a
+                              );
+                              const updated = { ...selectedTestCase, assertions: updatedAssertions };
+                              setSelectedTestCase(updated);
+                              setTestCases(prev => prev.map(tc => tc.id === updated.id ? updated : tc));
+                            }}
+                            placeholder="Target path (e.g., status, durationMs)"
+                            style={{
+                              flex: 1,
+                              padding: '4px 6px',
+                              fontSize: '11px',
+                              border: '1px solid #ddd',
+                              borderRadius: '2px'
+                            }}
+                          />
+                          <select
+                            value={assertion.comparison}
+                            onChange={(e) => {
+                              const updatedAssertions = selectedTestCase.assertions.map(a => 
+                                a.id === assertion.id ? { ...a, comparison: e.target.value as AssertionComparisonEnum } : a
+                              );
+                              const updated = { ...selectedTestCase, assertions: updatedAssertions };
+                              setSelectedTestCase(updated);
+                              setTestCases(prev => prev.map(tc => tc.id === updated.id ? updated : tc));
+                            }}
+                            style={{
+                              padding: '4px 6px',
+                              fontSize: '11px',
+                              border: '1px solid #ddd',
+                              borderRadius: '2px'
+                            }}
+                          >
+                            <option value="equals">equals</option>
+                            <option value="contains">contains</option>
+                            <option value="isGreaterThan">greater than</option>
+                            <option value="isLessThan">less than</option>
+                            <option value="isDefined">exists</option>
+                          </select>
+                          <button
+                            onClick={() => {
+                              const updatedAssertions = selectedTestCase.assertions.filter(a => a.id !== assertion.id);
+                              const updated = { ...selectedTestCase, assertions: updatedAssertions };
+                              setSelectedTestCase(updated);
+                              setTestCases(prev => prev.map(tc => tc.id === updated.id ? updated : tc));
+                            }}
+                            style={{
+                              padding: '4px 6px',
+                              fontSize: '11px',
+                              backgroundColor: '#f44336',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '2px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={typeof assertion.expectedValue === 'string' ? assertion.expectedValue : JSON.stringify(assertion.expectedValue)}
+                          onChange={(e) => {
+                            let expectedValue = e.target.value;
+                            try {
+                              expectedValue = JSON.parse(e.target.value);
+                            } catch {
+                              // Keep as string if not valid JSON
+                            }
+                            const updatedAssertions = selectedTestCase.assertions.map(a => 
+                              a.id === assertion.id ? { ...a, expectedValue } : a
+                            );
+                            const updated = { ...selectedTestCase, assertions: updatedAssertions };
+                            setSelectedTestCase(updated);
+                            setTestCases(prev => prev.map(tc => tc.id === updated.id ? updated : tc));
+                          }}
+                          placeholder="Expected value"
+                          style={{
+                            width: '100%',
+                            padding: '4px 6px',
+                            fontSize: '11px',
+                            border: '1px solid #ddd',
+                            borderRadius: '2px'
+                          }}
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Test Execution Controls */}
+              <div style={{ marginBottom: '16px' }}>
+                <button
+                  onClick={async () => {
+                    if (!selectedTestCase) return;
+                    
+                    setIsExecutingTest(true);
+                    try {
+                      const result = await actions.runTestCase(selectedTestCase);
+                      if (result) {
+                        setTestResults(prev => ({
+                          ...prev,
+                          [selectedTestCase.id]: result
+                        }));
+                      }
+                    } catch (error) {
+                      console.error('Test execution failed:', error);
+                      setTestResults(prev => ({
+                        ...prev,
+                        [selectedTestCase.id]: {
+                          testCase: selectedTestCase,
+                          passed: false,
+                          assertionResults: [],
+                          error: error instanceof Error ? error.message : 'Test execution failed'
+                        }
+                      }));
+                    } finally {
+                      setIsExecutingTest(false);
+                    }
+                  }}
+                  disabled={isExecutingTest}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    backgroundColor: isExecutingTest ? '#ccc' : '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: isExecutingTest ? 'not-allowed' : 'pointer',
+                    fontSize: '13px',
+                    fontWeight: '600'
+                  }}
+                >
+                  {isExecutingTest ? 'Running Test...' : 'Run Test Case'}
+                </button>
+              </div>
+
+              {/* Test Results */}
+              {testResults[selectedTestCase.id] && (
+                <div style={{ marginBottom: '16px' }}>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600' }}>
+                    Test Results
+                  </h4>
+                  
+                  <div style={{ 
+                    backgroundColor: '#f9f9f9',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '4px',
+                    padding: '12px',
+                    fontSize: '12px'
+                  }}>
+                    {(() => {
+                      const result = testResults[selectedTestCase.id];
+                      return (
+                        <div>
+                          <div style={{ 
+                            marginBottom: '12px',
+                            padding: '8px',
+                            backgroundColor: result.passed ? '#e8f5e8' : '#ffebee',
+                            borderRadius: '4px',
+                            border: `1px solid ${result.passed ? '#4CAF50' : '#f44336'}`
+                          }}>
+                            <div style={{ 
+                              fontWeight: '600',
+                              color: result.passed ? '#2e7d32' : '#c62828',
+                              marginBottom: '4px'
+                            }}>
+                              {result.passed ? '✓ TEST PASSED' : '✗ TEST FAILED'}
+                            </div>
+                            {result.error && (
+                              <div style={{ color: '#c62828', fontSize: '11px' }}>
+                                Error: {result.error}
+                              </div>
+                            )}
+                          </div>
+
+                          {result.assertionResults.length > 0 && (
+                            <div>
+                              <div style={{ fontWeight: '500', marginBottom: '8px' }}>
+                                Assertion Results:
+                              </div>
+                              {result.assertionResults.map((assertionResult, index) => (
+                                <div 
+                                  key={index}
+                                  style={{ 
+                                    backgroundColor: 'white',
+                                    border: `1px solid ${assertionResult.passed ? '#4CAF50' : '#f44336'}`,
+                                    borderRadius: '3px',
+                                    padding: '8px',
+                                    marginBottom: '6px',
+                                    fontSize: '11px'
+                                  }}
+                                >
+                                  <div style={{ 
+                                    fontWeight: '500',
+                                    color: assertionResult.passed ? '#2e7d32' : '#c62828',
+                                    marginBottom: '4px'
+                                  }}>
+                                    {assertionResult.passed ? '✓' : '✗'} {assertionResult.targetPath}
+                                  </div>
+                                  <div style={{ color: '#666' }}>
+                                    Expected: {JSON.stringify(assertionResult.expectedValue)}
+                                  </div>
+                                  {assertionResult.actualValue !== undefined && (
+                                    <div style={{ color: '#666' }}>
+                                      Actual: {JSON.stringify(assertionResult.actualValue)}
+                                    </div>
+                                  )}
+                                  {assertionResult.message && (
+                                    <div style={{ color: '#666', fontStyle: 'italic' }}>
+                                      {assertionResult.message}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {result.trace && (
+                            <div style={{ marginTop: '12px' }}>
+                              <div style={{ fontWeight: '500', marginBottom: '6px' }}>
+                                Execution Trace:
+                              </div>
+                              <div style={{ 
+                                backgroundColor: 'white',
+                                border: '1px solid #e0e0e0',
+                                borderRadius: '3px',
+                                padding: '8px',
+                                fontSize: '11px'
+                              }}>
+                                <div>Status: {result.trace.status}</div>
+                                {result.trace.durationMs && (
+                                  <div>Duration: {result.trace.durationMs}ms</div>
+                                )}
+                                <div>Steps: {result.trace.steps.length}</div>
+                                <div>
+                                  Successful: {result.trace.steps.filter(s => s.status === 'SUCCESS').length}
+                                </div>
+                                <div>
+                                  Failed: {result.trace.steps.filter(s => s.status === 'FAILURE').length}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Bulk Test Operations */}
+          {testCases.length > 0 && (
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ 
+                display: 'flex', 
+                gap: '8px',
+                justifyContent: 'space-between'
+              }}>
+                <button
+                  onClick={async () => {
+                    setIsExecutingAllTests(true);
+                    try {
+                      for (const testCase of testCases) {
+                        const result = await actions.runTestCase(testCase);
+                        if (result) {
+                          setTestResults(prev => ({
+                            ...prev,
+                            [testCase.id]: result
+                          }));
+                        }
+                      }
+                    } catch (error) {
+                      console.error('Bulk test execution failed:', error);
+                    } finally {
+                      setIsExecutingAllTests(false);
+                    }
+                  }}
+                  disabled={isExecutingAllTests}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    backgroundColor: isExecutingAllTests ? '#ccc' : '#FF9800',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: isExecutingAllTests ? 'not-allowed' : 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}
+                >
+                  {isExecutingAllTests ? 'Running All...' : 'Run All Tests'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setTestCases([]);
+                    setSelectedTestCase(null);
+                    setTestResults({});
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    backgroundColor: '#f44336',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}
+                >
+                  Clear All
+                </button>
+              </div>
+
+              {/* Test Summary */}
+              <div style={{ 
+                marginTop: '12px',
+                padding: '8px',
+                backgroundColor: '#f0f0f0',
+                borderRadius: '4px',
+                fontSize: '12px'
+              }}>
+                <div style={{ fontWeight: '500', marginBottom: '4px' }}>Test Summary:</div>
+                <div>
+                  Total: {testCases.length} | 
+                  Passed: {Object.values(testResults).filter(r => r.passed).length} | 
+                  Failed: {Object.values(testResults).filter(r => !r.passed).length} | 
+                  Not Run: {testCases.length - Object.keys(testResults).length}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1272,8 +1911,7 @@ export default function HomePage() {
         <CascadeFlowVisualizer
           initialModules={sampleModules}
           componentSchemas={sampleComponentSchemas}
-          mode="trace"
-          traceData={sampleTraceData}
+          mode="design"
           designData={{
             initialFlowFqn: 'com.casino.core.UserOnboardingFlow',
             initialViewMode: 'flowDetail'

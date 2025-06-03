@@ -127,11 +127,63 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   const [isGeneratingGraph, setIsGeneratingGraph] = React.useState(false);
   const [expandedModules, setExpandedModules] = React.useState<Set<string>>(new Set());
   const [activeInspectorTab, setActiveInspectorTab] = useAtom(activeInspectorTabAtom);
+  
+  // Execution state management
+  const [currentExecutionResults, setCurrentExecutionResults] = React.useState<any>(null);
 
-  // Sidebar width state - start with defaults to avoid hydration mismatch
+  // UI customization options with defaults
+  const uiOptions = React.useMemo(() => ({
+    sidebarOptions: {
+      defaultLeftWidth: 300,
+      defaultRightWidth: 300,
+      minWidth: 20,
+      maxWidth: 900,
+      resizable: true,
+      collapsible: false,
+      ...props.uiOptions?.sidebarOptions
+    },
+    colorTheme: {
+      primaryColor: '#1976D2',
+      secondaryColor: '#4CAF50',
+      backgroundColor: '#f5f5f5',
+      sidebarBackgroundColor: '#fafafa',
+      nodeColors: {
+        successColor: '#4CAF50',
+        failureColor: '#F44336',
+        runningColor: '#FF9800',
+        skippedColor: '#9E9E9E',
+        notExecutedColor: '#E0E0E0',
+        stepNodeColor: '#2196F3',
+        triggerNodeColor: '#4CAF50',
+        subFlowInvokerColor: '#9C27B0',
+        ...props.uiOptions?.colorTheme?.nodeColors
+      },
+      edgeColors: {
+        dataFlowColor: '#81C784',
+        controlFlowColor: '#666',
+        invocationEdgeColor: '#FF9800',
+        triggerLinkEdgeColor: '#4CAF50',
+        executedPathColor: '#4CAF50',
+        notExecutedPathColor: '#ccc',
+        ...props.uiOptions?.colorTheme?.edgeColors
+      },
+      ...props.uiOptions?.colorTheme
+    },
+    interactionOptions: {
+      enableDoubleClickNavigation: true,
+      enableHoverEffects: true,
+      multiSelectEnabled: false,
+      enableAnimations: true,
+      animationDuration: 200,
+      ...props.uiOptions?.interactionOptions
+    },
+    ...props.uiOptions
+  }), [props.uiOptions]);
+
+  // Sidebar width state - use UI options for defaults
   const [sidebarWidths, setSidebarWidthsState] = React.useState({
-    leftWidth: DEFAULT_LEFT_SIDEBAR_WIDTH,
-    rightWidth: DEFAULT_RIGHT_SIDEBAR_WIDTH
+    leftWidth: uiOptions.sidebarOptions.defaultLeftWidth || DEFAULT_LEFT_SIDEBAR_WIDTH,
+    rightWidth: uiOptions.sidebarOptions.defaultRightWidth || DEFAULT_RIGHT_SIDEBAR_WIDTH
   });
   const [isResizing, setIsResizing] = React.useState<'left' | 'right' | null>(null);
   const resizeStartX = useRef<number>(0);
@@ -242,12 +294,27 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
       };
     } : undefined;
 
+    // Callback to update execution state in the visualizer
+    const updateExecutionStateCallback = (flowFqn: string, executionResults: any) => {
+      console.log('🔄 Updating execution state for flow:', flowFqn, executionResults);
+      setCurrentExecutionResults(executionResults);
+    };
+
     return new DebugTestActionsService(
       moduleRegistry,
       componentSchemas,
-      wrappedOnRunTestCase
+      wrappedOnRunTestCase,
+      updateExecutionStateCallback,
+      currentFlowFqn || undefined
     );
-  }, [moduleRegistry, componentSchemas, props.onRunTestCase]);
+  }, [moduleRegistry, componentSchemas, props.onRunTestCase, currentFlowFqn]);
+
+  // Update debug actions service when flow changes
+  React.useEffect(() => {
+    if (debugTestActionsService && 'setCurrentFlowFqn' in debugTestActionsService) {
+      (debugTestActionsService as any).setCurrentFlowFqn(currentFlowFqn || undefined);
+    }
+  }, [debugTestActionsService, currentFlowFqn]);
 
   // Inspector actions
   const inspectorActions = useMemo(() => {
@@ -298,13 +365,16 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         } else if (currentFlowFqn) {
           const flowDef = moduleRegistry.getFlowDefinition(currentFlowFqn);
           
+          // Use currentExecutionResults as trace data if available, otherwise use props.traceData
+          const traceDataToUse = currentExecutionResults || props.traceData;
+          
           graphData = await generateFlowDetailGraphData({
             flowFqn: currentFlowFqn,
             mode: props.mode || 'design',
             moduleRegistry,
             parseContextVarsFn: parseContextVars,
             componentSchemas,
-            traceData: props.traceData
+            traceData: traceDataToUse
           });
         } else {
           console.log('🔍 Debug: No flow selected and not in system view');
@@ -322,7 +392,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
     };
 
     generateGraphData();
-  }, [currentFlowFqn, systemViewActive, dslModuleRepresentations, componentSchemas, props.mode, props.traceData]);
+  }, [currentFlowFqn, systemViewActive, dslModuleRepresentations, componentSchemas, props.mode, props.traceData, currentExecutionResults]);
 
   // Initialize from design data
   useEffect(() => {
@@ -391,6 +461,54 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
     setSelectedElement(newSelectedElement);
   }, [currentFlowFqn, setSelectedElement]);
 
+  // Node double-click handler for SubFlowInvoker navigation
+  const handleNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
+    // Only handle double-click navigation if enabled
+    if (!uiOptions.interactionOptions.enableDoubleClickNavigation) {
+      return;
+    }
+
+    // Handle SubFlowInvoker navigation
+    if (node.type === 'subFlowInvokerNode' && node.data?.invokedFlowFqn) {
+      const targetFlowFqn = node.data.invokedFlowFqn;
+      
+      // Check if target flow is already loaded
+      const targetModule = Object.values(dslModuleRepresentations).find(module => 
+        module.definitions?.flows?.some((flow: any) => 
+          `${module.fqn}.${flow.name}` === targetFlowFqn
+        )
+      );
+
+      if (targetModule) {
+        // Navigate to the target flow
+        navigateToFlow(targetFlowFqn);
+      } else {
+        // Try to load the target module
+        const moduleFqn = targetFlowFqn.split('.').slice(0, -1).join('.');
+        if (props.requestModule) {
+          props.requestModule(moduleFqn)
+            .then((result) => {
+              if (result) {
+                // Module loaded successfully, navigate to flow
+                setTimeout(() => navigateToFlow(targetFlowFqn), 100);
+              } else {
+                console.warn(`Failed to load module for flow: ${targetFlowFqn}`);
+                // Could show user notification here
+              }
+            })
+            .catch((error) => {
+              console.error(`Error loading module for flow ${targetFlowFqn}:`, error);
+              if (props.onModuleLoadError) {
+                props.onModuleLoadError(moduleFqn, error);
+              }
+            });
+        } else {
+          console.warn(`Cannot navigate to ${targetFlowFqn}: requestModule not provided`);
+        }
+      }
+    }
+  }, [uiOptions.interactionOptions.enableDoubleClickNavigation, dslModuleRepresentations, navigateToFlow, props.requestModule, props.onModuleLoadError]);
+
   // Flow navigation handler
   const handleFlowNavigation = useCallback((flowFqn: string) => {
     navigateToFlow(flowFqn);
@@ -446,20 +564,20 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   }, [dslModuleRepresentations]);
 
   return (
-    <div className={props.className} style={props.style}>
-      <div style={{ display: 'flex', height: '100vh', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ 
+      height: '100vh', 
+      display: 'flex', 
+      backgroundColor: uiOptions.colorTheme.backgroundColor,
+      ...props.style 
+    }} className={props.className}>
+      <ReactFlowProvider>
         {/* Left Sidebar */}
         <div style={{ 
           width: `${sidebarWidths.leftWidth}px`, 
-          borderRight: '1px solid #e0e0e0', 
-          padding: '16px',
-          backgroundColor: '#fafafa',
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          position: 'relative',
-          minWidth: `${MIN_SIDEBAR_WIDTH}px`,
-          maxWidth: `${MAX_SIDEBAR_WIDTH}px`,
-          wordWrap: 'break-word'
+          backgroundColor: uiOptions.colorTheme.sidebarBackgroundColor,
+          borderRight: '1px solid #e0e0e0',
+          overflow: 'auto',
+          position: 'relative'
         }}>
           <div style={{ marginBottom: '16px' }}>
             <button 
@@ -620,7 +738,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
           />
         </div>
 
-        {/* Main Canvas */}
+        {/* Main Content */}
         <div style={{ flex: 1, position: 'relative' }}>
           {/* Header */}
           <div style={{ 
@@ -639,39 +757,33 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
           
           {/* React Flow Canvas */}
           <div style={{ height: 'calc(100vh - 50px)' }}>
-            <ReactFlowProvider>
-              <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onConnect={onConnect}
-                onNodeClick={handleNodeClick}
-                nodeTypes={props.customNodeTypes}
-                edgeTypes={props.customEdgeTypes}
-                fitView
-                {...props.customReactFlowProOptions}
-              >
-                <Controls />
-                <Background />
-                <MiniMap />
-              </ReactFlow>
-            </ReactFlowProvider>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onNodeClick={handleNodeClick}
+              onNodeDoubleClick={handleNodeDoubleClick}
+              nodeTypes={props.customNodeTypes}
+              edgeTypes={props.customEdgeTypes}
+              fitView
+              {...props.customReactFlowProOptions}
+            >
+              <Controls />
+              <Background />
+              <MiniMap />
+            </ReactFlow>
           </div>
         </div>
 
         {/* Right Sidebar */}
         <div style={{ 
           width: `${sidebarWidths.rightWidth}px`, 
-          borderLeft: '1px solid #e0e0e0', 
-          padding: '16px',
-          backgroundColor: '#fafafa',
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          position: 'relative',
-          minWidth: `${MIN_SIDEBAR_WIDTH}px`,
-          maxWidth: `${MAX_SIDEBAR_WIDTH}px`,
-          wordWrap: 'break-word'
+          backgroundColor: uiOptions.colorTheme.sidebarBackgroundColor,
+          borderLeft: '1px solid #e0e0e0',
+          overflow: 'auto',
+          position: 'relative'
         }}>
           {/* Right Resize Handle */}
           <div
@@ -800,7 +912,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                       }}>
                         {props.renderInspectorDebugTestTab({
                           currentFlowFqn: currentFlowFqn || '',
-                          selectedElement,
+                          selectedElement: selectedElement || undefined,
                           actions: debugTestActionsService,
                           moduleRegistry
                         })}
@@ -957,7 +1069,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
             </div>
           )}
         </div>
-      </div>
+      </ReactFlowProvider>
     </div>
   );
 };

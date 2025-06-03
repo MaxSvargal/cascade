@@ -33,8 +33,8 @@ const FlowEdge: React.FC<EdgeProps<FlowEdgeData>> = ({
     if (data?.type === 'dataFlow') {
       return {
         ...baseStyle,
-        stroke: data.isExecutedPath ? '#4CAF50' : '#2196F3',
-        strokeDasharray: '5,5'
+        stroke: data.isExecutedPath ? '#4CAF50' : '#81C784',
+        strokeDasharray: 'none'
       };
     } else {
       return {
@@ -45,21 +45,12 @@ const FlowEdge: React.FC<EdgeProps<FlowEdgeData>> = ({
   };
 
   return (
-    <>
-      <path
-        id={id}
-        style={getEdgeStyle()}
-        className="react-flow__edge-path"
-        d={edgePath}
-      />
-      {data?.type === 'dataFlow' && (
-        <text>
-          <textPath href={`#${id}`} style={{ fontSize: '10px', fill: '#666' }} startOffset="50%" textAnchor="middle">
-            data
-          </textPath>
-        </text>
-      )}
-    </>
+    <path
+      id={id}
+      style={getEdgeStyle()}
+      className="react-flow__edge-path"
+      d={edgePath}
+    />
   );
 };
 

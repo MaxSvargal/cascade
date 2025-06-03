@@ -49,6 +49,8 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
 
   // Generate trigger node
   if (flowDefinition.trigger) {
+    const triggerTrace = traceData?.steps.find(t => t.stepId === 'trigger');
+    
     const triggerNodeData: TriggerEntryPointNodeData = {
       label: `Trigger: ${flowDefinition.trigger.type}`,
       triggerType: flowDefinition.trigger.type,
@@ -56,7 +58,14 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
       resolvedComponentFqn: flowDefinition.trigger.type,
       componentSchema: componentSchemas[flowDefinition.trigger.type] || undefined,
       isNamedComponent: false,
-      contextVarUsages: parseContextVarsFn(JSON.stringify(flowDefinition.trigger))
+      contextVarUsages: parseContextVarsFn(JSON.stringify(flowDefinition.trigger)),
+      // CRITICAL: Only populate execution fields when trace data is available
+      ...(triggerTrace && {
+        executionStatus: triggerTrace.status,
+        executionDurationMs: triggerTrace.durationMs,
+        executionInputData: triggerTrace.inputData,
+        executionOutputData: triggerTrace.outputData
+      })
     };
 
     nodes.push({
@@ -86,10 +95,14 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
         componentSchema: componentInfo ? moduleRegistry.getComponentSchema(componentInfo.baseType) || undefined : undefined,
         isNamedComponent: componentInfo?.isNamedComponent || false,
         contextVarUsages: parseContextVarsFn(JSON.stringify(step)),
-        executionStatus: stepTrace?.status,
-        executionDurationMs: stepTrace?.durationMs,
-        executionInputData: stepTrace?.inputData,
-        executionOutputData: stepTrace?.outputData
+        // CRITICAL: Only populate execution fields when trace data is available
+        // This ensures nodes start clean in design mode without "Not Executed" status
+        ...(stepTrace && {
+          executionStatus: stepTrace.status,
+          executionDurationMs: stepTrace.durationMs,
+          executionInputData: stepTrace.inputData,
+          executionOutputData: stepTrace.outputData
+        })
       };
 
       // Check if this is a SubFlowInvoker

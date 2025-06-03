@@ -81,6 +81,9 @@ export interface UnifiedDebugTestActions {
   generateSchemaBasedInput: (componentSchema: ComponentSchema, scenarioType: 'happyPath' | 'empty' | 'fullOptional') => any;
   /** Validates provided data against a JSON schema. Signature: (data: any, schema: JsonSchemaObject) => ValidationResult */
   validateDataAgainstSchema: (data: any, schema: JsonSchemaObject) => ValidationResult;
+  // Execution State Management
+  /** Update the visualizer with execution results to show node states. Signature: (flowFqn: string, executionResults: FlowSimulationResult | FlowExecutionTrace) => void */
+  updateExecutionState: (flowFqn: string, executionResults: FlowSimulationResult | FlowExecutionTrace) => void;
   /** Resolve trigger input data based on trigger configuration and schema. Signature: (triggerConfig: any, triggerSchema?: ComponentSchema, dataType?: 'happy_path' | 'fork_paths' | 'error_cases') => any */
   resolveTriggerInputData: (triggerConfig: any, triggerSchema?: ComponentSchema, dataType?: 'happy_path' | 'fork_paths' | 'error_cases') => any;
   /** Propagate data flow from trigger to target step. Signature: (flowFqn: string, triggerData: any) => Promise<Record<string, any>> */
@@ -229,11 +232,15 @@ export interface BaseNodeData {
   /** Error info if this element has a validation/resolution error. */
   error?: NodeError;
   // Fields for trace/debug mode, populated by GraphBuilderService from traceData or simulation results
+  // CRITICAL: These fields should ONLY be populated when trace data is available or after debug/test execution
+  // In design mode without trace data, these fields should be undefined/null to show clean nodes
+  /** Only populated when trace data is available or after execution. */
   executionStatus?: ExecutionStatusEnum;
+  /** Only populated when trace data is available or after execution. */
   executionDurationMs?: number;
-  /** Actual input data passed during execution/simulation. */
+  /** Actual input data passed during execution/simulation. Only populated when trace data is available. */
   executionInputData?: any;
-  /** Actual output data from execution/simulation. */
+  /** Actual output data from execution/simulation. Only populated when trace data is available. */
   executionOutputData?: any;
 }
 
@@ -697,6 +704,134 @@ export interface CascadeFlowVisualizerProps {
   // Styling & Dimensions
   className?: string;
   style?: React.CSSProperties;
+  
+  // UI Customization Options (New)
+  /** Customization options for UI appearance and behavior. */
+  uiOptions?: UICustomizationOptions;
+}
+
+export interface UICustomizationOptions {
+  /** Configuration options for sidebar appearance and behavior. */
+  sidebarOptions?: SidebarOptions;
+  /** Color theme configuration for the visualizer. */
+  colorTheme?: ColorTheme;
+  /** Styling options for nodes. */
+  nodeStyleOptions?: NodeStyleOptions;
+  /** Styling options for edges. */
+  edgeStyleOptions?: EdgeStyleOptions;
+  /** Configuration for user interaction behavior. */
+  interactionOptions?: InteractionOptions;
+}
+
+export interface SidebarOptions {
+  /** Default width of left sidebar in pixels. */
+  defaultLeftWidth?: number;
+  /** Default width of right sidebar in pixels. */
+  defaultRightWidth?: number;
+  /** Minimum sidebar width in pixels. */
+  minWidth?: number;
+  /** Maximum sidebar width in pixels. */
+  maxWidth?: number;
+  /** Whether sidebars can be resized. */
+  resizable?: boolean;
+  /** Whether sidebars can be collapsed. */
+  collapsible?: boolean;
+}
+
+export interface ColorTheme {
+  /** Primary accent color. */
+  primaryColor?: string;
+  /** Secondary accent color. */
+  secondaryColor?: string;
+  /** Color configuration for different node types and states. */
+  nodeColors?: NodeColors;
+  /** Color configuration for different edge types and states. */
+  edgeColors?: EdgeColors;
+  /** Main background color. */
+  backgroundColor?: string;
+  /** Sidebar background color. */
+  sidebarBackgroundColor?: string;
+}
+
+export interface NodeColors {
+  /** Color for successful execution. */
+  successColor?: string;
+  /** Color for failed execution. */
+  failureColor?: string;
+  /** Color for running execution. */
+  runningColor?: string;
+  /** Color for skipped execution. */
+  skippedColor?: string;
+  /** Color for not executed nodes. */
+  notExecutedColor?: string;
+  /** Default color for step nodes. */
+  stepNodeColor?: string;
+  /** Default color for trigger nodes. */
+  triggerNodeColor?: string;
+  /** Default color for sub-flow invoker nodes. */
+  subFlowInvokerColor?: string;
+}
+
+export interface EdgeColors {
+  /** Color for data flow edges (pastel green). */
+  dataFlowColor?: string;
+  /** Color for control flow edges. */
+  controlFlowColor?: string;
+  /** Color for invocation edges. */
+  invocationEdgeColor?: string;
+  /** Color for trigger link edges. */
+  triggerLinkEdgeColor?: string;
+  /** Color for executed paths. */
+  executedPathColor?: string;
+  /** Color for not executed paths. */
+  notExecutedPathColor?: string;
+}
+
+export interface NodeStyleOptions {
+  /** Default border width in pixels. */
+  defaultBorderWidth?: number;
+  /** Border width for selected nodes. */
+  selectedBorderWidth?: number;
+  /** Border width for not executed nodes. */
+  notExecutedBorderWidth?: number;
+  /** Default border style. */
+  defaultBorderStyle?: string;
+  /** Border style for not executed nodes. */
+  notExecutedBorderStyle?: string;
+  /** Opacity for not executed nodes. */
+  notExecutedOpacity?: number;
+  /** Whether to show node shadows. */
+  enableShadows?: boolean;
+  /** Shadow color for nodes. */
+  shadowColor?: string;
+}
+
+export interface EdgeStyleOptions {
+  /** Default edge stroke width. */
+  defaultStrokeWidth?: number;
+  /** Stroke width for selected edges. */
+  selectedStrokeWidth?: number;
+  /** Whether to use dashed lines for data flow edges. */
+  useDashedLines?: boolean;
+  /** Dash pattern for dashed edges. */
+  dashPattern?: string;
+  /** Whether to show labels on edges. */
+  showEdgeLabels?: boolean;
+  /** Font size for edge labels. */
+  edgeLabelFontSize?: number;
+}
+
+export interface InteractionOptions {
+  /** Enable double-click navigation for SubFlowInvoker nodes. */
+  enableDoubleClickNavigation?: boolean;
+  /** Enable hover effects on nodes and edges. */
+  enableHoverEffects?: boolean;
+  /** Enable multi-selection of nodes. */
+  multiSelectEnabled?: boolean;
+  /** Enable animations for state changes. */
+  enableAnimations?: boolean;
+  /** Animation duration in milliseconds. */
+  animationDuration?: number;
 }
 
 // --- Interaction Message Models ---
