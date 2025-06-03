@@ -125,6 +125,8 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         if (systemViewActive) {
           graphData = await generateSystemOverviewGraphData(moduleRegistry, parseContextVars, true, handleFlowNavigation);
         } else if (currentFlowFqn) {
+          const flowDef = moduleRegistry.getFlowDefinition(currentFlowFqn);
+          
           graphData = await generateFlowDetailGraphData({
             flowFqn: currentFlowFqn,
             mode: props.mode || 'design',
@@ -133,6 +135,8 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
             componentSchemas,
             traceData: props.traceData
           });
+        } else {
+          console.log('🔍 Debug: No flow selected and not in system view');
         }
 
         setNodes(graphData.nodes);
@@ -808,10 +812,11 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         
         return {
           stepId,
-          resolvedInputData: finalInputData,
-          inputSources: [], // Will be populated by simulation
-          availableContext: contextState,
-          inputSchema: undefined // Will be resolved from component schema
+          flowFqn,
+          componentFqn: 'unknown',
+          actualInputData: finalInputData,
+          dslConfig: {},
+          availableContext: contextState
         };
       } catch (error) {
         console.error('Flow simulation failed, falling back to mock data:', error);
@@ -837,15 +842,16 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         
         return {
           stepId,
-          resolvedInputData,
-          inputSources: [],
-          availableContext: {},
-          inputSchema: undefined
+          flowFqn,
+          componentFqn: 'unknown',
+          actualInputData: resolvedInputData,
+          dslConfig: {},
+          availableContext: {}
         };
       }
     },
 
-    simulateFlowExecution: async (flowFqn: string, targetStepId: string, triggerData?: any) => {
+    simulateFlowExecution: async (flowFqn: string, targetStepId?: string, triggerInputData?: any, options?: any) => {
       console.log('Simulating flow execution for:', flowFqn, 'up to step:', targetStepId);
       
       // Get flow definition
@@ -855,11 +861,11 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
       }
       
       // Generate trigger data if not provided
-      if (!triggerData) {
+      if (!triggerInputData) {
         if (flowDef.trigger) {
-          triggerData = generateTriggerData(flowDef.trigger);
+          triggerInputData = generateTriggerData(flowDef.trigger);
         } else {
-          triggerData = { timestamp: new Date().toISOString(), data: {} };
+          triggerInputData = { timestamp: new Date().toISOString(), data: {} };
         }
       }
       
@@ -867,23 +873,26 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
       const stepResults: Record<string, any> = {};
       const contextState = { ...(flowDef.context || {}) };
       const executionOrder: string[] = [];
-      const errors: string[] = [];
+      const errors: any[] = [];
       
       // Find target step index
       let targetStepIndex = -1;
-      if (flowDef.steps) {
+      if (targetStepId && flowDef.steps) {
         targetStepIndex = flowDef.steps.findIndex((s: any) => s.step_id === targetStepId);
-        if (targetStepIndex === -1 && targetStepId !== 'trigger') {
+        if (targetStepIndex === -1) {
           throw new Error(`Target step not found: ${targetStepId}`);
         }
+      } else if (!targetStepId && flowDef.steps) {
+        // If no target step specified, simulate entire flow
+        targetStepIndex = flowDef.steps.length - 1;
       }
       
       // Simulate trigger execution
       const triggerResult = {
         stepId: 'trigger',
         componentFqn: flowDef.trigger?.type || 'trigger',
-        inputData: triggerData,
-        outputData: triggerData,
+        inputData: triggerInputData,
+        outputData: triggerInputData,
         contextChanges: {},
         executionOrder: 0,
         simulationSuccess: true
@@ -899,7 +908,12 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
             const stepResult = simulateStepExecution(step, stepResults, contextState, flowFqn);
             
             if (!stepResult.simulationSuccess) {
-              errors.push(stepResult.error || 'Step simulation failed');
+              errors.push({
+                errorType: 'SimulationError',
+                message: stepResult.error || 'Step simulation failed',
+                stepId: step.step_id,
+                timestamp: new Date().toISOString()
+              });
               break;
             }
             
@@ -910,29 +924,34 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
             Object.assign(contextState, stepResult.contextChanges);
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-            errors.push(`Step ${step.step_id}: ${errorMsg}`);
+            errors.push({
+              errorType: 'ExecutionError',
+              message: `Step ${step.step_id}: ${errorMsg}`,
+              stepId: step.step_id,
+              timestamp: new Date().toISOString()
+            });
             break;
           }
         }
       }
       
-      // Resolve final input data for target step
-      let finalInputData = {};
-      if (targetStepId === 'trigger') {
-        finalInputData = triggerData;
-      } else if (flowDef.steps && targetStepIndex >= 0) {
-        const targetStep = flowDef.steps[targetStepIndex];
-        finalInputData = resolveStepInputFromSimulation(targetStep, stepResults, contextState);
-      }
+      // Build resolved step inputs and simulated outputs
+      const resolvedStepInputs: Record<string, any> = {};
+      const simulatedStepOutputs: Record<string, any> = {};
+      
+      Object.entries(stepResults).forEach(([stepId, result]: [string, any]) => {
+        resolvedStepInputs[stepId] = result.inputData;
+        simulatedStepOutputs[stepId] = result.outputData;
+      });
       
       return {
         flowFqn,
         targetStepId,
-        triggerData,
-        stepResults,
-        finalInputData,
-        executionOrder,
-        contextState,
+        status: errors.length > 0 ? 'FAILED' as const : 'COMPLETED' as const,
+        triggerInputData,
+        resolvedStepInputs,
+        simulatedStepOutputs,
+        finalContextState: contextState,
         errors
       };
     },
@@ -1074,24 +1093,26 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         });
         
         return {
-          targetStepId: stepId,
           flowFqn,
-          dataPath,
-          availableInputs,
-          contextVariables: contextState,
-          inputMappings
+          paths: inputMappings.map(mapping => ({
+            targetStepId: stepId,
+            targetInputField: mapping.targetInputField,
+            source: {
+              sourceType: mapping.sourceType,
+              id: mapping.sourceStepId || mapping.contextVariableName || 'trigger',
+              dataPath: mapping.sourceOutputField,
+              valuePreview: null
+            },
+            transformationExpression: mapping.transformationRule
+          }))
         };
       } catch (error) {
         console.error('Data lineage simulation failed:', error);
         
         // Fallback to basic mock data lineage
         return {
-          targetStepId: stepId,
           flowFqn,
-          dataPath: [],
-          availableInputs: {},
-          contextVariables: {},
-          inputMappings: []
+          paths: []
         };
       }
     },
@@ -1149,6 +1170,47 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         default:
           return JSON.stringify(executionResult, null, 2);
       }
+    },
+
+    runDebugStep: async (flowFqn: string, stepId: string, inputData: any, componentConfig: any, options?: any) => {
+      console.log('Running debug step:', stepId, 'in flow:', flowFqn);
+      
+      return {
+        stepId,
+        componentFqn: 'unknown',
+        status: 'SUCCESS' as const,
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        durationMs: 100,
+        inputData,
+        outputData: { result: 'debug step completed' }
+      };
+    },
+
+    generateTestCaseTemplate: (flowFqn: string, scenarioType: 'happyPath' | 'errorCase' | 'custom') => {
+      return {
+        id: `test-${Date.now()}`,
+        flowFqn,
+        description: `${scenarioType} test case for ${flowFqn}`,
+        triggerInput: {},
+        assertions: []
+      };
+    },
+
+    generateSchemaBasedInput: (componentSchema: any, scenarioType: 'happyPath' | 'empty' | 'fullOptional') => {
+      if (componentSchema?.inputSchema) {
+        return generateDataFromSchema(componentSchema.inputSchema, 'happy_path', scenarioType === 'fullOptional');
+      }
+      return {};
+    },
+
+    validateDataAgainstSchema: (data: any, schema: any) => {
+      return {
+        isValid: true,
+        errors: [],
+        warnings: [],
+        processedData: data
+      };
     }
   }), [props.onRunTestCase, moduleRegistry, dslModuleRepresentations, currentFlowFqn]);
 
@@ -2047,7 +2109,11 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                     borderRadius: '4px',
                     padding: '12px'
                   }}>
-                    {props.renderInspectorPropertiesTab(selectedElement, inspectorActions, moduleRegistry)}
+                    {props.renderInspectorPropertiesTab({
+                      selectedElement,
+                      actions: inspectorActions,
+                      moduleRegistry
+                    })}
                   </div>
                 </div>
               )}
@@ -2062,7 +2128,10 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                     borderRadius: '4px',
                     padding: '12px'
                   }}>
-                    {props.renderInspectorSourceTab(currentFlowFqn, selectedElement, moduleRegistry)}
+                    {props.renderInspectorSourceTab({
+                      selectedElement,
+                      moduleRegistry
+                    })}
                   </div>
                 </div>
               )}
@@ -2077,7 +2146,12 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                     borderRadius: '4px',
                     padding: '12px'
                   }}>
-                    {props.renderInspectorDebugTestTab(currentFlowFqn, selectedElement, unifiedDebugTestActions, moduleRegistry)}
+                    {props.renderInspectorDebugTestTab({
+                      currentFlowFqn: currentFlowFqn || '',
+                      selectedElement,
+                      actions: unifiedDebugTestActions,
+                      moduleRegistry
+                    })}
                   </div>
                 </div>
               )}
@@ -2160,12 +2234,10 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                               if (props.onRunTestCase) {
                                 // Create a sample test case
                                 const testCase = {
-                                  testCaseId: 'test-' + Date.now(),
+                                  id: 'test-' + Date.now(),
                                   flowFqn: currentFlowFqn,
                                   description: 'Sample test case',
                                   triggerInput: {},
-                                  inputData: {},
-                                  expectedOutputs: {},
                                   assertions: []
                                 };
                                 props.onRunTestCase(testCase);

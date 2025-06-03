@@ -247,6 +247,7 @@ export async function generateSystemOverviewGraphData(
         const flowNodeData: SystemGraphNodeData = {
           label: flow.name,
           fqn: flowFqn,
+          nodeCategory: 'flow',
           dslObject: flow,
           resolvedComponentFqn: undefined,
           componentSchema: undefined,
@@ -271,6 +272,7 @@ export async function generateSystemOverviewGraphData(
           const triggerNodeData: SystemGraphNodeData = {
             label: `${flow.trigger.type}`,
             fqn: triggerNodeId,
+            nodeCategory: 'externalTrigger',
             dslObject: flow.trigger,
             resolvedComponentFqn: flow.trigger.type,
             componentSchema: undefined,

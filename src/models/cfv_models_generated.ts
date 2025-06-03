@@ -24,6 +24,12 @@ export interface SaveModulePayload {
   fqn: string;
   /** New full YAML content of the module. */
   newContent: string;
+  /** Optional path to the specific config that was changed, for context. */
+  pathToConfig?: (string | number)[];
+  /** Optional old value of the specific config, for context. */
+  oldConfigValue?: any;
+  /** Optional new value of the specific config, for context. */
+  newConfigValue?: any;
 }
 
 export type SelectedElementSourceEnum = 
@@ -43,34 +49,38 @@ export interface SelectedElement {
   id: string;
   /** Associated data: React Flow node/edge object, DslModuleRepresentation, FlowDefinition summary, etc. */
   data?: any;
-  /** FQN of the module this element belongs to. */
+  /** FQN of the module this element belongs to (if applicable). */
   moduleFqn?: string;
+  /** FQN of the flow this element belongs to (if applicable). */
+  flowFqn?: string;
+  /** Step ID if the element is a step or related to a step. */
+  stepId?: string;
 }
 
+// --- Inspector Tab Related Models (Consolidated Architecture) ---
 export interface InspectorPropertiesActions {
   /** Call to request saving changes to a part of the selected element's configuration. Signature: (newConfigValue: any, pathToConfig: (string | number)[]) => void */
   requestSave: (newConfigValue: any, pathToConfig: (string | number)[]) => void;
-  /** Execute the current step/flow with current properties for debugging. Signature: (elementId: string, config: any) => Promise<StepExecutionTrace | FlowExecutionTrace> */
-  runDebugExecution: (elementId: string, config: any) => Promise<StepExecutionTrace | FlowExecutionTrace>;
 }
 
 export interface UnifiedDebugTestActions {
-  /** Execute flow/step for debugging with current configuration. Signature: (targetId: string, inputData: any, executionOptions?: ExecutionOptions) => Promise<ExecutionResult> */
-  runDebugExecution: (targetId: string, inputData: any, executionOptions?: ExecutionOptions) => Promise<ExecutionResult>;
-  /** Execute a test case and return results. Signature: (testCase: FlowTestCase) => Promise<TestRunResult> */
+  // Debugging Actions
+  /** Simulate complete flow execution from trigger through all steps up to target step, resolving actual data. Signature: (flowFqn: string, targetStepId?: string, triggerInputData?: any, options?: ExecutionOptions) => Promise<FlowSimulationResult> */
+  simulateFlowExecution: (flowFqn: string, targetStepId?: string, triggerInputData?: any, options?: ExecutionOptions) => Promise<FlowSimulationResult>;
+  /** Resolve and display the input data that would be passed to a selected step if the flow were executed up to that point. Signature: (flowFqn: string, stepId: string, triggerInputData?: any, options?: ExecutionOptions) => Promise<ResolvedStepInput> */
+  resolveStepInputData: (flowFqn: string, stepId: string, triggerInputData?: any, options?: ExecutionOptions) => Promise<ResolvedStepInput>;
+  /** Execute a single selected step with provided or resolved input data and its DSL config. Signature: (flowFqn: string, stepId: string, inputData: any, componentConfig: any, options?: ExecutionOptions) => Promise<StepExecutionTrace> */
+  runDebugStep: (flowFqn: string, stepId: string, inputData: any, componentConfig: any, options?: ExecutionOptions) => Promise<StepExecutionTrace>;
+  // Test Case Actions
+  /** Execute a defined test case. Signature: (testCase: FlowTestCase) => Promise<TestRunResult> */
   runTestCase: (testCase: FlowTestCase) => Promise<TestRunResult>;
-  /** Generate default test case from current flow. Signature: (flowFqn: string, testType: 'happy_path' | 'error_handling' | 'performance') => FlowTestCase */
-  generateTestCase: (flowFqn: string, testType: 'happy_path' | 'error_handling' | 'performance') => FlowTestCase;
-  /** Generate input data based on component schema and data type. Signature: (targetId: string, dataType: 'happy_path' | 'fork_paths' | 'error_cases', inputSchema?: ComponentSchema, outputSchemas?: Record<string, ComponentSchema>) => any */
-  generateSchemaBasedInputData: (targetId: string, dataType: 'happy_path' | 'fork_paths' | 'error_cases', inputSchema?: ComponentSchema, outputSchemas?: Record<string, ComponentSchema>) => any;
-  /** Resolve input data for a step based on component input schema and previous step outputs. Signature: (stepId: string, flowFqn: string) => Promise<ResolvedStepInput> */
-  resolveStepInputData: (stepId: string, flowFqn: string) => Promise<ResolvedStepInput>;
-  /** Generate input structure template from component input schema. Signature: (inputSchema: ComponentSchema, useDefaults?: boolean) => any */
-  generateInputStructureFromSchema: (inputSchema: ComponentSchema, useDefaults?: boolean) => any;
-  /** Resolve data lineage from trigger to selected step. Signature: (stepId: string, flowFqn: string) => Promise<DataLineage> */
-  resolveDataLineage: (stepId: string, flowFqn: string) => Promise<DataLineage>;
-  /** Validate input data against component input schema. Signature: (inputData: any, inputSchema: ComponentSchema) => ValidationResult */
-  validateInputAgainstSchema: (inputData: any, inputSchema: ComponentSchema) => ValidationResult;
+  /** Generate a template for a new test case. Signature: (flowFqn: string, scenarioType: 'happyPath' | 'errorCase' | 'custom') => FlowTestCase */
+  generateTestCaseTemplate: (flowFqn: string, scenarioType: 'happyPath' | 'errorCase' | 'custom') => FlowTestCase;
+  // Data Generation & Validation (for test input forms)
+  /** Generates sample input data based on a component's input schema. Signature: (componentSchema: ComponentSchema, scenarioType: 'happyPath' | 'empty' | 'fullOptional') => any */
+  generateSchemaBasedInput: (componentSchema: ComponentSchema, scenarioType: 'happyPath' | 'empty' | 'fullOptional') => any;
+  /** Validates provided data against a JSON schema. Signature: (data: any, schema: JsonSchemaObject) => ValidationResult */
+  validateDataAgainstSchema: (data: any, schema: JsonSchemaObject) => ValidationResult;
   /** Resolve trigger input data based on trigger configuration and schema. Signature: (triggerConfig: any, triggerSchema?: ComponentSchema, dataType?: 'happy_path' | 'fork_paths' | 'error_cases') => any */
   resolveTriggerInputData: (triggerConfig: any, triggerSchema?: ComponentSchema, dataType?: 'happy_path' | 'fork_paths' | 'error_cases') => any;
   /** Propagate data flow from trigger to target step. Signature: (flowFqn: string, triggerData: any) => Promise<Record<string, any>> */
@@ -83,98 +93,435 @@ export interface UnifiedDebugTestActions {
   collectStepLogs: (executionId: string) => Promise<StepLog[]>;
   /** Export execution results for analysis. Signature: (executionResult: ExecutionResult, format: 'json' | 'yaml' | 'csv') => string */
   exportExecutionResults: (executionResult: ExecutionResult, format: 'json' | 'yaml' | 'csv') => string;
+  /** Generate input data based on component schema and data type. Signature: (targetId: string, dataType: 'happy_path' | 'fork_paths' | 'error_cases', componentSchema?: ComponentSchema) => any */
+  generateSchemaBasedInputData: (targetId: string, dataType: 'happy_path' | 'fork_paths' | 'error_cases', componentSchema?: ComponentSchema) => any;
+  /** Resolve data lineage from trigger to selected step. Signature: (stepId: string, flowFqn: string) => Promise<DataLineageResult> */
+  resolveDataLineage: (stepId: string, flowFqn: string) => Promise<DataLineageResult>;
+  /** Validate input data against component input schema. Signature: (inputData: any, componentSchema: ComponentSchema) => ValidationResult */
+  validateInputAgainstSchema: (inputData: any, componentSchema: ComponentSchema) => ValidationResult;
+  /** Execute flow/step for debugging with current configuration. Signature: (targetId: string, inputData: any, executionOptions?: ExecutionOptions) => Promise<ExecutionResult> */
+  runDebugExecution: (targetId: string, inputData: any, executionOptions?: ExecutionOptions) => Promise<ExecutionResult>;
 }
 
+export type DslModuleStatusEnum = 'unloaded' | 'loading' | 'loaded' | 'error' | 'partially_loaded';
+
+export type StringOrNumber = string | number;
+
+export type ErrorSeverityEnum = 'error' | 'warning' | 'info';
+
+export interface DslModuleErrorItem {
+  message: string;
+  /** Path within the YAML/JSON structure where the error occurred. */
+  path?: StringOrNumber[];
+  severity?: ErrorSeverityEnum;
+  details?: any;
+}
+
+export interface DslModuleImportItem {
+  namespace: string;
+  as?: string;
+  version?: string;
+}
+
+export interface DslModuleDefinitions {
+  context: any[];
+  components: any[];
+  flows: any[];
+}
+
+export interface DslModuleRepresentation {
+  fqn: string;
+  rawContent: string;
+  /** Parsed YAML as a JavaScript object. */
+  parsedContent?: any;
+  /** Extracted definitions from the module. */
+  definitions?: DslModuleDefinitions;
+  imports?: DslModuleImportItem[];
+  /** Errors from parsing or validation. */
+  errors?: DslModuleErrorItem[];
+  status: DslModuleStatusEnum;
+}
+
+// --- Layout Service Types ---
+export type LayoutAlgorithmEnum = 'layered' | 'force' | 'mrtree' | 'radial' | 'disco' | 'rectpacking' | 'stress';
+
+export type LayoutDirectionEnum = 'DOWN' | 'UP' | 'RIGHT' | 'LEFT';
+
+export interface LayoutSpacing {
+  /** Spacing between nodes. */
+  nodeNode?: number;
+  /** Spacing between edges and nodes. */
+  edgeNode?: number;
+  /** Spacing between edges. */
+  edgeEdge?: number;
+  /** Spacing between layers (for layered algorithm). */
+  layerSpacing?: number;
+}
+
+export interface NodePadding {
+  /** Top padding in pixels. */
+  top?: number;
+  /** Right padding in pixels. */
+  right?: number;
+  /** Bottom padding in pixels. */
+  bottom?: number;
+  /** Left padding in pixels. */
+  left?: number;
+}
+
+export interface NodeSizeOptions {
+  /** Default node width. */
+  width?: number;
+  /** Default node height. */
+  height?: number;
+  /** Whether to calculate size based on content. */
+  calculateFromContent?: boolean;
+  /** Minimum node width. */
+  minWidth?: number;
+  /** Maximum node width. */
+  maxWidth?: number;
+  /** Minimum node height. */
+  minHeight?: number;
+  /** Maximum node height. */
+  maxHeight?: number;
+  /** Internal padding for node content. */
+  padding?: NodePadding;
+}
+
+export interface LayoutOptions {
+  /** Layout algorithm to use. */
+  algorithm?: LayoutAlgorithmEnum;
+  /** Primary layout direction. */
+  direction?: LayoutDirectionEnum;
+  /** Spacing configuration between elements. */
+  spacing?: LayoutSpacing;
+  /** Node sizing configuration. */
+  nodeSize?: NodeSizeOptions;
+  /** ELK edge routing strategy, e.g., 'ORTHOGONAL', 'POLYLINE', 'SPLINES'. */
+  edgeRouting?: string;
+}
+
+// --- Node & Edge Data Payloads (Enhanced) ---
+export interface NodeError {
+  message: string;
+  /** e.g., 'SchemaValidationError', 'ResolutionError', 'ContextVarError'. */
+  type?: string;
+  details?: any;
+  isFatal?: boolean;
+}
+
+export type ExecutionStatusEnum = 'SUCCESS' | 'FAILURE' | 'SKIPPED' | 'RUNNING' | 'PENDING';
+
+export interface BaseNodeData {
+  label: string;
+  /** Raw DSL definition snippet for this element. */
+  dslObject?: any;
+  /** Fully resolved FQN of the component type (e.g., StdLib:HttpCall). */
+  resolvedComponentFqn?: string;
+  /** JSON schema for the component, if available. */
+  componentSchema?: ComponentSchema;
+  /** True if this node represents a Named Component Definition. */
+  isNamedComponent?: boolean;
+  /** FQN if this is a named component instance (e.g. mymodule.MyNamedHttpCall). */
+  namedComponentFqn?: string;
+  /** Context variable names used (e.g., '{{context.varName}}'). */
+  contextVarUsages?: string[];
+  /** Error info if this element has a validation/resolution error. */
+  error?: NodeError;
+  // Fields for trace/debug mode, populated by GraphBuilderService from traceData or simulation results
+  executionStatus?: ExecutionStatusEnum;
+  executionDurationMs?: number;
+  /** Actual input data passed during execution/simulation. */
+  executionInputData?: any;
+  /** Actual output data from execution/simulation. */
+  executionOutputData?: any;
+}
+
+export interface StepNodeData extends BaseNodeData {
+  stepId: string;
+}
+
+export interface SubFlowInvokerNodeData extends StepNodeData {
+  invokedFlowFqn: string;
+}
+
+export interface TriggerEntryPointNodeData extends BaseNodeData {
+  /** e.g., 'StdLib.Trigger:Http', 'com.custom.MyTrigger'. */
+  triggerType: string;
+}
+
+export type SystemNodeCategoryEnum = 'flow' | 'externalTrigger';
+
+export interface SystemGraphNodeData extends BaseNodeData {
+  /** FQN of the flow or unique ID for the external trigger source. */
+  fqn: string;
+  nodeCategory: SystemNodeCategoryEnum;
+  /** Whether this node can be clicked to navigate to the flow. */
+  navigatable?: boolean;
+  /** Callback function to handle flow navigation. */
+  onFlowNodeClick?: (flowFqn: string) => void;
+  /** Target flow FQN for navigation. */
+  targetFlowFqn?: string;
+}
+
+export type FlowEdgeTypeEnum = 'dataFlow' | 'controlFlow';
+
+export interface FlowEdgeData {
+  type: FlowEdgeTypeEnum;
+  /** Specific output handle on source node. */
+  sourceHandle?: string;
+  /** Specific input handle on target node. */
+  targetHandle?: string;
+  /** Indicates if this edge was traversed in a trace/simulation. */
+  isExecutedPath?: boolean;
+  /** Source step ID for the edge. */
+  sourceStepId?: string;
+  /** Target step ID for the edge. */
+  targetStepId?: string;
+}
+
+export type SystemEdgeTypeEnum = 'invocationEdge' | 'triggerLinkEdge';
+
+export interface SystemEdgeData {
+  type: SystemEdgeTypeEnum;
+}
+
+// --- Component Schema ---
+export interface JsonSchemaObject {
+  [key: string]: any;
+}
+
+export interface ComponentSchema {
+  /** FQN of the component type (e.g., StdLib:HttpCall). */
+  fqn: string;
+  /** JSON Schema for the 'config' block. */
+  configSchema?: JsonSchemaObject;
+  /** JSON Schema describing the expected input data structure for the component's primary data input port. */
+  inputSchema?: JsonSchemaObject;
+  /** JSON Schema describing the data structure of the component's primary success output port. */
+  outputSchema?: JsonSchemaObject;
+  /** JSON Schema for the data structure on the error output port (often StandardErrorStructure). */
+  errorOutputSchema?: JsonSchemaObject;
+  // For trigger components:
+  /** JSON Schema for the trigger's 'config' block in a flow definition. */
+  triggerConfigSchema?: JsonSchemaObject;
+  /** JSON Schema for the data structure the trigger provides to the flow (trigger.*). */
+  triggerOutputSchema?: JsonSchemaObject;
+}
+
+// --- Trace & Execution Types (Enhanced) ---
+export interface StepExecutionTrace {
+  stepId: string;
+  /** Actual component FQN executed. */
+  componentFqn: string;
+  status: ExecutionStatusEnum;
+  /** ISO timestamp of step start. */
+  startTime: string;
+  /** ISO timestamp of step completion. */
+  endTime?: string;
+  /** Step execution duration in milliseconds. */
+  durationMs?: number;
+  /** Input data provided to the step's primary input. */
+  inputData?: any;
+  /** Output data produced by the step's primary success output. */
+  outputData?: any;
+  /** Data produced on the step's error output. */
+  errorData?: any;
+  /** Resolved configuration used for execution. */
+  resolvedConfig?: any;
+  /** Logs emitted by this step during execution. */
+  logs?: StepLog[];
+}
+
+export type FlowExecutionStatusEnum = 'COMPLETED' | 'FAILED' | 'RUNNING' | 'TERMINATED' | 'PENDING';
+
+export interface FlowExecutionTrace {
+  /** Unique identifier for this trace. */
+  traceId: string;
+  /** FQN of the executed flow. */
+  flowFqn: string;
+  /** Instance identifier for this execution. */
+  instanceId?: string;
+  status: FlowExecutionStatusEnum;
+  /** ISO timestamp of flow start. */
+  startTime: string;
+  /** ISO timestamp of flow completion. */
+  endTime?: string;
+  /** Total flow execution duration in milliseconds. */
+  durationMs?: number;
+  /** Data that triggered the flow execution (from trigger.outputSchema). */
+  triggerData?: any;
+  /** Initial context state. */
+  initialContext?: Record<string, any>;
+  /** Final context state. */
+  finalContext?: Record<string, any>;
+  /** Execution traces for all steps in execution order. */
+  steps: StepExecutionTrace[];
+  /** Overall flow error if the flow itself failed outside a specific step. */
+  flowError?: ExecutionError;
+}
+
+export interface HistoricalFlowInstanceSummary {
+  /** Typically traceId or instanceId. */
+  id: string;
+  flowFqn: string;
+  startTime: string;
+  /** e.g., 'COMPLETED', 'FAILED'. */
+  status: string;
+}
+
+// --- Property Testing Types (Enhanced for Debug & Test Tab) ---
+export type AssertionComparisonEnum = 'equals' | 'notEquals' | 'contains' | 'notContains' | 'startsWith' | 'endsWith' | 'matchesRegex' | 'isGreaterThan' | 'isLessThan' | 'isDefined' | 'isNotDefined' | 'isEmpty' | 'isNotEmpty';
+
+export interface TestCaseAssertion {
+  /** Unique ID for the assertion within the test case. */
+  id: string;
+  description?: string;
+  /** JMESPath to data in step output, finalContext, or flowError. */
+  targetPath: string;
+  expectedValue: any;
+  comparison: AssertionComparisonEnum;
+  isEnabled?: boolean;
+}
+
+export interface MockedComponentResponse {
+  /** Regex or ID of step(s) to mock. */
+  stepIdPattern: string;
+  /** Data to return as output. */
+  outputData?: any;
+  /** Error to simulate. */
+  errorData?: any;
+  /** Simulated execution delay. */
+  delayMs?: number;
+}
+
+export interface FlowTestCase {
+  /** Unique ID for the test case. */
+  id: string;
+  flowFqn: string;
+  /** Human-readable test description. */
+  description?: string;
+  /** Input data for the flow trigger. Should conform to trigger's output schema. */
+  triggerInput: any;
+  /** Initial context variable values. */
+  initialContext?: Record<string, any>;
+  componentMocks?: MockedComponentResponse[];
+  assertions: TestCaseAssertion[];
+  tags?: string[];
+}
+
+export interface AssertionResult {
+  assertionId: string;
+  targetPath: string;
+  expectedValue: any;
+  comparison: string;
+  /** Actual value found during test execution. */
+  actualValue?: any;
+  /** Whether the assertion passed. */
+  passed: boolean;
+  /** Human-readable result message. */
+  message?: string;
+}
+
+export interface TestRunResult {
+  testCase: FlowTestCase;
+  /** Overall test pass/fail status. */
+  passed: boolean;
+  /** Execution trace from the test run. */
+  trace?: FlowExecutionTrace;
+  assertionResults: AssertionResult[];
+  /** Error message if test run failed globally. */
+  error?: string;
+}
+
+// --- Simulation & Resolved Data Models (for Debug & Test Tab) ---
 export interface ExecutionOptions {
-  /** Whether to use mocked components instead of real ones. */
   useMocks?: boolean;
-  /** Execution timeout in milliseconds. */
+  /** Signature: (stepId: string, componentFqn: string) => MockedComponentResponse | null */
+  mockProvider?: (stepId: string, componentFqn: string) => MockedComponentResponse | null;
   timeoutMs?: number;
-  /** Specific mock responses to use. */
-  mockResponses?: MockedComponentResponse[];
-  /** Context variable overrides. */
-  contextOverrides?: Record<string, any>;
-  /** Step ID to start execution from (for partial execution). */
-  startFromStep?: string;
-  /** Step ID to stop execution at. */
-  stopAtStep?: string;
+}
+
+export interface FlowSimulationResult {
+  flowFqn: string;
+  /** If simulating up to a specific step. */
+  targetStepId?: string;
+  status: FlowExecutionStatusEnum;
+  triggerInputData: any;
+  /** Keyed by stepId, the fully resolved input data for each executed/evaluated step. */
+  resolvedStepInputs: Record<string, any>;
+  /** Keyed by stepId, the simulated output data for each executed step. */
+  simulatedStepOutputs: Record<string, any>;
+  finalContextState?: Record<string, any>;
+  /** Detailed data flow paths. */
+  dataLineage?: DataLineageResult;
+  errors?: ExecutionError[];
 }
 
 export interface ResolvedStepInput {
   stepId: string;
-  /** Input data resolved from previous step outputs and context. */
-  resolvedInputData: any;
-  /** Sources of input data (previous steps, context, etc.). */
-  inputSources: InputDataSource[];
-  /** Context variables available at this step. */
-  availableContext: Record<string, any>;
-  /** Expected input schema for validation. */
-  inputSchema?: ComponentSchema;
+  flowFqn: string;
+  componentFqn: string;
+  componentSchema?: ComponentSchema;
+  /** The data that WOULD be passed to the component's primary input. */
+  actualInputData: any;
+  /** The component's config block from the DSL. */
+  dslConfig: any;
+  availableContext?: Record<string, any>;
 }
+
+export interface DataLineageResult {
+  flowFqn: string;
+  paths: DataLineagePath[];
+}
+
+export interface DataLineagePath {
+  targetStepId: string;
+  targetInputField: string;
+  source: InputDataSource;
+  /** The inputs_map expression used. */
+  transformationExpression?: string;
+}
+
+export type InputSourceTypeEnum = 'previousStepOutput' | 'contextVariable' | 'triggerOutput' | 'constantValue' | 'expression';
 
 export interface InputDataSource {
-  sourceType: 'previousStep' | 'contextVariable' | 'triggerData' | 'constant';
-  /** ID of the source (step ID, context variable name, etc.). */
-  sourceId: string;
-  /** Path to the data within the source (e.g., 'outputs.result'). */
-  dataPath: string;
-  /** The actual value after transformation. */
-  transformedValue?: any;
+  sourceType: InputSourceTypeEnum;
+  /** stepId, contextVarName, or 'trigger'. */
+  id: string;
+  /** JMESPath from source's output (e.g., 'result.user.id'). */
+  dataPath?: string;
+  valuePreview?: any;
 }
 
-export interface ExecutionResult {
-  executionId: string;
-  status: 'SUCCESS' | 'FAILURE' | 'SKIPPED' | 'RUNNING';
-  /** ISO timestamp of execution start. */
-  startTime: string;
-  /** ISO timestamp of execution completion. */
-  endTime?: string;
-  /** Total execution duration. */
-  durationMs?: number;
-  /** Full execution trace if available. */
-  trace?: FlowExecutionTrace;
-  /** Single step trace for step-level execution. */
-  stepTrace?: StepExecutionTrace;
-  /** Execution logs from all steps. */
-  logs: StepLog[];
-  /** Output from the last executed step. */
-  finalOutput?: any;
-  /** System triggers sent during execution. */
-  systemTriggers: SystemTrigger[];
-  /** Data transformations between steps. */
-  dataTransformations: DataTransformation[];
-  /** Error message if execution failed. */
-  error?: string;
-  /** Detailed error information. */
-  errorDetails?: ExecutionError;
+export interface ValidationResult {
+  isValid: boolean;
+  errors?: ValidationError[];
+  warnings?: ValidationWarning[];
+  /** Data after applying defaults or coercions, if any. */
+  processedData?: any;
 }
 
-export interface SystemTrigger {
-  triggerId: string;
-  triggerType: string;
-  /** Target system or service. */
-  targetSystem: string;
-  /** Trigger payload data. */
-  payload: any;
-  /** When the trigger was sent. */
-  timestamp: string;
-  /** Step that generated this trigger. */
-  sourceStepId: string;
+export interface ValidationError {
+  /** JSON path to the field with error. */
+  fieldPath: string;
+  /** Error message. */
+  message: string;
+  /** Expected data type. */
+  expectedType?: string;
+  /** Actual value that caused the error. */
+  actualValue?: any;
+  /** Schema rule that was violated. */
+  schemaRule?: string;
 }
 
-export interface DataTransformation {
-  fromStepId: string;
-  toStepId: string;
-  /** Path in the source step output. */
-  inputPath: string;
-  /** Path in the target step input. */
-  outputPath: string;
-  /** Original value before transformation. */
-  originalValue?: any;
-  /** Value after transformation. */
-  transformedValue?: any;
-  /** Transformation rule or expression used. */
-  transformationRule?: string;
+export interface ValidationWarning {
+  /** JSON path to the field with warning. */
+  fieldPath: string;
+  /** Warning message. */
+  message: string;
+  /** Suggested fix for the warning. */
+  suggestion?: string;
 }
 
 export interface ExecutionError {
@@ -190,27 +537,6 @@ export interface ExecutionError {
   timestamp: string;
 }
 
-export interface RandomDataGenerationOptions {
-  dataType: 'happy_path' | 'fork_paths' | 'error_cases' | 'boundary_values' | 'performance_test';
-  /** Schema to generate data against. */
-  schema?: ComponentSchema;
-  /** Custom generation rules. */
-  customRules?: DataGenerationRule[];
-  /** Seed for reproducible random generation. */
-  seedValue?: string;
-}
-
-export interface DataGenerationRule {
-  /** JSON path to the field. */
-  fieldPath: string;
-  /** Type of generation (e.g., 'random', 'sequence', 'pattern'). */
-  generationType: string;
-  /** Parameters for the generation type. */
-  parameters?: any;
-  /** Constraints for generated values. */
-  constraints?: any;
-}
-
 export interface StepLog {
   stepId: string;
   timestamp: string;
@@ -221,259 +547,30 @@ export interface StepLog {
   data?: any;
 }
 
-export interface FlowDataAnalysisActions {
-  /** Analyze data flow between steps. Signature: (sourceStepId: string, targetStepId: string) => DataFlowAnalysis */
-  analyzeDataFlow: (sourceStepId: string, targetStepId: string) => DataFlowAnalysis;
-  /** Compare data between multiple executions. Signature: (traceIds: string[]) => ExecutionComparison */
-  compareExecutions: (traceIds: string[]) => ExecutionComparison;
-}
-
-export interface DataFlowAnalysis {
-  sourceStepId: string;
-  targetStepId: string;
-  /** Data that flowed from source to target. */
-  dataTransformed?: any;
-  /** Path of data transformation (e.g., ['steps.source.outputs.data', 'inputs.targetInput']). */
-  transformationPath: string[];
-  /** Size of transferred data in bytes. */
-  dataSize?: number;
-  /** When the data transfer occurred. */
-  transferTime?: string;
-}
-
-export interface ExecutionComparison {
-  traceIds: string[];
-  differences: ExecutionDifference[];
-  performanceMetrics: PerformanceComparison;
-}
-
-export interface ExecutionDifference {
+export interface StepSimulationResult {
   stepId: string;
-  /** Field that differs (e.g., 'inputData', 'outputData', 'status'). */
-  field: string;
-  /** Values from each execution being compared. */
-  values: any[];
-}
-
-export interface PerformanceComparison {
-  /** Total execution durations for each trace. */
-  totalDurations: number[];
-  /** Step durations by step ID for each trace. */
-  stepDurations: Record<string, number[]>;
-  /** Critical path step IDs for each trace. */
-  criticalPaths: string[][];
-}
-
-export type DslModuleStatusEnum = 'unloaded' | 'loading' | 'loaded' | 'error';
-
-export type StringOrNumber = string | number;
-
-export interface DslModuleErrorItem {
-  message: string;
-  path?: StringOrNumber[];
-}
-
-export interface DslModuleImportItem {
-  alias?: string;
-  fqn: string;
-  version?: string;
-}
-
-export interface DslModuleDefinitions {
-  context: any[];
-  components: any[];
-  flows: any[];
-}
-
-export interface DslModuleRepresentation {
-  fqn: string;
-  rawContent: string;
-  /** Parsed YAML as a JavaScript object. */
-  parsedContent?: object;
-  /** Extracted definitions from the module. */
-  definitions?: DslModuleDefinitions;
-  imports?: DslModuleImportItem[];
-  /** Errors from parsing or validation. */
-  errors?: DslModuleErrorItem[];
-  status: DslModuleStatusEnum;
-}
-
-// --- Node & Edge Data Payloads ---
-
-export interface NodeError {
-  message: string;
-  details?: any;
-  isFatal?: boolean;
-}
-
-export interface BaseNodeData {
-  label: string;
-  /** Raw DSL definition snippet for this element. */
-  dslObject?: any;
-  /** Fully resolved FQN of the component type. */
-  resolvedComponentFqn?: string;
-  /** JSON schema for the component, if available. */
-  componentSchema?: ComponentSchema;
-  isNamedComponent?: boolean;
-  /** Context variable names used. */
-  contextVarUsages?: string[];
-  /** Error info if this element has a validation/resolution error. */
-  error?: NodeError;
-}
-
-export type ExecutionStatusEnum = 'SUCCESS' | 'FAILURE' | 'SKIPPED' | 'RUNNING';
-
-export interface StepNodeData extends BaseNodeData {
-  stepId: string;
-  executionStatus?: ExecutionStatusEnum;
-  executionDurationMs?: number;
-  executionInputData?: any;
-  executionOutputData?: any;
-}
-
-export interface SubFlowInvokerNodeData extends StepNodeData {
-  invokedFlowFqn: string;
-}
-
-export interface TriggerEntryPointNodeData extends BaseNodeData {
-  triggerType: string;
-}
-
-export interface SystemGraphNodeData extends BaseNodeData {
-  /** FQN of the flow or unique ID for the trigger source. */
-  fqn: string;
-  /** Whether this node supports navigation (for flow nodes). */
-  navigatable?: boolean;
-  /** Target flow FQN for navigation (for flow nodes). */
-  targetFlowFqn?: string;
-  /** Click handler for navigation (for flow nodes). */
-  onFlowNodeClick?: (flowFqn: string) => void;
-}
-
-export interface BaseEdgeData {
-  // Common edge properties if any (currently none defined here)
-}
-
-export type FlowEdgeTypeEnum = 'dataFlow' | 'controlFlow';
-
-export interface FlowEdgeData extends BaseEdgeData {
-  type: FlowEdgeTypeEnum;
-  sourceStepId?: string;
-  targetStepId: string;
-  /** Indicates if this edge was traversed in a trace. */
-  isExecutedPath?: boolean;
-}
-
-export type SystemEdgeTypeEnum = 'invocationEdge' | 'triggerLinkEdge';
-
-export interface SystemEdgeData extends BaseEdgeData {
-  type: SystemEdgeTypeEnum;
-}
-
-// --- Component Schema ---
-
-export interface ComponentSchema {
-  /** FQN of the component type. */
-  fqn: string;
-  /** JSON Schema for the 'config' block. */
-  configSchema?: object;
-  /** JSON Schema describing input ports/data structure. */
-  inputSchema?: object;
-  /** JSON Schema describing output ports/data structure. */
-  outputSchema?: object;
-}
-
-// --- Trace & Debugging Types ---
-
-export interface StepExecutionTrace {
-  stepId: string;
-  status: ExecutionStatusEnum;
-  startTime?: string;
-  endTime?: string;
-  durationMs?: number;
-  inputData?: any;
-  outputData?: any;
-  resolvedConfig?: any;
-  contextBefore?: Record<string, any>;
-  contextAfter?: Record<string, any>;
-}
-
-export type FlowExecutionStatusEnum = 'COMPLETED' | 'FAILED' | 'RUNNING' | 'TERMINATED';
-
-export interface FlowExecutionTrace {
-  traceId: string;
-  flowFqn: string;
-  instanceId?: string;
-  status: FlowExecutionStatusEnum;
-  startTime: string;
-  endTime?: string;
-  durationMs?: number;
-  triggerData?: any;
-  initialContext?: Record<string, any>;
-  finalContext?: Record<string, any>;
-  steps: StepExecutionTrace[];
-}
-
-export interface HistoricalFlowInstanceSummary {
-  /** Typically traceId or instanceId. */
-  id: string;
-  flowFqn: string;
-  startTime: string;
-  /** e.g., 'COMPLETED', 'FAILED'. */
-  status: string;
-}
-
-// --- Property Testing Types ---
-
-export interface TestCaseAssertion {
-  /** JMESPath to data in step output or context. */
-  targetPath: string;
-  /** Expected value or pattern. */
-  expectedValue: any;
-  /** e.g., 'equals', 'contains', 'matchesRegex'. */
-  comparison: string;
-}
-
-export interface MockedComponentResponse {
-  /** Regex or ID of step(s) to mock. */
-  stepIdPattern: string;
-  /** Data to return as output. */
-  outputData?: any;
-  /** Error to simulate. */
-  errorData?: any;
-  delayMs?: number;
-}
-
-export interface FlowTestCase {
-  flowFqn: string;
-  description?: string;
-  triggerInput: any;
-  contextOverrides?: Record<string, any>;
-  componentMocks?: MockedComponentResponse[];
-  assertions: TestCaseAssertion[];
-}
-
-export interface AssertionResult extends TestCaseAssertion {
-  actualValue?: any;
-  passed: boolean;
-  message?: string;
-}
-
-export interface TestRunResult {
-  testCase: FlowTestCase;
-  passed: boolean;
-  trace?: FlowExecutionTrace;
-  assertionResults: AssertionResult[];
-  /** Error message if test run failed globally. */
+  componentFqn: string;
+  /** Input data provided to the step. */
+  inputData: any;
+  /** Output data generated by the step. */
+  outputData: any;
+  /** Changes made to context by this step. */
+  contextChanges: Record<string, any>;
+  executionOrder: number;
+  simulationSuccess: boolean;
+  /** Error message if simulation failed for this step. */
   error?: string;
 }
 
-// --- Module Registry Interface ---
-
+// --- IModuleRegistry (Interface) ---
 export interface ResolvedComponentInfo {
+  /** Base component type FQN (e.g. StdLib:HttpCall). */
   baseType: string;
+  /** The NamedComponent DSL if applicable. */
   componentDefinition?: any;
+  /** FQN of the module where the component was defined. */
   sourceModuleFqn: string;
+  /** Whether this is a Named Component. */
   isNamedComponent: boolean;
 }
 
@@ -487,15 +584,17 @@ export interface IModuleRegistry {
   /** Signature: (componentTypeFqn: string) => ComponentSchema | null */
   getComponentSchema: (componentTypeFqn: string) => ComponentSchema | null;
   /** Signature: (flowFqn: string) => any | null */
-  getFlowDefinition: (flowFqn: string) => any | null;
-  /** Signature: (componentFqn: string) => any | null */
-  getNamedComponentDefinition: (componentFqn: string) => any | null;
+  getFlowDefinitionDsl: (flowFqn: string) => any | null;
+  /** Signature: (namedComponentFqn: string) => any | null */
+  getNamedComponentDefinitionDsl: (namedComponentFqn: string) => any | null;
   /** Signature: (contextFqn: string) => any | null */
   getContextDefinition: (contextFqn: string) => any | null;
+  // Legacy methods for backward compatibility
+  getFlowDefinition: (flowFqn: string) => any | null;
+  getNamedComponentDefinition: (componentFqn: string) => any | null;
 }
 
-// --- Main Component Props ---
-
+// --- Main Component Props (CascadeFlowVisualizerProps) ---
 export type VisualizerModeEnum = 'design' | 'trace' | 'test_result';
 
 export type DesignViewModeEnum = 'systemOverview' | 'flowDetail';
@@ -511,14 +610,30 @@ export interface ViewChangePayload {
   systemViewActive: boolean;
 }
 
-export interface TestDefinitionActions {
-  /** Signature: (testCase: FlowTestCase) => Promise<TestRunResult | null> */
-  runTestCase: (testCase: FlowTestCase) => Promise<TestRunResult | null>;
-}
-
 export interface FlowRunListItemActions {
   /** Signature: (traceIdOrInstanceId: string) => void */
   selectTrace: (traceIdOrInstanceId: string) => void;
+}
+
+// Props for the new Inspector Tabs
+export interface InspectorSourceTabProps {
+  selectedElement: SelectedElement;
+  moduleRegistry: IModuleRegistry;
+}
+
+export interface InspectorPropertiesTabProps {
+  selectedElement: SelectedElement;
+  actions: InspectorPropertiesActions;
+  moduleRegistry: IModuleRegistry;
+}
+
+export interface InspectorDebugTestTabProps {
+  currentFlowFqn: string;
+  selectedElement?: SelectedElement;
+  traceData?: FlowExecutionTrace;
+  testResultData?: TestRunResult;
+  actions: UnifiedDebugTestActions;
+  moduleRegistry: IModuleRegistry;
 }
 
 export interface CascadeFlowVisualizerProps {
@@ -565,27 +680,19 @@ export interface CascadeFlowVisualizerProps {
   customEdgeTypes: any;
   
   // Consolidated Inspector Tab Renderers (New Architecture)
-  /** Component-level configuration FORM editor with debug execution. Signature: (selectedElement: SelectedElement | null, actions: InspectorPropertiesActions, moduleRegistry: IModuleRegistry) => React.ReactNode */
-  renderInspectorPropertiesTab?: (selectedElement: SelectedElement | null, actions: InspectorPropertiesActions, moduleRegistry: IModuleRegistry) => React.ReactNode;
-  /** Full flow DSL source viewer with selected step highlighting. Signature: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode */
-  renderInspectorSourceTab?: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, moduleRegistry: IModuleRegistry) => React.ReactNode;
-  /** Unified debugging and testing interface. Combines step logs, test execution, and results. Signature: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, actions: UnifiedDebugTestActions, moduleRegistry: IModuleRegistry) => React.ReactNode */
-  renderInspectorDebugTestTab?: (currentFlowFqn: string | null, selectedElement: SelectedElement | null, actions: UnifiedDebugTestActions, moduleRegistry: IModuleRegistry) => React.ReactNode;
-  
-  // Removed/Deprecated Tab Renderers
-  // - renderInspectorDataFlowTab (merged into DebugTest)
-  // - renderInspectorTestingTab (merged into DebugTest) 
-  // - renderInspectorDataIOTab (removed - redundant with Properties)
-  // - renderInspectorContextVarsTab (merged into Properties)
-  // - renderInspectorTestDefinitionTab (merged into DebugTest)
-  // - renderInspectorAssertionResultsTab (merged into DebugTest)
+  /** PRIMARY TAB: Full module YAML source viewer. Signature: (props: InspectorSourceTabProps) => React.ReactNode */
+  renderInspectorSourceTab?: (props: InspectorSourceTabProps) => React.ReactNode;
+  /** Component-level configuration FORM editor. Signature: (props: InspectorPropertiesTabProps) => React.ReactNode */
+  renderInspectorPropertiesTab?: (props: InspectorPropertiesTabProps) => React.ReactNode;
+  /** Unified debugging and testing interface. Signature: (props: InspectorDebugTestTabProps) => React.ReactNode */
+  renderInspectorDebugTestTab?: (props: InspectorDebugTestTabProps) => React.ReactNode;
   
   /** Signature: (summary: HistoricalFlowInstanceSummary, actions: FlowRunListItemActions, isSelected: boolean) => React.ReactNode */
   renderFlowRunListItem?: (summary: HistoricalFlowInstanceSummary, actions: FlowRunListItemActions, isSelected: boolean) => React.ReactNode;
 
   // Layout
   /** ELK.js layout configuration options. */
-  elkOptions?: any;
+  elkOptions?: LayoutOptions;
 
   // Styling & Dimensions
   className?: string;
@@ -593,7 +700,6 @@ export interface CascadeFlowVisualizerProps {
 }
 
 // --- Interaction Message Models ---
-
 export interface FlowSelectedEventMsg {
   /** The FQN of the selected flow. */
   flowFqn: string;
@@ -623,6 +729,30 @@ export interface ConfigEditActionMsg {
   newConfigValue: any;
   /** Path to the configuration property being edited. */
   pathToConfig: StringOrNumber[];
+}
+
+// --- Legacy Types for Backward Compatibility ---
+export interface ExecutionResult {
+  executionId: string;
+  status: 'SUCCESS' | 'FAILURE' | 'SKIPPED' | 'RUNNING';
+  /** ISO timestamp of execution start. */
+  startTime: string;
+  /** ISO timestamp of execution completion. */
+  endTime?: string;
+  /** Total execution duration. */
+  durationMs?: number;
+  /** Full execution trace if available. */
+  trace?: FlowExecutionTrace;
+  /** Single step trace for step-level execution. */
+  stepTrace?: StepExecutionTrace;
+  /** Execution logs from all steps. */
+  logs: StepLog[];
+  /** Output from the last executed step. */
+  finalOutput?: any;
+  /** Error message if execution failed. */
+  error?: string;
+  /** Detailed error information. */
+  errorDetails?: ExecutionError;
 }
 
 export interface DataLineage {
@@ -668,36 +798,4 @@ export interface InputMapping {
   transformationRule?: string;
   /** Whether this input field is required by the component schema. */
   isRequired: boolean;
-}
-
-export interface ValidationResult {
-  isValid: boolean;
-  /** List of validation errors if any. */
-  errors: ValidationError[];
-  /** List of validation warnings if any. */
-  warnings: ValidationWarning[];
-  /** Data after type coercion and normalization. */
-  normalizedData?: any;
-}
-
-export interface ValidationError {
-  /** JSON path to the field with error. */
-  fieldPath: string;
-  /** Error message. */
-  message: string;
-  /** Expected data type. */
-  expectedType?: string;
-  /** Actual value that caused the error. */
-  actualValue?: any;
-  /** Schema rule that was violated. */
-  schemaRule?: string;
-}
-
-export interface ValidationWarning {
-  /** JSON path to the field with warning. */
-  fieldPath: string;
-  /** Warning message. */
-  message: string;
-  /** Suggested fix for the warning. */
-  suggestion?: string;
 } 

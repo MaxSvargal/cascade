@@ -116,7 +116,7 @@ export function processSingleModuleInput(
     const definitions = {
       context: parsedContent?.definitions?.context || [],
       components: parsedContent?.definitions?.components || [],
-      flows: parsedContent?.flows || []
+      flows: parsedContent?.definitions?.flows || parsedContent?.flows || []
     };
 
     // Extract imports
@@ -212,35 +212,36 @@ export function createModuleRegistryInterface(
     },
 
     getFlowDefinition: (flowFqn: string) => {
-      const modules = getAtoms('dslModuleRepresentationsAtom');
-      
-      // Parse FQN to get module and flow name
+      // Parse flowFqn like "com.casino.core.UserOnboardingFlow"
+      // Module FQN is "com.casino.core", flow name is "UserOnboardingFlow"
       const parts = flowFqn.split('.');
       const flowName = parts[parts.length - 1];
       const moduleFqn = parts.slice(0, -1).join('.');
       
+      const modules = getAtoms('dslModuleRepresentationsAtom');
       const module = modules[moduleFqn];
+      
       if (!module?.definitions?.flows) {
+        console.log('🔍 Debug: No flows found in module:', moduleFqn);
         return null;
       }
-
-      return module.definitions.flows.find((flow: any) => flow.name === flowName) || null;
+      
+      const flow = module.definitions.flows.find((f: any) => f.name === flowName);
+      
+      return flow || null;
     },
 
     getNamedComponentDefinition: (componentFqn: string) => {
-      const modules = getAtoms('dslModuleRepresentationsAtom');
-      
-      // Parse FQN to get module and component name
+      // Parse componentFqn like "com.casino.core.MyComponent"
+      // Module FQN is "com.casino.core", component name is "MyComponent"
       const parts = componentFqn.split('.');
       const componentName = parts[parts.length - 1];
       const moduleFqn = parts.slice(0, -1).join('.');
       
+      const modules = getAtoms('dslModuleRepresentationsAtom');
       const module = modules[moduleFqn];
-      if (!module?.definitions?.components) {
-        return null;
-      }
-
-      return module.definitions.components.find((comp: any) => comp.name === componentName) || null;
+      if (!module?.definitions?.components) return null;
+      return module.definitions.components.find((c: any) => c.name === componentName) || null;
     },
 
     getContextDefinition: (contextFqn: string) => {
@@ -257,6 +258,33 @@ export function createModuleRegistryInterface(
       }
 
       return module.definitions.context.find((ctx: any) => ctx.name === contextName) || null;
+    },
+
+    // New methods required by interface
+    getFlowDefinitionDsl: (flowFqn: string) => {
+      // Parse flowFqn like "com.casino.core.UserOnboardingFlow"
+      // Module FQN is "com.casino.core", flow name is "UserOnboardingFlow"
+      const parts = flowFqn.split('.');
+      const flowName = parts[parts.length - 1];
+      const moduleFqn = parts.slice(0, -1).join('.');
+      
+      const modules = getAtoms('dslModuleRepresentationsAtom');
+      const module = modules[moduleFqn];
+      if (!module?.definitions?.flows) return null;
+      return module.definitions.flows.find((f: any) => f.name === flowName) || null;
+    },
+
+    getNamedComponentDefinitionDsl: (namedComponentFqn: string) => {
+      // Parse namedComponentFqn like "com.casino.core.MyComponent"
+      // Module FQN is "com.casino.core", component name is "MyComponent"
+      const parts = namedComponentFqn.split('.');
+      const componentName = parts[parts.length - 1];
+      const moduleFqn = parts.slice(0, -1).join('.');
+      
+      const modules = getAtoms('dslModuleRepresentationsAtom');
+      const module = modules[moduleFqn];
+      if (!module?.definitions?.components) return null;
+      return module.definitions.components.find((c: any) => c.name === componentName) || null;
     }
   };
 } 

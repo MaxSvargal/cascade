@@ -41,8 +41,8 @@ export function reconstructModuleYaml(
   // Add imports if present
   if (moduleRep.imports && moduleRep.imports.length > 0) {
     yamlStructure.imports = moduleRep.imports.map(imp => {
-      const importObj: any = { fqn: imp.fqn };
-      if (imp.alias) importObj.alias = imp.alias;
+      const importObj: any = { fqn: imp.namespace };
+      if (imp.as) importObj.alias = imp.as;
       if (imp.version) importObj.version = imp.version;
       return importObj;
     });

@@ -23,7 +23,7 @@ import {
   UnifiedDebugTestActions
 } from '@/models/cfv_models_generated';
 import { generateTestCaseTemplates, createTestCaseFromTemplate } from '@/services/testCaseService';
-import { casinoPlatformModules, casinoPlatformComponentSchemas } from '@/examples/casinoPlatformExample';
+import { casinoPlatformModules, casinoPlatformComponentSchemas } from '@/examples/casinoPlatformRefinedExample';
 
 // Import dependencies for enhanced inspector tabs
 import hljs from 'highlight.js/lib/core';
@@ -39,11 +39,39 @@ import ReactJson from 'react-json-view';
 // Register YAML language for highlight.js
 hljs.registerLanguage('yaml', yaml);
 
-// Sample DSL module data - Using Casino Platform Example
+// Sample DSL module data - Using Casino Platform Refined Example
 const sampleModules: DslModuleInput[] = casinoPlatformModules;
 
-// Sample component schemas - Using Casino Platform Schemas
-const sampleComponentSchemas: Record<string, ComponentSchema> = casinoPlatformComponentSchemas;
+// Sample component schemas - Using Casino Platform Refined Schemas
+const sampleComponentSchemas: Record<string, ComponentSchema> = {
+  ...Object.fromEntries(
+    Object.entries(casinoPlatformComponentSchemas).map(([key, schema]) => {
+      // Type guard to check if this is a ComponentSchema
+      if (typeof schema === 'object' && schema !== null && 'fqn' in schema) {
+        return [
+          key,
+          {
+            ...schema,
+            configSchema: (schema as any).configSchema === null ? undefined : (schema as any).configSchema
+          }
+        ];
+      }
+      return [key, schema];
+    })
+  ),
+  // Fix the StdLib:Manual schema to have undefined instead of null
+  'StdLib:Manual': {
+    fqn: 'StdLib:Manual',
+    configSchema: undefined, // Changed from null to undefined
+    outputSchema: {
+      type: 'object',
+      properties: {
+        initialData: { type: 'object', description: 'The data passed when the flow was manually triggered.' }
+      },
+      required: ['initialData']
+    }
+  }
+};
 
 // Sample trace data for demonstration - Casino Platform Flow
 const sampleTraceData: FlowExecutionTrace = {
@@ -70,6 +98,7 @@ const sampleTraceData: FlowExecutionTrace = {
   steps: [
     {
       stepId: 'validate-registration-data',
+      componentFqn: 'StdLib:JsonSchemaValidator',
       status: 'SUCCESS',
       startTime: '2024-01-15T10:00:00Z',
       endTime: '2024-01-15T10:00:02Z',
@@ -83,6 +112,7 @@ const sampleTraceData: FlowExecutionTrace = {
     },
     {
       stepId: 'geo-compliance-check',
+      componentFqn: 'StdLib:Fork',
       status: 'SUCCESS',
       startTime: '2024-01-15T10:00:02Z',
       endTime: '2024-01-15T10:00:05Z',
@@ -96,6 +126,7 @@ const sampleTraceData: FlowExecutionTrace = {
     },
     {
       stepId: 'evaluate-compliance-results',
+      componentFqn: 'StdLib:MapData',
       status: 'SUCCESS',
       startTime: '2024-01-15T10:00:05Z',
       endTime: '2024-01-15T10:00:06Z',
@@ -109,6 +140,7 @@ const sampleTraceData: FlowExecutionTrace = {
     },
     {
       stepId: 'initiate-kyc-process',
+      componentFqn: 'StdLib:SubFlowInvoker',
       status: 'SUCCESS',
       startTime: '2024-01-15T10:00:06Z',
       endTime: '2024-01-15T10:00:10Z',
@@ -118,6 +150,7 @@ const sampleTraceData: FlowExecutionTrace = {
     },
     {
       stepId: 'create-user-account',
+      componentFqn: 'StdLib:HttpCall',
       status: 'SUCCESS',
       startTime: '2024-01-15T10:00:10Z',
       endTime: '2024-01-15T10:00:12Z',
@@ -127,6 +160,7 @@ const sampleTraceData: FlowExecutionTrace = {
     },
     {
       stepId: 'setup-responsible-gambling',
+      componentFqn: 'StdLib:SubFlowInvoker',
       status: 'SUCCESS',
       startTime: '2024-01-15T10:00:12Z',
       endTime: '2024-01-15T10:00:14Z',
@@ -136,6 +170,7 @@ const sampleTraceData: FlowExecutionTrace = {
     },
     {
       stepId: 'send-welcome-communication',
+      componentFqn: 'StdLib:Fork',
       status: 'SUCCESS',
       startTime: '2024-01-15T10:00:14Z',
       endTime: '2024-01-15T10:00:15Z',
@@ -506,7 +541,7 @@ const InspectorDebugTestTab: React.FC<{
               currentFlowFqn
             );
             
-            setInputData(JSON.stringify(resolvedInput.resolvedInputData, null, 2));
+            setInputData(JSON.stringify(resolvedInput.actualInputData, null, 2));
             
             // Resolve data lineage
             const lineage = await actions.resolveDataLineage(
@@ -863,8 +898,8 @@ const InspectorDebugTestTab: React.FC<{
                 <div style={{ marginBottom: '8px' }}>
                   <strong>Flow Path:</strong>
                 </div>
-                {dataLineage.dataPath.map((step: any, index: number) => (
-                  <div key={step.stepId} style={{ 
+                {dataLineage.paths.map((path: any, index: number) => (
+                  <div key={`${path.targetStepId}-${path.targetInputField}`} style={{ 
                     marginLeft: `${index * 16}px`,
                     marginBottom: '4px',
                     padding: '4px',
@@ -872,13 +907,19 @@ const InspectorDebugTestTab: React.FC<{
                     borderRadius: '3px',
                     border: '1px solid #e0e0e0'
                   }}>
-                    <div style={{ fontWeight: '600' }}>{step.stepId} ({step.stepType})</div>
-                    {step.componentFqn && (
-                      <div style={{ color: '#666' }}>Component: {step.componentFqn}</div>
+                    <div style={{ fontWeight: '600' }}>{path.targetStepId} → {path.targetInputField}</div>
+                    <div style={{ color: '#666' }}>Source: {path.source.sourceType}</div>
+                    {path.source.id && (
+                      <div style={{ color: '#666' }}>From: {path.source.id}</div>
                     )}
-                    {step.outputData && (
+                    {path.source.dataPath && (
                       <div style={{ color: '#666', fontSize: '11px' }}>
-                        Output: {JSON.stringify(step.outputData)}
+                        Path: {path.source.dataPath}
+                      </div>
+                    )}
+                    {path.transformationExpression && (
+                      <div style={{ color: '#666', fontSize: '11px' }}>
+                        Expression: {path.transformationExpression}
                       </div>
                     )}
                   </div>
@@ -887,10 +928,10 @@ const InspectorDebugTestTab: React.FC<{
             </div>
           )}
 
-          {/* Input Mappings */}
-          {dataLineage?.inputMappings && (
+          {/* Input Mappings - now included in paths */}
+          {dataLineage?.paths && dataLineage.paths.length > 0 && (
             <div style={{ marginBottom: '16px' }}>
-              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600' }}>Input Mappings</h4>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600' }}>Input Mappings Summary</h4>
               <div style={{ 
                 backgroundColor: '#f9f9f9',
                 border: '1px solid #e0e0e0',
@@ -898,30 +939,9 @@ const InspectorDebugTestTab: React.FC<{
                 padding: '8px',
                 fontSize: '12px'
               }}>
-                {dataLineage.inputMappings.map((mapping: any, index: number) => (
-                  <div key={index} style={{ 
-                    marginBottom: '4px',
-                    padding: '4px',
-                    backgroundColor: 'white',
-                    borderRadius: '3px',
-                    border: '1px solid #e0e0e0'
-                  }}>
-                    <div style={{ fontWeight: '600' }}>
-                      {mapping.targetInputField} 
-                      {mapping.isRequired && <span style={{ color: '#f44336' }}>*</span>}
-                    </div>
-                    <div style={{ color: '#666' }}>
-                      Source: {mapping.sourceType}
-                      {mapping.sourceStepId && ` (${mapping.sourceStepId})`}
-                      {mapping.contextVariableName && ` (${mapping.contextVariableName})`}
-                    </div>
-                    {mapping.defaultValue !== null && (
-                      <div style={{ color: '#666', fontSize: '11px' }}>
-                        Default: {JSON.stringify(mapping.defaultValue)}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                <div style={{ color: '#666' }}>
+                  Found {dataLineage.paths.length} input mapping(s) for this step.
+                </div>
               </div>
             </div>
           )}
@@ -1086,42 +1106,29 @@ const InspectorDebugTestTab: React.FC<{
   );
 };
 
-// Wrapper functions that return the React components
-const renderInspectorSourceTab = (
-  currentFlowFqn: string | null,
-  selectedElement: SelectedElement | null,
-  moduleRegistry: IModuleRegistry
-) => {
+// Wrapper functions that return the React components with proper prop signatures
+const renderInspectorSourceTab = (props: { selectedElement: SelectedElement; moduleRegistry: IModuleRegistry }) => {
   return React.createElement(InspectorSourceTab, {
-    currentFlowFqn,
-    selectedElement,
-    moduleRegistry
+    currentFlowFqn: null,
+    selectedElement: props.selectedElement,
+    moduleRegistry: props.moduleRegistry
   });
 };
 
-const renderInspectorPropertiesTab = (
-  selectedElement: SelectedElement | null,
-  actions: InspectorPropertiesActions,
-  moduleRegistry: IModuleRegistry
-) => {
+const renderInspectorPropertiesTab = (props: { selectedElement: SelectedElement; actions: InspectorPropertiesActions; moduleRegistry: IModuleRegistry }) => {
   return React.createElement(InspectorPropertiesTab, {
-    selectedElement,
-    actions,
-    moduleRegistry
+    selectedElement: props.selectedElement,
+    actions: props.actions,
+    moduleRegistry: props.moduleRegistry
   });
 };
 
-const renderInspectorDebugTestTab = (
-  currentFlowFqn: string | null,
-  selectedElement: SelectedElement | null,
-  actions: UnifiedDebugTestActions,
-  moduleRegistry: IModuleRegistry
-) => {
+const renderInspectorDebugTestTab = (props: { currentFlowFqn: string; selectedElement?: SelectedElement; actions: UnifiedDebugTestActions; moduleRegistry: IModuleRegistry }) => {
   return React.createElement(InspectorDebugTestTab, {
-    currentFlowFqn,
-    selectedElement,
-    actions,
-    moduleRegistry
+    currentFlowFqn: props.currentFlowFqn,
+    selectedElement: props.selectedElement || null,
+    actions: props.actions,
+    moduleRegistry: props.moduleRegistry
   });
 };
 
@@ -1155,7 +1162,9 @@ export default function HomePage() {
       resolveComponentTypeInfo: () => null,
       getComponentSchema: () => null,
       getNamedComponentDefinition: () => null,
-      getContextDefinition: () => null
+      getContextDefinition: () => null,
+      getFlowDefinitionDsl: () => null,
+      getNamedComponentDefinitionDsl: () => null
     });
     
     // Mock test result
@@ -1163,6 +1172,7 @@ export default function HomePage() {
       testCase,
       passed: true,
       assertionResults: testCase.assertions.map(assertion => ({
+        assertionId: assertion.id,
         ...assertion,
         actualValue: assertion.expectedValue,
         passed: true,

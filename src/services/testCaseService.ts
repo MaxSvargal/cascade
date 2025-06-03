@@ -45,9 +45,16 @@ export function generateTestCaseTemplates(
     triggerInputTemplate: generateTriggerInputTemplate(flowDefinition.trigger),
     commonAssertions: [
       {
+        id: 'status-check',
         targetPath: 'status',
         expectedValue: 'COMPLETED',
         comparison: 'equals'
+      },
+      {
+        id: 'duration-check',
+        targetPath: 'durationMs',
+        expectedValue: 10000,
+        comparison: 'isLessThan'
       }
     ]
   });
@@ -59,6 +66,7 @@ export function generateTestCaseTemplates(
     triggerInputTemplate: generateInvalidInputTemplate(flowDefinition.trigger),
     commonAssertions: [
       {
+        id: 'error-status-check',
         targetPath: 'status',
         expectedValue: 'FAILED',
         comparison: 'equals'
@@ -74,9 +82,10 @@ export function generateTestCaseTemplates(
       triggerInputTemplate: generateTriggerInputTemplate(flowDefinition.trigger),
       commonAssertions: [
         {
+          id: 'performance-check',
           targetPath: 'durationMs',
           expectedValue: 5000, // 5 seconds
-          comparison: 'lessThan'
+          comparison: 'isLessThan'
         }
       ]
     });
@@ -94,10 +103,10 @@ export function createTestCaseFromTemplate(
   customizations?: Partial<FlowTestCase>
 ): FlowTestCase {
   return {
+    id: `test-${Date.now()}`,
     flowFqn,
     description: template.description,
     triggerInput: template.triggerInputTemplate,
-    contextOverrides: {},
     componentMocks: [],
     assertions: template.commonAssertions,
     ...customizations
@@ -197,7 +206,10 @@ export function evaluateAssertions(
     const passed = evaluateComparison(actualValue, assertion.expectedValue, assertion.comparison);
     
     return {
-      ...assertion,
+      assertionId: assertion.id,
+      targetPath: assertion.targetPath,
+      expectedValue: assertion.expectedValue,
+      comparison: assertion.comparison,
       actualValue,
       passed,
       message: passed 
