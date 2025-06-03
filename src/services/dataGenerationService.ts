@@ -205,6 +205,8 @@ export class DataGenerationService {
 
   /**
    * Simulate component execution with realistic outputs
+   * CRITICAL REQUIREMENT: Each component must return BOTH its input data AND its own output data
+   * This ensures proper data flow where each step can access all previous step data
    */
   simulateComponentExecution(
     componentType: string, 
@@ -218,27 +220,34 @@ export class DataGenerationService {
     
     switch (componentType) {
       case 'StdLib:HttpCall':
-        return {
+        const httpOutput = {
           status: 200,
           body: { success: true, data: inputData, timestamp: new Date().toISOString() },
           headers: { 'content-type': 'application/json' },
-          requestConfig: config, // Include config that was used
-          inputData: inputData // Preserve input data for debugging
+          requestConfig: config
+        };
+        return {
+          input: inputData, // CRITICAL: Preserve input data from previous step
+          output: httpOutput // Component's own output
         };
       
       case 'StdLib:DatabaseQuery':
-        return {
+        const dbOutput = {
           rows: [{ id: 1, ...inputData, created_at: new Date().toISOString() }],
           rowCount: 1,
           success: true,
-          queryConfig: config,
-          inputData: inputData
+          queryConfig: config
+        };
+        return {
+          input: inputData, // CRITICAL: Preserve input data from previous step
+          output: dbOutput // Component's own output
         };
       
       case 'StdLib:JsonSchemaValidator':
         // CRITICAL: For validators, return BOTH validation result AND the validated data
+        let schemaValidationOutput;
         if (inputData?.data) {
-          return {
+          schemaValidationOutput = {
             isValid: true,
             validData: inputData.data, // The validated data that passes to next steps
             validationResult: {
@@ -247,11 +256,10 @@ export class DataGenerationService {
               schema: config?.schema,
               validatedFields: Object.keys(inputData.data || {})
             },
-            inputData: inputData, // Original input for reference
             config: config // Validation config used
           };
         } else {
-          return {
+          schemaValidationOutput = {
             isValid: true,
             validData: inputData, // Pass through all input data if no nested data
             validationResult: {
@@ -260,10 +268,13 @@ export class DataGenerationService {
               schema: config?.schema,
               validatedFields: Object.keys(inputData || {})
             },
-            inputData: inputData,
             config: config
           };
         }
+        return {
+          input: inputData, // CRITICAL: Preserve input data from previous step
+          output: schemaValidationOutput // Component's own validation output
+        };
       
       case 'StdLib:DataTransform':
       case 'StdLib:MapData':
@@ -297,10 +308,13 @@ export class DataGenerationService {
           transformed.result = inputData;
           transformed.success = true;
         }
-        return {
+        const transformationOutput = {
           ...transformed, // Spread the transformed data
-          transformationConfig: config, // Include config used
-          originalInput: inputData // Preserve original input
+          transformationConfig: config // Include config used
+        };
+        return {
+          input: inputData, // CRITICAL: Preserve input data from previous step
+          output: transformationOutput // Component's own transformation output
         };
       
       case 'StdLib:Fork':
@@ -344,30 +358,79 @@ export class DataGenerationService {
             }
           });
         }
+        const forkOutput = {
+          branches: forkResults, // All branch results
+          forkConfig: config // Fork configuration
+        };
         return {
-          ...forkResults, // Spread the fork results at the top level for easier access
-          forkConfig: config, // Fork configuration
-          inputData: inputData // Original input data for debugging
+          input: inputData, // CRITICAL: Preserve input data from previous step
+          output: forkOutput // Component's own fork output
+        };
+      
+      case 'StdLib:FilterData':
+        // CRITICAL: Filter components evaluate conditions and return filtered data
+        const filterOutput: Record<string, any> = {
+          matched: true, // Simulate successful filter match
+          filteredData: inputData,
+          filterExpression: config?.expression || 'default',
+          filterConfig: config
+        };
+        if (config?.matchOutput) {
+          filterOutput[config.matchOutput] = true;
+        }
+        return {
+          input: inputData, // CRITICAL: Preserve input data from previous step
+          output: filterOutput // Component's own filter output
+        };
+      
+      case 'StdLib:Validation':
+        const basicValidationOutput = {
+          isValid: true,
+          validatedData: inputData,
+          errors: [],
+          validationConfig: config
+        };
+        return {
+          input: inputData, // CRITICAL: Preserve input data from previous step
+          output: basicValidationOutput // Component's own validation output
+        };
+      
+      case 'StdLib:SubFlowInvoker':
+        const subFlowOutput = {
+          subFlowResult: { success: true, data: inputData },
+          executionId: 'sub-exec-' + Math.random().toString(36).substr(2, 9),
+          status: 'completed',
+          subFlowConfig: config
+        };
+        return {
+          input: inputData, // CRITICAL: Preserve input data from previous step
+          output: subFlowOutput // Component's own subflow output
         };
       
       default:
         // CRITICAL: Handle named components and use schema if available
         if (componentSchema?.outputSchema) {
           const schemaBasedOutput = this.generateDataFromSchema(componentSchema.outputSchema, 'happy_path', true);
-          return {
+          const componentOutput = {
             ...schemaBasedOutput,
-            componentConfig: config,
-            inputData: inputData
+            componentConfig: config
+          };
+          return {
+            input: inputData, // CRITICAL: Preserve input data from previous step
+            output: componentOutput // Component's own schema-based output
           };
         } else {
           // CRITICAL: Default fallback should preserve input data and config for next steps
-          return { 
+          const defaultOutput = { 
             result: inputData, 
             success: true, 
             timestamp: new Date().toISOString(),
             componentType: componentType,
-            componentConfig: config,
-            inputData: inputData
+            componentConfig: config
+          };
+          return {
+            input: inputData, // CRITICAL: Preserve input data from previous step
+            output: defaultOutput // Component's own default output
           };
         }
     }

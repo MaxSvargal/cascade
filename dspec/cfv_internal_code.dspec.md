@@ -1047,29 +1047,38 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
     detailed_behavior: `
         // Generate realistic output based on component type and schema - CRITICAL: outputs must be usable by next steps
         // Components receive BOTH inputData AND config, and should return structured outputs
+        // CRITICAL REQUIREMENT: Each component must return BOTH its input data AND its own output data
+        // This ensures proper data flow where each step can access all previous step data
         SWITCH componentType
             CASE 'StdLib:HttpCall'
-                RETURN_VALUE {
+                DECLARE componentOutput = {
                     status: 200,
                     body: { success: true, data: inputData, timestamp: new Date().toISOString() },
                     headers: { 'content-type': 'application/json' },
-                    requestConfig: config, // Include config that was used
-                    inputData: inputData // Preserve input data for debugging
+                    requestConfig: config
+                }
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: componentOutput // Component's own output
                 }
             
             CASE 'StdLib:DatabaseQuery'
-                RETURN_VALUE {
+                DECLARE componentOutput = {
                     rows: [{ id: 1, ...inputData, created_at: new Date().toISOString() }],
                     rowCount: 1,
                     success: true,
-                    queryConfig: config,
-                    inputData: inputData
+                    queryConfig: config
+                }
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: componentOutput // Component's own output
                 }
             
             CASE 'StdLib:JsonSchemaValidator'
                 // CRITICAL: For validators, return BOTH validation result AND the validated data
+                DECLARE validationOutput = null
                 IF inputData?.data IS_DEFINED THEN
-                    RETURN_VALUE {
+                    ASSIGN validationOutput = {
                         isValid: true,
                         validData: inputData.data, // The validated data that passes to next steps
                         validationResult: {
@@ -1078,11 +1087,10 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
                             schema: config?.schema,
                             validatedFields: Object.keys(inputData.data || {})
                         },
-                        inputData: inputData, // Original input for reference
                         config: config // Validation config used
                     }
                 ELSE
-                    RETURN_VALUE {
+                    ASSIGN validationOutput = {
                         isValid: true,
                         validData: inputData, // Pass through all input data if no nested data
                         validationResult: {
@@ -1091,10 +1099,13 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
                             schema: config?.schema,
                             validatedFields: Object.keys(inputData || {})
                         },
-                        inputData: inputData,
                         config: config
                     }
                 END_IF
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: validationOutput // Component's own validation output
+                }
             
             CASE 'StdLib:DataTransform'
             CASE 'StdLib:MapData'
@@ -1125,10 +1136,13 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
                     ASSIGN transformed.result = inputData
                     ASSIGN transformed.success = true
                 END_IF
-                RETURN_VALUE {
+                DECLARE transformationOutput = {
                     ...transformed, // Spread the transformed data
-                    transformationConfig: config, // Include config used
-                    originalInput: inputData // Preserve original input
+                    transformationConfig: config // Include config used
+                }
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: transformationOutput // Component's own transformation output
                 }
             
             CASE 'StdLib:Fork'
@@ -1183,105 +1197,134 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
                         END_IF
                     END_FOR
                 END_IF
-                RETURN_VALUE {
+                DECLARE forkOutput = {
                     branches: forkResults, // All branch results
-                    forkConfig: config, // Fork configuration
-                    inputData: inputData // Original input data
+                    forkConfig: config // Fork configuration
+                }
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: forkOutput // Component's own fork output
                 }
             
             CASE 'StdLib:FilterData'
                 // CRITICAL: Filter components evaluate conditions and return filtered data
-                DECLARE filterResult = {
+                DECLARE filterOutput = {
                     matched: true, // Simulate successful filter match
                     filteredData: inputData,
                     filterExpression: config?.expression OR 'default',
-                    filterConfig: config,
-                    inputData: inputData
+                    filterConfig: config
                 }
                 IF config?.matchOutput IS_DEFINED THEN
-                    ASSIGN filterResult[config.matchOutput] = true
+                    ASSIGN filterOutput[config.matchOutput] = true
                 END_IF
-                RETURN_VALUE filterResult
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: filterOutput // Component's own filter output
+                }
             
             CASE 'StdLib:Validation'
-                RETURN_VALUE {
+                DECLARE validationOutput = {
                     isValid: true,
                     validatedData: inputData,
                     errors: [],
-                    validationConfig: config,
-                    inputData: inputData
+                    validationConfig: config
+                }
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: validationOutput // Component's own validation output
                 }
             
             CASE 'StdLib:SubFlowInvoker'
-                RETURN_VALUE {
+                DECLARE subFlowOutput = {
                     subFlowResult: { success: true, data: inputData },
                     executionId: 'sub-exec-' + Math.random().toString(36).substr(2, 9),
                     status: 'completed',
-                    subFlowConfig: config,
-                    inputData: inputData
+                    subFlowConfig: config
+                }
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: subFlowOutput // Component's own subflow output
                 }
             
             // CRITICAL: Handle named components (custom components defined in modules)
             CASE STARTS_WITH 'kyc.'
-                RETURN_VALUE {
+                DECLARE kycOutput = {
                     status: 'initiated',
                     kycId: 'kyc-' + Math.random().toString(36).substr(2, 9),
                     requiredDocuments: ['passport', 'proof_of_address'],
                     estimatedCompletionTime: '24-48 hours',
-                    kycConfig: config,
-                    inputData: inputData
+                    kycConfig: config
+                }
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: kycOutput // Component's own KYC output
                 }
             
             CASE STARTS_WITH 'responsible.'
-                RETURN_VALUE {
+                DECLARE responsibleOutput = {
                     limitsSet: true,
                     dailyLimit: config?.dailyLimit OR 1000,
                     weeklyLimit: config?.weeklyLimit OR 5000,
                     monthlyLimit: config?.monthlyLimit OR 20000,
                     userId: inputData?.userId OR 'user-' + Math.random().toString(36).substr(2, 9),
-                    limitsConfig: config,
-                    inputData: inputData
+                    limitsConfig: config
+                }
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: responsibleOutput // Component's own responsible gambling output
                 }
             
             CASE STARTS_WITH 'bonuses.'
-                RETURN_VALUE {
+                DECLARE bonusOutput = {
                     bonusProcessed: true,
                     bonusAmount: config?.bonusAmount OR 50,
                     bonusType: config?.bonusType OR 'referral',
                     bonusId: 'bonus-' + Math.random().toString(36).substr(2, 9),
                     expiryDate: new Date(Date.now() + (config?.expiryDays OR 30) * 24 * 60 * 60 * 1000).toISOString(),
-                    bonusConfig: config,
-                    inputData: inputData
+                    bonusConfig: config
+                }
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: bonusOutput // Component's own bonus output
                 }
             
             CASE STARTS_WITH 'analytics.'
-                RETURN_VALUE {
+                DECLARE analyticsOutput = {
                     tracked: true,
                     eventId: 'analytics-' + Math.random().toString(36).substr(2, 9),
                     timestamp: new Date().toISOString(),
                     userId: inputData?.userId OR inputData?.userData?.userId OR 'unknown',
-                    analyticsConfig: config,
-                    inputData: inputData
+                    analyticsConfig: config
+                }
+                RETURN_VALUE {
+                    input: inputData, // CRITICAL: Preserve input data from previous step
+                    output: analyticsOutput // Component's own analytics output
                 }
             
             DEFAULT
                 // Use schema to generate output if available
                 IF componentSchema?.outputSchema IS_DEFINED THEN
                     DECLARE schemaBasedOutput = CALL generateDataFromSchema WITH componentSchema.outputSchema, 'happy_path', true
-                    RETURN_VALUE {
+                    DECLARE componentOutput = {
                         ...schemaBasedOutput,
-                        componentConfig: config,
-                        inputData: inputData
+                        componentConfig: config
+                    }
+                    RETURN_VALUE {
+                        input: inputData, // CRITICAL: Preserve input data from previous step
+                        output: componentOutput // Component's own schema-based output
                     }
                 ELSE
                     // CRITICAL: Default fallback should preserve input data and config for next steps
-                    RETURN_VALUE { 
+                    DECLARE defaultOutput = { 
                         result: inputData, 
                         success: true, 
                         timestamp: new Date().toISOString(),
                         componentType: componentType,
-                        componentConfig: config,
-                        inputData: inputData
+                        componentConfig: config
+                    }
+                    RETURN_VALUE {
+                        input: inputData, // CRITICAL: Preserve input data from previous step
+                        output: defaultOutput // Component's own default output
                     }
                 END_IF
         END_SWITCH
