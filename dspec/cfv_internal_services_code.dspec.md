@@ -1201,36 +1201,95 @@ service GraphBuilderService {
                 
                 // 3. Generate edges based on inputs_map, run_after, AND outputs_map
                 IF flowDefinition.steps IS_DEFINED THEN
+                    // 3a. First, collect all steps that are targets of outputs_map error routing
+                    DECLARE errorTargetSteps = new Set()
                     FOR_EACH step IN flowDefinition.steps
-                        // 3a. Control flow edges from trigger (for steps without run_after)
-                        IF NOT step.run_after OR step.run_after.length EQUALS 0 THEN
+                        IF step.outputs_map IS_DEFINED THEN
+                            // Handle both array and object formats for outputs_map
+                            IF Array.isArray(step.outputs_map) THEN
+                                FOR_EACH outputMapping IN step.outputs_map
+                                    IF outputMapping.target AND outputMapping.target.startsWith('steps.') THEN
+                                        DECLARE match = outputMapping.target.match(/steps\.([^.]+)\.inputs/)
+                                        IF match IS_DEFINED THEN
+                                            ADD_TO errorTargetSteps match[1]
+                                        END_IF
+                                    END_IF
+                                END_FOR
+                            ELSE_IF typeof step.outputs_map EQUALS 'object' THEN
+                                FOR_EACH outputPort, targetExpression IN step.outputs_map
+                                    IF targetExpression.startsWith('steps.') THEN
+                                        DECLARE match = targetExpression.match(/steps\.([^.]+)\.inputs/)
+                                        IF match IS_DEFINED THEN
+                                            ADD_TO errorTargetSteps match[1]
+                                        END_IF
+                                    END_IF
+                                END_FOR
+                            END_IF
+                        END_IF
+                    END_FOR
+                    
+                    FOR_EACH step IN flowDefinition.steps
+                        // 3b. Control flow edges from trigger (for steps without run_after AND not error targets)
+                        IF (NOT step.run_after OR step.run_after.length EQUALS 0) AND NOT errorTargetSteps.has(step.step_id) THEN
                             DECLARE edgeData = { type: 'controlFlow', targetStepId: step.step_id, isExecutedPath: traceData ? true : undefined }
                             PUSH_TO edges: { id: "trigger-${step.step_id}", source: 'trigger', target: step.step_id, type: 'flowEdge', data: edgeData }
                         END_IF
                         
-                        // 3b. Control flow edges from run_after
+                        // 3c. ENHANCED: Execution order dependency edges from run_after
                         IF step.run_after IS_DEFINED AND Array.isArray(step.run_after) THEN
                             FOR_EACH sourceStepId IN step.run_after
-                                DECLARE edgeData = { type: 'controlFlow', sourceStepId: sourceStepId, targetStepId: step.step_id, isExecutedPath: traceData ? true : undefined }
-                                PUSH_TO edges: { id: "${sourceStepId}-${step.step_id}-control", source: sourceStepId, target: step.step_id, type: 'flowEdge', data: edgeData }
+                                DECLARE edgeData = { 
+                                    type: 'executionOrderDependency', 
+                                    sourceStepId: sourceStepId, 
+                                    targetStepId: step.step_id, 
+                                    dependencyType: 'execution_order',
+                                    isExecutedPath: traceData ? true : undefined 
+                                }
+                                PUSH_TO edges: { 
+                                    id: "${sourceStepId}-${step.step_id}-execution-order", 
+                                    source: sourceStepId, 
+                                    target: step.step_id, 
+                                    type: 'flowEdge', 
+                                    data: edgeData,
+                                    style: { stroke: '#9C27B0', strokeWidth: 2, strokeDasharray: 'none' },
+                                    label: 'execution order',
+                                    labelStyle: { fontSize: '10px', fill: '#9C27B0' }
+                                }
                             END_FOR
                         END_IF
                         
-                        // 3c. Data flow edges from inputs_map
+                        // 3d. ENHANCED: Data dependency edges from inputs_map
                         IF step.inputs_map IS_DEFINED THEN
                             FOR_EACH inputKey, sourceExpression IN step.inputs_map
                                 IF typeof sourceExpression EQUALS 'string' AND sourceExpression.startsWith('steps.') THEN
                                     DECLARE match = sourceExpression.match(/steps\.([^.]+)/)
                                     IF match IS_DEFINED THEN
                                         DECLARE sourceStepId = match[1]
-                                        DECLARE edgeData = { type: 'dataFlow', sourceStepId: sourceStepId, targetStepId: step.step_id, isExecutedPath: traceData ? true : undefined }
-                                        PUSH_TO edges: { id: "${sourceStepId}-${step.step_id}-data-${inputKey}", source: sourceStepId, target: step.step_id, type: 'flowEdge', data: edgeData }
+                                        DECLARE edgeData = { 
+                                            type: 'dataDependency', 
+                                            sourceStepId: sourceStepId, 
+                                            targetStepId: step.step_id, 
+                                            dependencyType: 'data_flow',
+                                            dataPath: sourceExpression,
+                                            targetInputKey: inputKey,
+                                            isExecutedPath: traceData ? true : undefined 
+                                        }
+                                        PUSH_TO edges: { 
+                                            id: "${sourceStepId}-${step.step_id}-data-${inputKey}", 
+                                            source: sourceStepId, 
+                                            target: step.step_id, 
+                                            type: 'flowEdge', 
+                                            data: edgeData,
+                                            style: { stroke: '#2196F3', strokeWidth: 2, strokeDasharray: '3,3' },
+                                            label: inputKey,
+                                            labelStyle: { fontSize: '10px', fill: '#2196F3' }
+                                        }
                                     END_IF
                                 END_IF
                             END_FOR
                         END_IF
                         
-                        // 3d. ENHANCED: Error routing edges from outputs_map
+                        // 3e. ENHANCED: Error routing edges from outputs_map
                         IF step.outputs_map IS_DEFINED THEN
                             // Handle both array and object formats for outputs_map
                             IF Array.isArray(step.outputs_map) THEN
@@ -1240,32 +1299,52 @@ service GraphBuilderService {
                                         IF match IS_DEFINED THEN
                                             DECLARE targetStepId = match[1]
                                             DECLARE edgeData = { 
-                                                type: 'controlFlow', 
+                                                type: 'errorRouting', 
                                                 sourceStepId: step.step_id, 
                                                 targetStepId: targetStepId, 
+                                                dependencyType: 'error_flow',
                                                 sourceHandle: outputMapping.source || 'error',
                                                 targetHandle: 'data',
                                                 isExecutedPath: traceData ? true : undefined 
                                             }
-                                            PUSH_TO edges: { id: "${step.step_id}-${targetStepId}-error-${outputMapping.source || 'error'}", source: step.step_id, target: targetStepId, type: 'flowEdge', data: edgeData }
+                                            PUSH_TO edges: { 
+                                                id: "${step.step_id}-${targetStepId}-error-${outputMapping.source || 'error'}", 
+                                                source: step.step_id, 
+                                                target: targetStepId, 
+                                                type: 'flowEdge', 
+                                                data: edgeData,
+                                                style: { stroke: '#f44336', strokeDasharray: '5,5', strokeWidth: 2 },
+                                                label: outputMapping.source || 'error',
+                                                labelStyle: { fontSize: '10px', fill: '#f44336' }
+                                            }
                                         END_IF
                                     END_IF
                                 END_FOR
                             ELSE_IF typeof step.outputs_map EQUALS 'object' THEN
-                                FOR_EACH target, source IN step.outputs_map
-                                    IF target.startsWith('steps.') THEN
-                                        DECLARE match = target.match(/steps\.([^.]+)\.inputs/)
+                                FOR_EACH outputPort, targetExpression IN step.outputs_map
+                                    IF typeof targetExpression EQUALS 'string' AND targetExpression.startsWith('steps.') THEN
+                                        DECLARE match = targetExpression.match(/steps\.([^.]+)\.inputs/)
                                         IF match IS_DEFINED THEN
                                             DECLARE targetStepId = match[1]
                                             DECLARE edgeData = { 
-                                                type: 'controlFlow', 
+                                                type: 'errorRouting', 
                                                 sourceStepId: step.step_id, 
                                                 targetStepId: targetStepId, 
-                                                sourceHandle: source || 'error',
+                                                dependencyType: 'error_flow',
+                                                sourceHandle: outputPort,
                                                 targetHandle: 'data',
                                                 isExecutedPath: traceData ? true : undefined 
                                             }
-                                            PUSH_TO edges: { id: "${step.step_id}-${targetStepId}-error-${source || 'error'}", source: step.step_id, target: targetStepId, type: 'flowEdge', data: edgeData }
+                                            PUSH_TO edges: { 
+                                                id: "${step.step_id}-${targetStepId}-error-${outputPort}", 
+                                                source: step.step_id, 
+                                                target: targetStepId, 
+                                                type: 'flowEdge', 
+                                                data: edgeData,
+                                                style: { stroke: '#f44336', strokeDasharray: '5,5', strokeWidth: 2 },
+                                                label: outputPort,
+                                                labelStyle: { fontSize: '10px', fill: '#f44336' }
+                                            }
                                         END_IF
                                     END_IF
                                 END_FOR

@@ -204,55 +204,107 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
         });
       }
 
-      // Control flow edges from run_after
-      if (step.run_after) {
-        if (Array.isArray(step.run_after)) {
-          step.run_after.forEach((sourceStepId: string) => {
-            const edgeData: FlowEdgeData = {
-              type: 'controlFlow',
-              sourceStepId: sourceStepId,
-              targetStepId: step.step_id,
-              isExecutedPath: traceData ? true : undefined
-            };
+      // ENHANCED: Combine execution order and data dependencies into single edges
+      // First, collect all step-to-step relationships
+      const stepRelationships = new Map<string, {
+        hasExecutionOrder: boolean;
+        hasDataDependency: boolean;
+        inputKeys: string[];
+      }>();
 
-            edges.push({
-              id: `${sourceStepId}-${step.step_id}-control`,
-              source: sourceStepId,
-              target: step.step_id,
-              type: 'flowEdge',
-              data: edgeData
+      // Check run_after dependencies
+      if (step.run_after && Array.isArray(step.run_after)) {
+        step.run_after.forEach((sourceStepId: string) => {
+          if (!stepRelationships.has(sourceStepId)) {
+            stepRelationships.set(sourceStepId, {
+              hasExecutionOrder: false,
+              hasDataDependency: false,
+              inputKeys: []
             });
-          });
-        } else {
-          console.warn('step.run_after is not an array:', step.run_after);
-        }
+          }
+          stepRelationships.get(sourceStepId)!.hasExecutionOrder = true;
+        });
       }
 
-      // Data flow edges from inputs_map
+      // Check inputs_map dependencies
       if (step.inputs_map) {
         Object.entries(step.inputs_map).forEach(([inputKey, sourceExpression]: [string, any]) => {
           if (typeof sourceExpression === 'string' && sourceExpression.startsWith('steps.')) {
             const match = sourceExpression.match(/steps\.([^.]+)/);
             if (match) {
               const sourceStepId = match[1];
-              const edgeData: FlowEdgeData = {
-                type: 'dataFlow',
-                sourceStepId: sourceStepId,
-                targetStepId: step.step_id,
-                isExecutedPath: traceData ? true : undefined
-              };
-
-              edges.push({
-                id: `${sourceStepId}-${step.step_id}-data-${inputKey}`,
-                source: sourceStepId,
-                target: step.step_id,
-                type: 'flowEdge',
-                data: edgeData
-              });
+              if (!stepRelationships.has(sourceStepId)) {
+                stepRelationships.set(sourceStepId, {
+                  hasExecutionOrder: false,
+                  hasDataDependency: false,
+                  inputKeys: []
+                });
+              }
+              const relationship = stepRelationships.get(sourceStepId)!;
+              relationship.hasDataDependency = true;
+              relationship.inputKeys.push(inputKey);
             }
           }
         });
       }
+
+      // Create combined edges
+      stepRelationships.forEach((relationship, sourceStepId) => {
+        let edgeType: string = 'controlFlow'; // Default value
+        let edgeLabel: string = ''; // Default value
+        let edgeStyle: any;
+
+        if (relationship.hasExecutionOrder && relationship.hasDataDependency) {
+          // Combined edge
+          edgeType = 'combinedDependency';
+          edgeLabel = relationship.inputKeys.join(', '); // Just show the data field names
+          edgeStyle = {
+            stroke: '#6B7280', // Lighter gray for combined
+            strokeWidth: 2,
+            strokeDasharray: 'none' // Solid line
+          };
+        } else if (relationship.hasExecutionOrder) {
+          // Execution order only
+          edgeType = 'executionOrderDependency';
+          edgeLabel = ''; // No label for execute-only edges
+          edgeStyle = {
+            stroke: '#4B5563', // Dark gray
+            strokeWidth: 2,
+            strokeDasharray: 'none'
+          };
+        } else if (relationship.hasDataDependency) {
+          // Data dependency only
+          edgeType = 'dataDependency';
+          edgeLabel = relationship.inputKeys.join(', ');
+          edgeStyle = {
+            stroke: '#FFFFFF', // White
+            strokeWidth: 2,
+            strokeDasharray: '3,3' // Dotted
+          };
+        }
+
+        const edgeData: FlowEdgeData = {
+          type: edgeType as any,
+          sourceStepId: sourceStepId,
+          targetStepId: step.step_id,
+          targetInputKey: relationship.inputKeys.join(', '),
+          isExecutedPath: traceData ? true : undefined
+        };
+
+        edges.push({
+          id: `${sourceStepId}-${step.step_id}-combined`,
+          source: sourceStepId,
+          target: step.step_id,
+          type: 'flowEdge',
+          data: edgeData,
+          style: edgeStyle,
+          label: edgeLabel,
+          labelStyle: {
+            fontSize: '10px',
+            fill: relationship.hasDataDependency && !relationship.hasExecutionOrder ? '#000000' : '#4B5563' // Black text for white edges
+          }
+        });
+      });
 
       // ENHANCED: Error routing edges from outputs_map
       if (step.outputs_map) {
@@ -264,7 +316,7 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
               if (match) {
                 const targetStepId = match[1];
                 const edgeData: FlowEdgeData = {
-                  type: 'controlFlow',
+                  type: 'errorRouting',
                   sourceStepId: step.step_id,
                   targetStepId: targetStepId,
                   sourceHandle: outputMapping.source || 'error',
@@ -299,7 +351,7 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
               if (match) {
                 const targetStepId = match[1];
                 const edgeData: FlowEdgeData = {
-                  type: 'controlFlow',
+                  type: 'errorRouting',
                   sourceStepId: step.step_id,
                   targetStepId: targetStepId,
                   sourceHandle: outputPort, // The key is the output port (e.g., 'error')

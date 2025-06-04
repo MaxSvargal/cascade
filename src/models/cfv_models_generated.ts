@@ -271,7 +271,7 @@ export interface SystemGraphNodeData extends BaseNodeData {
   targetFlowFqn?: string;
 }
 
-export type FlowEdgeTypeEnum = 'dataFlow' | 'controlFlow';
+export type FlowEdgeTypeEnum = 'dataFlow' | 'controlFlow' | 'executionOrderDependency' | 'dataDependency' | 'errorRouting' | 'combinedDependency';
 
 export interface FlowEdgeData {
   type: FlowEdgeTypeEnum;
@@ -285,6 +285,8 @@ export interface FlowEdgeData {
   sourceStepId?: string;
   /** Target step ID for the edge. */
   targetStepId?: string;
+  /** Target input field name for data dependency edges. */
+  targetInputKey?: string;
 }
 
 export type SystemEdgeTypeEnum = 'invocationEdge' | 'triggerLinkEdge';
