@@ -229,7 +229,9 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
   // Apply automatic layout if requested
   if (useAutoLayout && nodes.length > 0) {
     try {
-      const layouted = await layoutNodes(nodes, edges, layoutPresets.flowDetail.options);
+      console.log(`📊 Applying automatic layout for flow ${flowFqn} with ${nodes.length} nodes`);
+      // Use the automatic layout selection logic that chooses square layout for flows with many nodes
+      const layouted = await layoutNodes(nodes, edges, {}); // Empty options to trigger automatic selection
       
       // Apply trace enhancements if trace data is available
       if (traceData) {
@@ -414,18 +416,9 @@ export async function generateSystemOverviewGraphData(
   // Apply enhanced system overview layout if requested
   if (useAutoLayout && nodes.length > 0) {
     try {
-      const layouted = await layoutSystemOverview(nodes, edges, {
-        algorithm: 'layered',
-        direction: 'RIGHT',
-        spacing: {
-          nodeNode: 150,
-          edgeNode: 50,
-          layerSpacing: 250
-        },
-        nodeSize: {
-          calculateFromContent: true
-        }
-      });
+      console.log(`📊 Applying automatic layout for system overview with ${nodes.length} flows`);
+      // Use the automatic layout selection logic that chooses square layout for system overview with many flows
+      const layouted = await layoutSystemOverview(nodes, edges, {}); // Empty options to trigger automatic selection
       return layouted;
     } catch (error) {
       console.warn('Auto-layout failed, using manual positions:', error);

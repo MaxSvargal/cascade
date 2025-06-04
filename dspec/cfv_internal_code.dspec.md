@@ -257,7 +257,7 @@ code cfv_internal_code.CascadeFlowVisualizerComponent_Main {
 // --- Layout Service Logic (New) ---
 
 code cfv_internal_code.LayoutService_AutomaticLayout {
-    title: "ELK.js Automatic Graph Layout Service"
+    title: "ELK.js Automatic Graph Layout Service with Grid Layout Support"
     part_of_design: cfv_designs.LayoutService
     language: "TypeScript"
     implementation_location: {
@@ -268,71 +268,62 @@ code cfv_internal_code.LayoutService_AutomaticLayout {
     signature: "(nodes: Node[], edges: Edge[], options?: cfv_models.LayoutOptions) => Promise<{ nodes: Node[]; edges: Edge[] }>"
     
     detailed_behavior: `
-        // Human Review Focus: ELK.js integration, layout algorithm configuration, node sizing.
-        // AI Agent Target: Generate automatic graph layout using ELK.js with left-to-right defaults.
+        // Human Review Focus: Grid layout implementation, node ordering, adaptive spacing.
+        // AI Agent Target: Generate automatic graph layout with grid arrangements for flows with many nodes.
 
-        // 1. Validate inputs and set defaults with left-to-right orientation
+        // 1. Validate inputs and determine optimal layout strategy
         IF nodes.length IS_ZERO THEN
             RETURN_VALUE { nodes, edges }
         END_IF
         
-        DECLARE defaultLayoutOptions = {
-            algorithm: "layered",
-            direction: "RIGHT", // Default to left-to-right
-            spacing: {
-                nodeNode: 80,
-                edgeNode: 20,
-                edgeEdge: 10,
-                layerSpacing: 100
-            },
-            nodeSize: {
-                width: 200,
-                height: 80,
-                calculateFromContent: true,
-                minWidth: 150,
-                maxWidth: 300,
-                minHeight: 60,
-                maxHeight: 120,
-                padding: { top: 8, right: 12, bottom: 8, left: 12 }
-            },
-            nodeStyle: {
-                containBackground: true,
-                borderRadius: 8,
-                borderWidth: 1,
-                shadowEnabled: true,
-                textAlignment: "center"
-            }
-        }
+        // 2. Determine if we should use grid layout based on node count
+        DECLARE useGridLayout = nodes.length > 7 // Use grid layout for flows with many nodes
         
-        DECLARE layoutOptions = MERGE_OBJECTS(defaultLayoutOptions, options)
-        
-        // 2. Calculate node sizes based on content if enabled
-        IF layoutOptions.nodeSize.calculateFromContent IS_TRUE THEN
-            FOR_EACH node IN nodes
-                DECLARE calculatedSize = CALL calculateNodeSizeWithStyling WITH node, layoutOptions.nodeSize
-                ASSIGN node.style = MERGE_OBJECTS(node.style, calculatedSize, layoutOptions.nodeStyle)
-            END_FOR
+        IF useGridLayout AND NOT options.algorithm AND NOT options.direction THEN
+            LOG "🔲 Using grid layout for flow with " + nodes.length + " nodes (max 7 per row)"
+            
+            // 3. Apply manual grid layout
+            DECLARE maxNodesPerRow = 7
+            DECLARE nodeSpacing = 220 // Horizontal spacing between nodes
+            DECLARE rowSpacing = 160  // Vertical spacing between rows
+            
+            // 4. Sort nodes to maintain flow order (trigger first, then steps in order)
+            DECLARE sortedNodes = SORT nodes WHERE
+                IF node.id EQUALS 'trigger' THEN return -1
+                ELSE return 0 // Maintain original order for steps
+            END_SORT
+            
+            // 5. Calculate grid positions
+            DECLARE gridNodes = MAP sortedNodes TO gridNode WHERE
+                DECLARE row = FLOOR(index / maxNodesPerRow)
+                DECLARE col = index MOD maxNodesPerRow
+                
+                // Center each row by calculating offset
+                DECLARE nodesInThisRow = MIN(maxNodesPerRow, sortedNodes.length - row * maxNodesPerRow)
+                DECLARE rowOffset = (maxNodesPerRow - nodesInThisRow) * nodeSpacing / 2
+                
+                RETURN_VALUE {
+                    ...node,
+                    position: {
+                        x: col * nodeSpacing + rowOffset,
+                        y: row * rowSpacing
+                    }
+                }
+            END_MAP
+            
+            RETURN_VALUE { nodes: gridNodes, edges }
+        ELSE_IF NOT useGridLayout AND NOT options.algorithm AND NOT options.direction THEN
+            // Use regular ELK layout for shorter flows
+            DECLARE finalOptions = MERGE_OBJECTS(layoutPresets.flowDetail.options, options)
+            DECLARE result = AWAIT service.layoutNodes(nodes, edges, finalOptions)
+            RETURN_VALUE { nodes: result.nodes, edges: result.edges }
+        ELSE
+            // Use provided options with ELK
+            DECLARE result = AWAIT service.layoutNodes(nodes, edges, options)
+            RETURN_VALUE { nodes: result.nodes, edges: result.edges }
         END_IF
-        
-        // 3. Convert React Flow format to ELK format
-        DECLARE elkNodes = MAP nodes TO elkNode FORMAT WITH layoutOptions
-        DECLARE elkEdges = MAP edges TO elkEdge FORMAT
-        
-        // 4. Configure ELK layout options based on algorithm and direction
-        DECLARE elkLayoutOptions = BUILD_ELK_OPTIONS_WITH_DIRECTION(layoutOptions)
-        
-        // 5. Execute ELK layout
-        TRY
-            DECLARE layoutedGraph = AWAIT elk.layout WITH elkGraph AND elkLayoutOptions
-            DECLARE layoutedNodes = APPLY_ELK_POSITIONS_TO_REACT_FLOW_NODES(layoutedGraph, nodes)
-            RETURN_VALUE { nodes: layoutedNodes, edges }
-        CATCH_ERROR error
-            LOG "ELK layout failed, using original positions: ${error}"
-            RETURN_VALUE { nodes, edges }
-        END_TRY
     `
     dependencies: [
-        "elkjs/lib/elk.bundled.js",
         "reactflow.Node",
         "reactflow.Edge"
     ]
@@ -406,7 +397,7 @@ code cfv_internal_code.LayoutService_ContentBasedSizing {
 }
 
 code cfv_internal_code.LayoutService_LayoutPresets {
-    title: "Layout Presets for Different View Types"
+    title: "Layout Presets for Different View Types with Square Layout Support"
     part_of_design: cfv_designs.LayoutService
     language: "TypeScript"
     implementation_location: {
@@ -417,11 +408,11 @@ code cfv_internal_code.LayoutService_LayoutPresets {
     signature: "Record<string, cfv_models.LayoutOptions>"
     
     detailed_behavior: `
-        // Define layout presets optimized for different visualization modes
+        // Define layout presets optimized for different visualization modes with square layout support
         DECLARE layoutPresets = {
             flowDetail: {
                 algorithm: "layered",
-                direction: "RIGHT", // Left-to-right flow
+                direction: "RIGHT", // Left-to-right flow for simple flows
                 spacing: {
                     nodeNode: 80,
                     edgeNode: 20,
@@ -432,6 +423,26 @@ code cfv_internal_code.LayoutService_LayoutPresets {
                     minWidth: 180,
                     maxWidth: 280,
                     padding: { top: 12, right: 16, bottom: 12, left: 16 }
+                }
+            },
+            flowDetailSquare: {
+                algorithm: "layered",
+                direction: "DOWN", // Top-to-bottom for square arrangement
+                spacing: {
+                    nodeNode: 100,
+                    edgeNode: 30,
+                    layerSpacing: 140
+                },
+                nodeSize: {
+                    calculateFromContent: true,
+                    minWidth: 160,
+                    maxWidth: 240,
+                    padding: { top: 10, right: 14, bottom: 10, left: 14 }
+                },
+                squareLayout: {
+                    enabled: true,
+                    maxNodesPerLayer: 4, // 4 nodes per row for square-ish arrangement
+                    preferCompactness: true
                 }
             },
             systemOverview: {
@@ -449,6 +460,26 @@ code cfv_internal_code.LayoutService_LayoutPresets {
                     padding: { top: 16, right: 20, bottom: 16, left: 20 }
                 }
             },
+            systemOverviewSquare: {
+                algorithm: "layered",
+                direction: "DOWN", // Top-to-bottom for system square layout
+                spacing: {
+                    nodeNode: 120,
+                    edgeNode: 40,
+                    layerSpacing: 160
+                },
+                nodeSize: {
+                    calculateFromContent: true,
+                    minWidth: 180,
+                    maxWidth: 260,
+                    padding: { top: 14, right: 18, bottom: 14, left: 18 }
+                },
+                squareLayout: {
+                    enabled: true,
+                    maxNodesPerLayer: 3, // 3 flows per row for system overview
+                    preferCompactness: false
+                }
+            },
             compact: {
                 algorithm: "layered",
                 direction: "RIGHT",
@@ -462,6 +493,26 @@ code cfv_internal_code.LayoutService_LayoutPresets {
                     minWidth: 120,
                     maxWidth: 200,
                     padding: { top: 8, right: 12, bottom: 8, left: 12 }
+                }
+            },
+            compactSquare: {
+                algorithm: "layered",
+                direction: "DOWN",
+                spacing: {
+                    nodeNode: 70,
+                    edgeNode: 20,
+                    layerSpacing: 90
+                },
+                nodeSize: {
+                    calculateFromContent: true,
+                    minWidth: 100,
+                    maxWidth: 180,
+                    padding: { top: 6, right: 10, bottom: 6, left: 10 }
+                },
+                squareLayout: {
+                    enabled: true,
+                    maxNodesPerLayer: 5, // 5 nodes per row for compact square
+                    preferCompactness: true
                 }
             }
         }
@@ -1549,7 +1600,14 @@ code cfv_internal_code.AutoZoomToFitComponent {
             IF (flowChanged OR nodeCountChanged) AND NOT isGeneratingGraph AND hasNodes THEN {
                 DECLARE timeoutId = setTimeout(() => {
                     TRY {
-                        CALL fitView({ duration: 800, padding: 0.1 })
+                        // Use more aggressive zoom-out for long flows
+                        DECLARE isLongFlow = nodes.length > 8
+                        CALL fitView({ 
+                            duration: 800, 
+                            padding: isLongFlow ? 0.15 : 0.1, // 15% padding for long flows, 10% for short flows
+                            minZoom: 0.1, // Allow very aggressive zoom-out
+                            maxZoom: 1.5  // Reasonable maximum zoom
+                        })
                     } CATCH error {
                         LOG "Failed to auto-fit view:", error
                     }
@@ -1573,4 +1631,214 @@ code cfv_internal_code.AutoZoomToFitComponent {
         - Uses 800ms animation duration and 10% padding for optimal user experience
         - Only triggers on flow changes or significant node count changes, not during user interaction
     `
+}
+
+specification cfv_internal_code.LayoutServiceEnhancedSpacing {
+    id: "CFV_INT_LAY_003"
+    title: "Enhanced Layout Service with Optimized Spacing and Fork Handling"
+    description: "Specification for improved ELK.js layout configuration with reduced spacing and better fork node alignment."
+    
+    overview: "The LayoutService must provide optimized spacing for compact layouts while ensuring proper vertical alignment of fork nodes and accommodating varying node heights."
+    
+    enhanced_spacing_configuration: {
+        description: "Reduced spacing configuration for more compact layouts",
+        
+        FUNCTION configureEnhancedSpacing(isLongFlow: Boolean, nodeCount: Number) -> LayoutSpacing {
+            IF isLongFlow OR nodeCount > 7 THEN
+                RETURN {
+                    nodeNode: 20,        // Reduced from 40px (50% reduction)
+                    edgeNode: 5,         // Reduced from 10px (50% reduction) 
+                    edgeEdge: 3,         // Reduced from 5px (40% reduction)
+                    layerSpacing: 30     // Reduced from 60px (50% reduction)
+                }
+            ELSE
+                RETURN {
+                    nodeNode: 40,        // Regular spacing for short flows
+                    edgeNode: 10,
+                    edgeEdge: 5,
+                    layerSpacing: 50
+                }
+            END_IF
+        }
+    }
+    
+    enhanced_fork_handling: {
+        description: "Improved ELK configuration for better fork node vertical alignment and spacing",
+        
+        FUNCTION configureElkForForkHandling(options: LayoutOptions) -> ElkLayoutOptions {
+            DECLARE elkOptions = {
+                // ENHANCED: Advanced layered algorithm options for perfect fork handling
+                'elk.layered.compaction.postCompaction.strategy': 'NONE', // Disable compaction to maintain spacing
+                'elk.layered.compaction.connectedComponents': 'false', // Don't compact connected components
+                'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+                'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+                'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
+                'elk.layered.cycleBreaking.strategy': 'GREEDY',
+                
+                // ENHANCED: Much more vertical spacing for fork nodes (1.5x increase to 9.0)
+                'elk.layered.spacing.inLayerSpacingFactor': '9.0',  // INCREASED: 1.5x more vertical space between fork nodes (6.0 * 1.5 = 9.0)
+                'elk.layered.nodePlacement.favorStraightEdges': 'true',
+                'elk.layered.mergeEdges': 'false',
+                'elk.layered.mergeHierarchyEdges': 'false',
+                
+                // CRITICAL: Advanced fork alignment options for perfect vertical grid
+                'elk.layered.nodePlacement.bk.edgeStraightening': 'IMPROVE_STRAIGHTNESS',
+                'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+                'elk.layered.nodePlacement.linearSegments.deflectionDampening': '0.1',
+                'elk.layered.spacing.baseValue': options.spacing.nodeNode.toString(),
+                
+                // ENHANCED: 2x space after forked nodes and SubFlow overflow prevention
+                'elk.layered.spacing.edgeNodeBetweenLayers': (Math.max((options.spacing.edgeNode || 20) * 2, 40)).toString(), // 2x space after fork nodes
+                'elk.layered.spacing.edgeEdgeBetweenLayers': (Math.max((options.spacing.edgeEdge || 10) * 1.5, 15)).toString(), // 1.5x edge spacing
+                'elk.layered.spacing.portsSurroundingNode': 'true', // Better port spacing around nodes
+                'elk.layered.spacing.portPortBetweenAdjacentLayers': (Math.max(options.spacing.edgeNode || 20, 15)).toString(), // Minimum 15px port spacing
+                'elk.layered.spacing.componentComponent': (Math.max(options.spacing.nodeNode || 80, 60)).toString(), // Minimum 60px component spacing
+                
+                // ENHANCED: Consistent spacing enforcement for uniform layout
+                'elk.layered.spacing.individualOverride': 'false',
+                'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+                'elk.layered.considerModelOrder.noModelOrder': 'false',
+                
+                // CRITICAL: SubFlow overflow prevention
+                'elk.layered.wrapping.strategy': 'OFF', // Disable wrapping to prevent overflow
+                'elk.layered.wrapping.additionalEdgeSpacing': '0',
+                'elk.layered.wrapping.correctionFactor': '1.0',
+                
+                // ENHANCED: Additional spacing control for perfect fork alignment
+                'elk.layered.thoroughness': '7',
+                'elk.layered.unnecessaryBendpoints': 'false',
+                'elk.layered.sausageFolding': 'false'
+            }
+            
+            RETURN elkOptions
+        }
+    }
+    
+    subflow_node_sizing: {
+        description: "Enhanced node sizing that accounts for SubFlow node height variations",
+        
+        FUNCTION calculateSubFlowNodeSize(node: Node, baseOptions: NodeSizeOptions) -> NodeDimensions {
+            IF node.type EQUALS "subFlowInvokerNode" THEN
+                DECLARE baseHeight = baseOptions.minHeight OR 70
+                DECLARE additionalHeight = 0
+                
+                // Account for additional content in SubFlow nodes
+                IF node.data?.invokedFlowFqn AND node.data.invokedFlowFqn !== "unknown" THEN
+                    ASSIGN additionalHeight += 25  // FQN display area
+                END_IF
+                
+                IF node.data?.resolvedComponentFqn THEN
+                    ASSIGN additionalHeight += 20  // Component FQN area
+                END_IF
+                
+                IF node.data?.executionStatus THEN
+                    ASSIGN additionalHeight += 15  // Status indicator area
+                END_IF
+                
+                DECLARE finalHeight = baseHeight + additionalHeight
+                DECLARE finalWidth = CLAMP(
+                    calculateTextWidth(node.data?.label OR node.id) + 40,
+                    baseOptions.minWidth OR 200,
+                    baseOptions.maxWidth OR 320
+                )
+                
+                RETURN {
+                    width: finalWidth,
+                    height: finalHeight,
+                    padding: { top: 14, right: 18, bottom: 14, left: 18 }  // Symmetric padding
+                }
+            ELSE
+                RETURN calculateStandardNodeSize(node, baseOptions)
+            END_IF
+        }
+    }
+}
+
+specification cfv_internal_code.SubFlowInvokerNodeStyling {
+    id: "CFV_INT_STY_002"
+    title: "SubFlowInvoker Node Enhanced Styling and Text Handling"
+    description: "Specification for improved SubFlowInvoker node styling with symmetric padding and text overflow handling."
+    
+    overview: "SubFlowInvoker nodes must have balanced visual appearance with proper text overflow handling for long FQNs."
+    
+    symmetric_padding_implementation: {
+        description: "Ensure symmetric left/right padding for visual balance",
+        
+        FUNCTION getNodeStyle(data: SubFlowInvokerNodeData, selected: Boolean) -> CSSProperties {
+            DECLARE baseStyle = {
+                padding: data.executionStatus ? '24px 18px 14px 18px' : '14px 18px',  // Symmetric horizontal padding
+                borderRadius: '8px',
+                minWidth: '200px',
+                maxWidth: '320px',
+                transition: 'all 0.2s ease',
+                boxSizing: 'border-box',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                position: 'relative',
+                cursor: 'pointer'
+            }
+            
+            // Apply execution status styling...
+            RETURN enhancedStyle
+        }
+    }
+    
+    text_overflow_handling: {
+        description: "Implement text overflow ellipsis for long FQN display",
+        
+        FUNCTION getInvokedFlowFqnStyle() -> CSSProperties {
+            RETURN {
+                fontSize: '10px',
+                color: '#8B5CF6',
+                marginBottom: '8px',
+                textAlign: 'center',
+                fontFamily: 'ui-monospace, monospace',
+                backgroundColor: '#FAF5FF',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                border: '1px solid #E9D5FF',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                position: 'relative',
+                
+                // ENHANCED: Text overflow handling
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%'
+            }
+        }
+    }
+    
+    responsive_content_display: {
+        description: "Adaptive content display based on available space",
+        
+        FUNCTION renderInvokedFlowFqn(fqn: String, maxWidth: Number) -> ReactElement {
+            IF fqn.length > 30 THEN
+                // For very long FQNs, show abbreviated version with ellipsis
+                DECLARE shortFqn = abbreviateFqn(fqn)
+                RETURN (
+                    <div 
+                        style={getInvokedFlowFqnStyle()}
+                        title={`Double-click to navigate to ${fqn}`}
+                    >
+                        🔗 {shortFqn}
+                        <span style={{ marginLeft: '4px', fontSize: '8px', opacity: 0.7 }}>⤴</span>
+                    </div>
+                )
+            ELSE
+                RETURN standardFqnDisplay(fqn)
+            END_IF
+        }
+        
+        FUNCTION abbreviateFqn(fqn: String) -> String {
+            DECLARE parts = fqn.split('.')
+            IF parts.length > 3 THEN
+                RETURN parts[0] + '...' + parts[parts.length - 1]
+            ELSE
+                RETURN fqn
+            END_IF
+        }
+    }
 }

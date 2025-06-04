@@ -66,6 +66,32 @@ export const layoutPresets: Record<string, LayoutPreset> = {
       separateConnectedComponents: false
     }
   },
+  flowDetailSquare: {
+    name: 'Flow Detail Square',
+    description: 'Square-shaped layout for flows with many nodes, top-to-bottom orientation',
+    options: {
+      algorithm: 'layered',
+      direction: 'DOWN',
+      spacing: {
+        nodeNode: 100,
+        edgeNode: 30,
+        edgeEdge: 15,
+        layerSpacing: 140
+      },
+      nodeSize: {
+        calculateFromContent: true,
+        minWidth: 160,
+        maxWidth: 240,
+        minHeight: 60,
+        maxHeight: 120,
+        padding: { top: 10, right: 14, bottom: 10, left: 14 }
+      },
+      edgeRouting: 'ORTHOGONAL',
+      separateConnectedComponents: false,
+      aspectRatio: 1.2, // Prefer square-ish aspect ratio
+      compactness: 0.7
+    }
+  },
   systemOverview: {
     name: 'System Overview',
     description: 'Optimized for system-level flow relationships',
@@ -90,6 +116,32 @@ export const layoutPresets: Record<string, LayoutPreset> = {
       separateConnectedComponents: true
     }
   },
+  systemOverviewSquare: {
+    name: 'System Overview Square',
+    description: 'Square-shaped layout for system overview with many flows',
+    options: {
+      algorithm: 'layered',
+      direction: 'DOWN',
+      spacing: {
+        nodeNode: 120,
+        edgeNode: 40,
+        edgeEdge: 20,
+        layerSpacing: 160
+      },
+      nodeSize: {
+        calculateFromContent: true,
+        minWidth: 180,
+        maxWidth: 260,
+        minHeight: 80,
+        maxHeight: 140,
+        padding: { top: 14, right: 18, bottom: 14, left: 18 }
+      },
+      edgeRouting: 'ORTHOGONAL',
+      separateConnectedComponents: true,
+      aspectRatio: 1.0, // Square aspect ratio
+      compactness: 0.6
+    }
+  },
   compact: {
     name: 'Compact',
     description: 'Space-efficient layout for large graphs',
@@ -110,6 +162,31 @@ export const layoutPresets: Record<string, LayoutPreset> = {
       },
       edgeRouting: 'POLYLINE',
       compactness: 0.8
+    }
+  },
+  compactSquare: {
+    name: 'Compact Square',
+    description: 'Very space-efficient square layout for very large graphs',
+    options: {
+      algorithm: 'layered',
+      direction: 'DOWN',
+      spacing: {
+        nodeNode: 50,
+        edgeNode: 20,
+        edgeEdge: 10,
+        layerSpacing: 70
+      },
+      nodeSize: {
+        calculateFromContent: true,
+        minWidth: 100,
+        maxWidth: 180,
+        minHeight: 40,
+        maxHeight: 80,
+        padding: { top: 6, right: 10, bottom: 6, left: 10 }
+      },
+      edgeRouting: 'POLYLINE',
+      compactness: 0.9,
+      aspectRatio: 1.0
     }
   },
   hierarchical: {
@@ -387,21 +464,42 @@ export class LayoutService {
       targets: [edge.target]
     }));
 
+    // Enhanced ELK options for better fork and parallel path handling
+    const elkLayoutOptions: Record<string, string> = {
+      'elk.algorithm': this.getElkAlgorithm(options.algorithm),
+      'elk.direction': options.direction,
+      'elk.spacing.nodeNode': options.spacing.nodeNode?.toString() || '60',
+      'elk.spacing.edgeNode': options.spacing.edgeNode?.toString() || '20',
+      'elk.spacing.edgeEdge': options.spacing.edgeEdge?.toString() || '10',
+      'elk.edge.routing': options.edgeRouting || 'ORTHOGONAL',
+      'elk.separateConnectedComponents': options.separateConnectedComponents?.toString() || 'false',
+      'elk.aspectRatio': options.aspectRatio?.toString() || '1.6',
+      'elk.priority': options.priority?.toString() || '0',
+      
+      // SIMPLIFIED: Core layered algorithm options
+      'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+      'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
+      
+      // CRITICAL: Spacing between layers and nodes
+      'elk.layered.spacing.nodeNodeBetweenLayers': (options.spacing.layerSpacing || 80).toString(),
+      'elk.layered.spacing.edgeNodeBetweenLayers': (options.spacing.edgeNode || 20).toString(),
+      'elk.layered.spacing.edgeEdgeBetweenLayers': (options.spacing.edgeEdge || 10).toString(),
+      
+      // ENHANCED: More vertical spacing for fork nodes
+      'elk.layered.spacing.inLayerSpacingFactor': '8.0', // Good vertical space between fork nodes
+      'elk.layered.nodePlacement.favorStraightEdges': 'true',
+      'elk.layered.mergeEdges': 'false',
+      
+      // SIMPLIFIED: Basic alignment and spacing control
+      'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+      'elk.layered.spacing.individualOverride': 'false',
+      'elk.layered.thoroughness': '5' // Reasonable thoroughness
+    };
+
     return {
       id: 'root',
-      layoutOptions: {
-        'elk.algorithm': this.getElkAlgorithm(options.algorithm),
-        'elk.direction': options.direction,
-        'elk.spacing.nodeNode': options.spacing.nodeNode?.toString(),
-        'elk.spacing.edgeNode': options.spacing.edgeNode?.toString(),
-        'elk.spacing.edgeEdge': options.spacing.edgeEdge?.toString(),
-        'elk.layered.spacing.nodeNodeBetweenLayers': options.spacing.layerSpacing?.toString(),
-        'elk.edge.routing': options.edgeRouting,
-        'elk.separateConnectedComponents': options.separateConnectedComponents?.toString(),
-        'elk.aspectRatio': options.aspectRatio?.toString(),
-        'elk.priority': options.priority?.toString(),
-        'elk.layered.compaction.postCompaction.strategy': options.compactness ? 'EDGE_LENGTH' : 'NONE'
-      },
+      layoutOptions: elkLayoutOptions,
       children: elkNodes,
       edges: elkEdges
     };
@@ -463,7 +561,7 @@ export class LayoutService {
   private applyFallbackLayout(nodes: Node[], options: LayoutOptions): Node[] {
     // Simple grid layout as fallback
     const cols = Math.ceil(Math.sqrt(nodes.length));
-    const nodeSpacing = options.spacing?.nodeNode || 150;
+    const nodeSpacing = options.spacing?.nodeNode || 80;
     
     return nodes.map((node, index) => ({
       ...node,
@@ -494,15 +592,80 @@ export class LayoutService {
   }
 }
 
-// Export convenience functions for backward compatibility
+// Export convenience functions for backward compatibility with enhanced horizontal layout
 export async function layoutNodes(
   nodes: Node[],
   edges: Edge[],
   options: LayoutOptions = {}
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const service = new LayoutService();
-  const result = await service.layoutNodes(nodes, edges, options);
-  return { nodes: result.nodes, edges: result.edges };
+  
+  // Use enhanced horizontal layout for flows with many nodes
+  const isLongFlow = nodes.length > 7;
+  
+  if (isLongFlow && !options.algorithm && !options.direction) {
+    console.log(`📏 Using enhanced horizontal layout for flow with ${nodes.length} nodes`);
+    
+    // Use enhanced horizontal layout with REDUCED spacing (50% reduction)
+    const finalOptions = {
+      algorithm: 'layered' as const,
+      direction: 'RIGHT' as const,
+      spacing: {
+        nodeNode: 50,         // Good spacing for smaller nodes
+        edgeNode: 20,         // Simple edge spacing
+        edgeEdge: 10,         // Simple edge separation
+        layerSpacing: 80      // Good layer separation
+      },
+      nodeSize: {
+        calculateFromContent: true,
+        minWidth: 160,        // REDUCED: Match SubFlow node minimum
+        maxWidth: 240,        // REDUCED: Match SubFlow node maximum to prevent overlap
+        minHeight: 70,        // Reasonable minimum height
+        maxHeight: 120,       // Reasonable maximum height
+        padding: { top: 10, right: 12, bottom: 10, left: 12 } // Simple padding
+      },
+      edgeRouting: 'ORTHOGONAL',
+      separateConnectedComponents: false,
+      aspectRatio: 3.0,     // Wide aspect ratio for long flows
+      compactness: 0.3,     // Simple compactness
+      ...options // Allow user overrides
+    };
+    
+    const result = await service.layoutNodes(nodes, edges, finalOptions);
+    return { nodes: result.nodes, edges: result.edges };
+  } else if (!isLongFlow && !options.algorithm && !options.direction) {
+    // Use regular layout for shorter flows with REDUCED spacing
+    const finalOptions = {
+      algorithm: 'layered' as const,
+      direction: 'RIGHT' as const,
+      spacing: {
+        nodeNode: 60,         // Slightly more spacing for regular flows
+        edgeNode: 20,         // Simple edge spacing
+        edgeEdge: 10,         // Simple edge separation
+        layerSpacing: 90      // Good layer separation
+      },
+      nodeSize: {
+        calculateFromContent: true,
+        minWidth: 140,        // Slightly smaller for regular nodes
+        maxWidth: 220,        // Smaller maximum width
+        minHeight: 60,        // Regular minimum height
+        maxHeight: 100,       // Smaller maximum height
+        padding: { top: 8, right: 12, bottom: 8, left: 12 }
+      },
+      edgeRouting: 'ORTHOGONAL',
+      separateConnectedComponents: false,
+      aspectRatio: 1.6,
+      compactness: 0.4,     // Simple compactness
+      ...options // Allow user overrides
+    };
+    
+    const result = await service.layoutNodes(nodes, edges, finalOptions);
+    return { nodes: result.nodes, edges: result.edges };
+  } else {
+    // Use provided options
+    const result = await service.layoutNodes(nodes, edges, options);
+    return { nodes: result.nodes, edges: result.edges };
+  }
 }
 
 export async function layoutSystemOverview(
@@ -511,7 +674,33 @@ export async function layoutSystemOverview(
   options: LayoutOptions = {}
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const service = new LayoutService();
-  const result = await service.layoutSystemOverview(nodes, edges, options);
+  
+  // Use enhanced horizontal layout with REDUCED spacing for system overview
+  const finalOptions = {
+    algorithm: 'layered' as const,
+    direction: 'RIGHT' as const,
+    spacing: {
+      nodeNode: 23,         // Reduced from 45px (approximately 50% reduction)
+      edgeNode: 6,          // Reduced from 12px (50% reduction)
+      edgeEdge: 3,          // Reduced from 6px (50% reduction)
+      layerSpacing: 35      // Reduced from 70px (50% reduction)
+    },
+    nodeSize: {
+      calculateFromContent: true,
+      minWidth: 180,
+      maxWidth: 300,
+      minHeight: 80,
+      maxHeight: 140,
+      padding: { top: 14, right: 18, bottom: 14, left: 18 }
+    },
+    edgeRouting: 'ORTHOGONAL',
+    separateConnectedComponents: true,
+    aspectRatio: 2.5,     // Wide aspect ratio for system overview
+    compactness: 0.4,     // Less compactness for better readability
+    ...options // Allow user overrides
+  };
+  
+  const result = await service.layoutSystemOverview(nodes, edges, finalOptions);
   return { nodes: result.nodes, edges: result.edges };
 }
 

@@ -57,10 +57,10 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
   // Enhanced styling for clean design mode vs execution mode
   const getNodeStyle = () => {
     const baseStyle = {
-      padding: data.executionStatus ? '24px 28px 14px 28px' : '14px 18px', // Debug mode padding vs design mode
+      padding: data.executionStatus ? '20px 16px 12px 16px' : '12px 16px', // Reduced padding
       borderRadius: '8px',
-      minWidth: '200px',
-      maxWidth: '320px',
+      minWidth: '160px', // REDUCED: Much smaller minimum width
+      maxWidth: '240px', // REDUCED: Much smaller maximum width to prevent overlap
       transition: 'all 0.2s ease',
       boxSizing: 'border-box' as const,
       overflow: 'hidden' as const,
@@ -161,7 +161,6 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
           color: '#8B5CF6',
           marginBottom: '8px',
           textAlign: 'center',
-          wordWrap: 'break-word',
           fontFamily: 'ui-monospace, monospace',
           backgroundColor: '#FAF5FF',
           padding: '3px 8px',
@@ -169,7 +168,11 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
           border: '1px solid #E9D5FF',
           cursor: 'pointer',
           transition: 'all 0.2s ease',
-          position: 'relative'
+          position: 'relative',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          maxWidth: '100%'
         }}
         title={`Double-click to navigate to ${data.invokedFlowFqn}`}
         onMouseEnter={(e) => {
@@ -200,12 +203,15 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
           color: '#6B7280',
           marginBottom: '8px',
           textAlign: 'center',
-          wordWrap: 'break-word',
           fontFamily: 'ui-monospace, monospace',
           backgroundColor: '#F9FAFB',
           padding: '3px 6px',
           borderRadius: '4px',
-          border: '1px solid #F3F4F6'
+          border: '1px solid #F3F4F6',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          maxWidth: '100%'
         }}>
           {data.resolvedComponentFqn}
         </div>

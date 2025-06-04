@@ -118,10 +118,26 @@ const AutoZoomToFit: React.FC<{
       // Small delay to ensure DOM updates are complete
       const timeoutId = setTimeout(() => {
         try {
-          fitView({ 
-            duration: 800, 
-            padding: 0.1 // 10% padding around nodes
-          });
+          // Use different zoom settings for long flows vs regular flows
+          const isLongFlow = nodes.length > 7;
+          
+          if (isLongFlow) {
+            // Long flows need more aggressive zoom-out and different padding
+            fitView({ 
+              duration: 800, 
+              padding: 0.05, // 5% padding for long horizontal flows
+              minZoom: 0.02, // Very aggressive zoom-out for very long flows
+              maxZoom: 1.0   // Lower maximum zoom for long flows
+            });
+          } else {
+            // Regular layout settings
+            fitView({ 
+              duration: 800, 
+              padding: 0.08, // 8% padding for regular layout
+              minZoom: 0.1,  // Standard minimum zoom
+              maxZoom: 1.5   // Standard maximum zoom
+            });
+          }
         } catch (error) {
           console.warn('Failed to auto-fit view:', error);
         }
@@ -809,6 +825,8 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
               nodeTypes={props.customNodeTypes}
               edgeTypes={props.customEdgeTypes}
               fitView
+              minZoom={nodes.length > 7 ? 0.02 : 0.1}
+              maxZoom={nodes.length > 7 ? 1.0 : 1.5}
               {...props.customReactFlowProOptions}
             >
               <Controls />

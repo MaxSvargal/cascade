@@ -296,8 +296,10 @@ directive cfv_consumer_directives.AutoZoomToFit {
 
     technical_implementation: {
         hook_usage: "const { fitView } = useReactFlow(); within React Flow provider context",
-        effect_pattern: "useEffect(() => { if (nodes.length > 0) { setTimeout(() => fitView({ duration: 800, padding: 0.1 }), 100); } }, [currentFlowFqn, nodes.length]);",
+        effect_pattern: "useEffect(() => { if (nodes.length > 0) { setTimeout(() => fitView({ duration: 800, padding: 0.15, minZoom: 0.1, maxZoom: 1.5 }), 100); } }, [currentFlowFqn, nodes.length]);",
         error_handling: "Wrap fitView calls in try-catch to handle cases where React Flow context is not available.",
-        timing_delay: "Use small timeout (100ms) to ensure DOM updates are complete before fitting view."
+        timing_delay: "Use small timeout (100ms) to ensure DOM updates are complete before fitting view.",
+        zoom_constraints: "Set minZoom to 0.1 for very long flows and increase padding to 15% for better visibility.",
+        square_layout_support: "Coordinate with layout service to prefer square-shaped arrangements for long flows."
     }
 }

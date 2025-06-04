@@ -859,64 +859,50 @@ design cfv_designs.SubFlowInvokerNavigation {
                 hover_background: "#F3E8FF (darker purple on hover)",
                 hover_border: "#C4B5FD (darker purple border on hover)",
                 text_color: "#8B5CF6 (purple text)",
-                font_family: "ui-monospace, monospace"
+                font_family: "ui-monospace, monospace",
+                padding: "symmetric left/right padding for balanced appearance",
+                text_overflow: "ellipsis for long FQNs to maintain single-line display",
+                min_width: "200px",
+                max_width: "320px"
             }
         },
         
-        data_population: {
-            description: "Correct population of invokedFlowFqn from DSL configuration",
-            source_field: "step.config.flowName (NOT step.config.flow_fqn)",
-            resolution_logic: [
-                "If flowName contains '.', treat as full FQN",
-                "If flowName is simple name, prepend current module FQN",
-                "If flowName is missing/empty, set to 'unknown' and log warning"
-            ],
-            examples: {
-                full_fqn: "config.flowName = 'com.casino.kyc.InitiateKYCFlow' → invokedFlowFqn = 'com.casino.kyc.InitiateKYCFlow'",
-                simple_name: "config.flowName = 'InitiateKYCFlow' in module 'com.casino.core' → invokedFlowFqn = 'com.casino.core.InitiateKYCFlow'",
-                missing: "config.flowName = undefined → invokedFlowFqn = 'unknown'"
+        layout_requirements: {
+            description: "Enhanced layout requirements for proper fork handling and spacing",
+            fork_alignment: {
+                vertical_alignment: "Fork nodes must be aligned in perfect vertical line using advanced ELK configuration",
+                spacing_factor: "Increased vertical spacing between fork nodes to accommodate taller SubFlow nodes",
+                elk_configuration: "Use inLayerSpacingFactor of 6.0+ for adequate vertical separation with perfect grid alignment",
+                advanced_options: "Use NETWORK_SIMPLEX node placement, BALANCED fixed alignment, and IMPROVE_STRAIGHTNESS edge straightening"
+            },
+            horizontal_spacing: {
+                node_to_node: "Reduced horizontal spacing for more compact layout",
+                reduction_factor: "50% reduction from current spacing (2x reduction)",
+                target_spacing: "20px node-to-node, 5px edge-to-edge, 30px layer spacing",
+                consistency_enforcement: "Disable individual spacing overrides and compaction to maintain uniform spacing"
+            },
+            subflow_specific: {
+                height_consideration: "Account for SubFlow nodes being taller than regular step nodes",
+                text_handling: "Use CSS text-overflow ellipsis for long FQN display",
+                padding_symmetry: "Ensure equal left and right padding for visual balance",
+                spacing_uniformity: "Ensure consistent spacing before and after SubFlow nodes"
+            },
+            advanced_elk_features: {
+                compaction_disabled: "Disable post-compaction and connected component compaction to maintain spacing",
+                thoroughness_increased: "Use thoroughness level 7 for better layout quality",
+                edge_optimization: "Remove unnecessary bendpoints and disable sausage folding for cleaner appearance",
+                model_order_consideration: "Consider model order for consistent node placement"
             }
         },
         
-        navigation_behavior: {
-            description: "Double-click navigation with module loading support",
-            interaction_flow: [
-                "User double-clicks SubFlowInvoker node",
-                "Check if enableDoubleClickNavigation is true",
-                "Extract invokedFlowFqn from node data",
-                "Check if target module is already loaded",
-                "If loaded: Navigate immediately to target flow",
-                "If not loaded: Use requestModule to load target module",
-                "On successful load: Navigate to target flow",
-                "On load failure: Show error message"
-            ],
-            error_handling: [
-                "Unknown flow FQN: Show warning message",
-                "Module load failure: Display error with retry option",
-                "Missing requestModule callback: Log warning"
-            ]
+        navigation_interaction: {
+            description: "Double-click navigation behavior with module loading support",
+            trigger_event: "onNodeDoubleClick handler in CascadeFlowVisualizer",
+            target_resolution: "Extract invokedFlowFqn from node data",
+            module_loading: "Use requestModule callback for unloaded target modules",
+            error_handling: "Graceful fallback for unavailable flows",
+            visual_feedback: "Loading states and error notifications"
         }
-    },
-    
-    integration_points: {
-        graph_builder_service: "Populates invokedFlowFqn during node generation",
-        cascade_flow_visualizer: "Handles double-click events and navigation",
-        module_registry: "Checks if target modules are loaded",
-        navigation_atoms: "Updates current flow state"
-    },
-    
-    user_experience: {
-        visual_feedback: [
-            "Hover effects indicate interactivity",
-            "Loading states during module loading",
-            "Success feedback on navigation",
-            "Clear error messages on failure"
-        ],
-        accessibility: [
-            "Keyboard navigation support",
-            "Screen reader friendly tooltips",
-            "High contrast visual indicators"
-        ]
     }
 }
 
@@ -929,7 +915,8 @@ design cfv_designs.AutoZoomToFitService {
         "Provide smooth animated transitions for zoom changes.",
         "Respect user's manual zoom/pan actions after initial auto-fit.",
         "Handle timing coordination with graph layout completion.",
-        "Debounce rapid navigation changes to prevent excessive zoom adjustments."
+        "Debounce rapid navigation changes to prevent excessive zoom adjustments.",
+        "Adapt zoom settings for long flows vs regular flows."
     ]
     dependencies: [
         "reactflow.useReactFlow",
@@ -943,9 +930,21 @@ design cfv_designs.AutoZoomToFitService {
     }
     behavioral_rules: [
         "Only auto-fit on flow changes, not during user interaction",
-        "Use 10% padding around nodes for optimal viewing",
+        "Use 5% padding for long flows (flows with 8+ nodes) to accommodate wide horizontal layouts",
+        "Use 8% padding for regular flows (flows with 7 or fewer nodes)",
         "Apply 800ms animation duration for smooth transitions",
-        "Wait 100ms after layout completion before fitting view"
+        "Wait 100ms after layout completion before fitting view",
+        "Set minZoom to 0.02 for long flows to accommodate very wide layouts",
+        "Set minZoom to 0.1 for regular flows",
+        "Coordinate with layout service to use enhanced horizontal arrangements for flows with many nodes"
     ]
-    source: "New implementation for enhanced user experience"
+    enhanced_horizontal_layout_support: {
+        threshold: "Flows with more than 7 nodes use enhanced horizontal layout",
+        layout_configuration: "Single-line horizontal flow with enhanced spacing",
+        spacing_enhancements: "150px node spacing, 200px layer spacing, 40px edge spacing",
+        aspect_ratio: "3.0 wide aspect ratio for long flows to maintain readability",
+        fork_handling: "Enhanced ELK.js configuration for better fork and parallel path visualization",
+        zoom_optimization: "Very aggressive zoom-out (minZoom: 0.02) for very long horizontal flows"
+    }
+    source: "Enhanced implementation for horizontal layout support with fork handling"
 }
