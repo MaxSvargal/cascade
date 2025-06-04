@@ -12,7 +12,8 @@ import ReactFlow, {
   OnConnect,
   applyNodeChanges,
   applyEdgeChanges,
-  addEdge
+  addEdge,
+  useReactFlow
 } from 'reactflow';
 
 import { CascadeFlowVisualizerProps, SelectedElement } from '@/models/cfv_models_generated';
@@ -92,6 +93,49 @@ const setSidebarWidths = (leftWidth: number, rightWidth: number) => {
   } catch (error) {
     console.warn('Failed to save sidebar widths to localStorage:', error);
   }
+};
+
+// Auto Zoom-to-Fit Component (must be inside ReactFlowProvider)
+const AutoZoomToFit: React.FC<{
+  currentFlowFqn: string | null;
+  nodes: Node[];
+  isGeneratingGraph: boolean;
+}> = ({ currentFlowFqn, nodes, isGeneratingGraph }) => {
+  const { fitView } = useReactFlow();
+  const lastFlowFqnRef = useRef<string | null>(null);
+  const lastNodeCountRef = useRef<number>(0);
+
+  useEffect(() => {
+    // Only auto-fit when:
+    // 1. Flow changes (different FQN)
+    // 2. Graph generation is complete
+    // 3. We have nodes to display
+    const flowChanged = lastFlowFqnRef.current !== currentFlowFqn;
+    const hasNodes = nodes.length > 0;
+    const nodeCountChanged = lastNodeCountRef.current !== nodes.length;
+
+    if ((flowChanged || nodeCountChanged) && !isGeneratingGraph && hasNodes) {
+      // Small delay to ensure DOM updates are complete
+      const timeoutId = setTimeout(() => {
+        try {
+          fitView({ 
+            duration: 800, 
+            padding: 0.1 // 10% padding around nodes
+          });
+        } catch (error) {
+          console.warn('Failed to auto-fit view:', error);
+        }
+      }, 100);
+
+      // Update refs
+      lastFlowFqnRef.current = currentFlowFqn;
+      lastNodeCountRef.current = nodes.length;
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [currentFlowFqn, nodes.length, isGeneratingGraph, fitView]);
+
+  return null; // This component doesn't render anything
 };
 
 const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
@@ -770,6 +814,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
               <Controls />
               <Background />
               <MiniMap />
+              <AutoZoomToFit currentFlowFqn={currentFlowFqn} nodes={nodes} isGeneratingGraph={isGeneratingGraph} />
             </ReactFlow>
           </div>
         </div>

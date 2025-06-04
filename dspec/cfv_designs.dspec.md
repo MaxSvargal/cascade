@@ -919,3 +919,33 @@ design cfv_designs.SubFlowInvokerNavigation {
         ]
     }
 }
+
+design cfv_designs.AutoZoomToFitService {
+    title: "Auto Zoom-to-Fit Service (React Flow Integration)"
+    description: "Automatically adjusts zoom and pan to show all nodes when flows are loaded or navigation occurs."
+    part_of: cfv_designs.CascadeFlowVisualizerComponent
+    responsibilities: [
+        "Automatically fit view when flows are initially loaded or changed.",
+        "Provide smooth animated transitions for zoom changes.",
+        "Respect user's manual zoom/pan actions after initial auto-fit.",
+        "Handle timing coordination with graph layout completion.",
+        "Debounce rapid navigation changes to prevent excessive zoom adjustments."
+    ]
+    dependencies: [
+        "reactflow.useReactFlow",
+        cfv_designs.NavigationStateService,
+        cfv_designs.GraphBuilderService
+    ]
+    exposes_interface: {
+        autoFitView: "(options?: { duration?: number; padding?: number }) => void",
+        enableAutoFit: "() => void",
+        disableAutoFit: "() => void"
+    }
+    behavioral_rules: [
+        "Only auto-fit on flow changes, not during user interaction",
+        "Use 10% padding around nodes for optimal viewing",
+        "Apply 800ms animation duration for smooth transitions",
+        "Wait 100ms after layout completion before fitting view"
+    ]
+    source: "New implementation for enhanced user experience"
+}

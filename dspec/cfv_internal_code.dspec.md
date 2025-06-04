@@ -1521,3 +1521,56 @@ code cfv_internal_code.GraphBuilderService_GenerateFlowDetailGraphData {
         "cfv_models.IModuleRegistry"
     ]
 }
+
+code cfv_internal_code.AutoZoomToFitComponent {
+    title: "Auto Zoom-to-Fit Component Implementation"
+    part_of_design: cfv_designs.AutoZoomToFitService
+    language: "TypeScriptReact"
+    implementation_location: {
+        filepath: "components/CascadeFlowVisualizer.tsx",
+        entry_point_name: "AutoZoomToFit",
+        entry_point_type: "component"
+    }
+    signature: "React.FC<{ currentFlowFqn: string | null; nodes: Node[]; isGeneratingGraph: boolean }>"
+    
+    detailed_behavior: `
+        // Human Review Focus: Timing coordination, user experience, performance optimization.
+        // AI Agent Target: Implement smooth auto zoom-to-fit when flows change.
+
+        DECLARE fitView = CALL useReactFlow().fitView
+        DECLARE lastFlowFqnRef = useRef<string | null>(null)
+        DECLARE lastNodeCountRef = useRef<number>(0)
+
+        EFFECT on [currentFlowFqn, nodes.length, isGeneratingGraph, fitView] {
+            DECLARE flowChanged = lastFlowFqnRef.current !== currentFlowFqn
+            DECLARE hasNodes = nodes.length > 0
+            DECLARE nodeCountChanged = lastNodeCountRef.current !== nodes.length
+
+            IF (flowChanged OR nodeCountChanged) AND NOT isGeneratingGraph AND hasNodes THEN {
+                DECLARE timeoutId = setTimeout(() => {
+                    TRY {
+                        CALL fitView({ duration: 800, padding: 0.1 })
+                    } CATCH error {
+                        LOG "Failed to auto-fit view:", error
+                    }
+                }, 100)
+
+                SET lastFlowFqnRef.current = currentFlowFqn
+                SET lastNodeCountRef.current = nodes.length
+
+                RETURN () => clearTimeout(timeoutId)
+            }
+        }
+
+        RETURN null // Component doesn't render anything
+    `
+    
+    integration_notes: `
+        - Must be placed inside ReactFlowProvider context to access useReactFlow hook
+        - Renders as child of ReactFlow component alongside Controls, Background, MiniMap
+        - Uses refs to track flow changes and prevent unnecessary zoom adjustments
+        - Implements 100ms delay to ensure DOM updates are complete before fitting view
+        - Uses 800ms animation duration and 10% padding for optimal user experience
+        - Only triggers on flow changes or significant node count changes, not during user interaction
+    `
+}

@@ -264,3 +264,40 @@ directive cfv_consumer_directives.RefinedNodeStyling {
         subflow_node_default: "Background: '#FDFCFF', Border: '#E9D5FF' (purple theme)"
     }
 }
+
+directive cfv_consumer_directives.AutoZoomToFit {
+    id: "CFV_DIR_ZOOM_001"
+    title: "Directive for Automatic Zoom-to-Fit on Flow Load"
+    target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer"
+    description: "Provides guidance for implementing automatic zoom-to-fit functionality when flows are initially loaded to ensure all nodes are visible on screen."
+    default_language: "TypeScriptReact"
+
+    implementation_pattern: {
+        trigger_conditions: "Automatically fit view when: 1) A flow is initially loaded, 2) User navigates to a different flow via SubFlowInvoker double-click, 3) User switches between flows in the navigation, 4) Graph data changes significantly (new nodes added/removed).",
+        react_flow_integration: "Use React Flow's `fitView()` method from the useReactFlow hook to automatically adjust zoom and pan to show all nodes.",
+        timing_considerations: "Execute fitView() after graph layout is complete and nodes are positioned. Use useEffect with dependencies on currentFlowFqn and graph data.",
+        animation_settings: "Use smooth animation for better UX: fitView({ duration: 800, padding: 0.1 }) to provide 10% padding around nodes.",
+        performance_optimization: "Debounce fitView calls to prevent excessive zoom adjustments during rapid navigation or data updates."
+    }
+
+    integration_requirements: {
+        react_flow_hook: "Use useReactFlow() hook to access fitView method within React Flow context.",
+        dependency_tracking: "Track changes to currentFlowFqn, graph nodes, and layout completion status.",
+        conditional_execution: "Only execute fitView when nodes are present and positioned (avoid empty graphs).",
+        user_override: "Respect user's manual zoom/pan actions - only auto-fit on initial load, not during user interaction."
+    }
+
+    user_experience: {
+        smooth_transitions: "Use animated transitions for zoom changes to provide smooth visual feedback.",
+        appropriate_padding: "Maintain 10-15% padding around the graph to ensure nodes aren't touching screen edges.",
+        preserve_user_control: "After initial auto-fit, allow user to manually zoom/pan without interference.",
+        loading_states: "Coordinate with loading states to ensure fitView occurs after content is ready."
+    }
+
+    technical_implementation: {
+        hook_usage: "const { fitView } = useReactFlow(); within React Flow provider context",
+        effect_pattern: "useEffect(() => { if (nodes.length > 0) { setTimeout(() => fitView({ duration: 800, padding: 0.1 }), 100); } }, [currentFlowFqn, nodes.length]);",
+        error_handling: "Wrap fitView calls in try-catch to handle cases where React Flow context is not available.",
+        timing_delay: "Use small timeout (100ms) to ensure DOM updates are complete before fitting view."
+    }
+}
