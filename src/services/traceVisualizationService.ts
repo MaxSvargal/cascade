@@ -96,7 +96,6 @@ export class TraceVisualizationServiceImpl implements TraceVisualizationService 
           },
           style: {
             ...node.style,
-            opacity: 0.6,
             border: '2px solid #ccc'
           }
         };
@@ -330,48 +329,33 @@ export class TraceVisualizationServiceImpl implements TraceVisualizationService 
   ): any {
     const baseStyle: any = {};
 
-    // Status-based styling
+    // Status-based styling with clean backgrounds and no borders
     switch (status) {
       case 'SUCCESS':
-        baseStyle.backgroundColor = '#e8f5e8';
-        baseStyle.border = '2px solid #4caf50';
+        baseStyle.backgroundColor = '#F0FDF4';
+        baseStyle.background = 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)';
         break;
       case 'FAILURE':
-        baseStyle.backgroundColor = '#ffebee';
-        baseStyle.border = '2px solid #f44336';
+        baseStyle.backgroundColor = '#FEF2F2';
+        baseStyle.background = 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)';
         break;
       case 'RUNNING':
-        baseStyle.backgroundColor = '#fff3e0';
-        baseStyle.border = '2px solid #ff9800';
-        baseStyle.animation = 'pulse 1.5s infinite';
+        baseStyle.backgroundColor = '#FFFBEB';
+        baseStyle.background = 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)';
         break;
       case 'PENDING':
-        baseStyle.backgroundColor = '#f5f5f5';
-        baseStyle.border = '2px solid #9e9e9e';
+        baseStyle.backgroundColor = '#F9FAFB';
+        baseStyle.background = 'linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%)';
         break;
       case 'SKIPPED':
-        baseStyle.backgroundColor = '#f5f5f5';
-        baseStyle.border = '2px solid #9e9e9e';
+        baseStyle.backgroundColor = '#F9FAFB';
+        baseStyle.background = 'linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%)';
         baseStyle.opacity = 0.7;
         break;
     }
 
-    // Performance-based border styling
-    if (performanceClass === 'slow') {
-      baseStyle.borderWidth = '3px';
-      baseStyle.borderStyle = 'dashed';
-    }
-
-    // Critical path highlighting
-    if (isCritical) {
-      baseStyle.boxShadow = '0 0 10px #2196f3';
-    }
-
-    // Bottleneck highlighting
-    if (isBottleneck) {
-      baseStyle.boxShadow = '0 0 15px #ff5722';
-      baseStyle.borderColor = '#ff5722';
-    }
+    // Remove all borders and box-shadows - let the node components handle their own styling
+    // No additional styling for performance, critical path, or bottlenecks
 
     return baseStyle;
   }
@@ -384,7 +368,7 @@ export class TraceVisualizationServiceImpl implements TraceVisualizationService 
     const baseStyle: any = {};
 
     if (wasExecuted) {
-      baseStyle.stroke = '#4caf50';
+      baseStyle.stroke = '#4B5563'; // Dark gray instead of green
       baseStyle.strokeWidth = 2;
       
       if (isCriticalPath) {

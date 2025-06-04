@@ -727,74 +727,12 @@ const InspectorDebugTestTab: React.FC<{
       let result;
       
       if (isTriggerNode) {
-        // For trigger execution, run the entire flow from the beginning
+        // For trigger execution, use runDebugExecution with 'trigger' to get progressive execution
         console.log('🎯 Executing entire flow from trigger with input:', validation.data);
-        const simulationResult = await actions.simulateFlowExecution(
-          currentFlowFqn,
-          undefined, // No target step - run entire flow
-          validation.data,
-          {
-            useMocks: true,
-            timeoutMs: 30000
-          }
-        );
-        
-        // Convert simulation result to execution result format
-        result = {
-          executionId: `flow-exec-${Date.now()}`,
-          status: simulationResult.status === 'COMPLETED' ? 'SUCCESS' : 'FAILURE',
-          startTime: new Date().toISOString(),
-          endTime: new Date().toISOString(),
-          durationMs: 2000,
-          logs: [
-            {
-              stepId: 'trigger',
-              timestamp: new Date().toISOString(),
-              level: 'info',
-              message: 'Flow execution completed from trigger',
-              data: { simulationResult }
-            }
-          ],
-          finalOutput: simulationResult.simulatedStepOutputs,
-          trace: {
-            traceId: `flow-trace-${Date.now()}`,
-            flowFqn: currentFlowFqn,
-            status: simulationResult.status,
-            startTime: new Date().toISOString(),
-            endTime: new Date().toISOString(),
-            durationMs: 2000,
-            triggerData: validation.data,
-            steps: [
-              // Add trigger step
-              {
-                stepId: 'trigger',
-                componentFqn: 'trigger',
-                status: 'SUCCESS' as ExecutionStatusEnum,
-                startTime: new Date().toISOString(),
-                endTime: new Date().toISOString(),
-                durationMs: 50,
-                inputData: validation.data,
-                outputData: simulationResult.triggerInputData
-              },
-              // Add executed steps
-              ...Object.entries(simulationResult.resolvedStepInputs).map(([stepId, stepInputData]) => ({
-                stepId,
-                componentFqn: 'unknown',
-                status: 'SUCCESS' as ExecutionStatusEnum,
-                startTime: new Date().toISOString(),
-                endTime: new Date().toISOString(),
-                durationMs: 100,
-                inputData: stepInputData,
-                outputData: simulationResult.simulatedStepOutputs[stepId] || { result: 'completed' }
-              }))
-            ]
-          }
-        };
-        
-        // Update the execution state in the visualizer
-        if (result.trace) {
-          actions.updateExecutionState(currentFlowFqn, result.trace);
-        }
+        result = await actions.runDebugExecution('trigger', validation.data, {
+          useMocks: true,
+          timeoutMs: 30000
+        });
       } else {
         // For step execution, run debug execution up to that step
         console.log('🎯 Executing step:', selectedElement.id, 'with input:', validation.data);

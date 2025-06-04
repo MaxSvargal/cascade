@@ -646,86 +646,396 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
       
       console.log('🎯 Executing in flow context:', targetFlowFqn, 'for target:', targetId);
       
-      // For trigger execution, run the entire flow from the beginning
-      // For step execution, run up to that step
-      const targetStepId = targetId === 'trigger' ? undefined : targetId;
+      // Check if this is a trigger execution (entire flow) or step execution
+      const isTriggerExecution = targetId === 'trigger';
       
-      // Simulate the flow execution
-      const simulationResult = await this.simulateFlowExecution(
-        targetFlowFqn,
-        targetStepId,
-        inputData,
-        executionOptions
-      );
-      
-      console.log('🚀 Simulation completed:', simulationResult);
-      
-      // Convert simulation result to execution trace format for visualization
-      const executionTrace: FlowExecutionTrace = {
-        traceId: `debug-${Date.now()}`,
-        flowFqn: targetFlowFqn,
-        status: simulationResult.status,
-        startTime: new Date().toISOString(),
-        endTime: new Date().toISOString(),
-        durationMs: 1000,
-        triggerData: simulationResult.triggerInputData,
-        steps: [
-          // Add trigger step
-          {
-            stepId: 'trigger',
-            componentFqn: 'trigger',
-            status: 'SUCCESS' as ExecutionStatusEnum,
-            startTime: new Date().toISOString(),
-            endTime: new Date().toISOString(),
-            durationMs: 50,
-            inputData: inputData,
-            outputData: simulationResult.triggerInputData
-          },
-          // Add executed steps
-          ...Object.entries(simulationResult.resolvedStepInputs).map(([stepId, stepInputData]) => ({
-            stepId,
-            componentFqn: 'unknown',
-            status: 'SUCCESS' as ExecutionStatusEnum,
-            startTime: new Date().toISOString(),
-            endTime: new Date().toISOString(),
-            durationMs: 100,
-            inputData: stepInputData,
-            outputData: simulationResult.simulatedStepOutputs[stepId] || { result: 'completed' }
-          }))
-        ]
-      };
-      
-      console.log('📊 Generated execution trace:', executionTrace);
-      
-      // Update the execution state in the visualizer
-      this.updateExecutionState(targetFlowFqn, executionTrace);
-      
-      // Return execution result for the debug interface
-      const executionResult = {
-        executionId: `exec-${Date.now()}`,
-        status: 'SUCCESS' as const,
-        startTime: new Date().toISOString(),
-        endTime: new Date().toISOString(),
-        durationMs: 1000,
-        logs: [
-          {
-            stepId: targetId,
-            timestamp: new Date().toISOString(),
-            level: 'info',
-            message: 'Debug execution completed successfully',
-            data: { inputData, simulationResult }
-          }
-        ],
-        finalOutput: targetId === 'trigger' 
-          ? simulationResult.triggerInputData 
-          : (simulationResult.simulatedStepOutputs[targetId] || { result: 'success' }),
-        trace: executionTrace
-      };
-      
-      return executionResult;
+      if (isTriggerExecution) {
+        // For trigger execution, run progressive flow simulation
+        return await this.runProgressiveFlowExecution(targetFlowFqn, inputData, executionOptions);
+      } else {
+        // For step execution, run up to that step
+        const targetStepId = targetId;
+        
+        // Simulate the flow execution up to target step
+        const simulationResult = await this.simulateFlowExecution(
+          targetFlowFqn,
+          targetStepId,
+          inputData,
+          executionOptions
+        );
+        
+        console.log('🚀 Simulation completed:', simulationResult);
+        
+        // Convert simulation result to execution trace format for visualization
+        const executionTrace: FlowExecutionTrace = {
+          traceId: `debug-${Date.now()}`,
+          flowFqn: targetFlowFqn,
+          status: simulationResult.status,
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          durationMs: 1000,
+          triggerData: simulationResult.triggerInputData,
+          steps: [
+            // Add trigger step
+            {
+              stepId: 'trigger',
+              componentFqn: 'trigger',
+              status: 'SUCCESS' as ExecutionStatusEnum,
+              startTime: new Date().toISOString(),
+              endTime: new Date().toISOString(),
+              durationMs: 50,
+              inputData: inputData,
+              outputData: simulationResult.triggerInputData
+            },
+            // Add executed steps
+            ...Object.entries(simulationResult.resolvedStepInputs).map(([stepId, stepInputData]) => ({
+              stepId,
+              componentFqn: 'unknown',
+              status: 'SUCCESS' as ExecutionStatusEnum,
+              startTime: new Date().toISOString(),
+              endTime: new Date().toISOString(),
+              durationMs: 100,
+              inputData: stepInputData,
+              outputData: simulationResult.simulatedStepOutputs[stepId] || { result: 'completed' }
+            }))
+          ]
+        };
+        
+        console.log('📊 Generated execution trace:', executionTrace);
+        
+        // Update the execution state in the visualizer
+        this.updateExecutionState(targetFlowFqn, executionTrace);
+        
+        // Return execution result for the debug interface
+        const executionResult = {
+          executionId: `exec-${Date.now()}`,
+          status: 'SUCCESS' as const,
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          durationMs: 1000,
+          logs: [
+            {
+              stepId: targetId,
+              timestamp: new Date().toISOString(),
+              level: 'info',
+              message: 'Debug execution completed successfully',
+              data: { inputData, simulationResult }
+            }
+          ],
+          finalOutput: simulationResult.simulatedStepOutputs[targetId] || { result: 'success' },
+          trace: executionTrace
+        };
+        
+        return executionResult;
+      }
     } catch (error: any) {
       console.error('Debug execution failed:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Run progressive flow execution that updates node statuses step by step
+   */
+  private async runProgressiveFlowExecution(
+    flowFqn: string, 
+    triggerInputData: any, 
+    executionOptions?: ExecutionOptions
+  ): Promise<any> {
+    console.log('🚀 Starting progressive flow execution for:', flowFqn);
+    console.log('🔍 Trigger input data:', triggerInputData);
+    console.log('🔍 Execution options:', executionOptions);
+    
+    // Get flow definition
+    const flowDef = this.moduleRegistry.getFlowDefinition(flowFqn);
+    if (!flowDef) {
+      console.error('❌ Flow not found:', flowFqn);
+      throw new Error(`Flow not found: ${flowFqn}`);
+    }
+    
+    console.log('✅ Flow definition found:', flowDef);
+    
+    const steps = flowDef.steps || [];
+    const executionId = `progressive-${Date.now()}`;
+    
+    console.log(`📋 Found ${steps.length} steps to execute:`, steps.map((s: any) => s.step_id));
+    
+    // Initialize execution trace with all steps in PENDING status
+    let currentTrace: FlowExecutionTrace = {
+      traceId: executionId,
+      flowFqn,
+      status: 'RUNNING',
+      startTime: new Date().toISOString(),
+      endTime: new Date().toISOString(),
+      durationMs: 0,
+      triggerData: triggerInputData,
+      steps: [
+        // Trigger step starts as RUNNING
+        {
+          stepId: 'trigger',
+          componentFqn: 'trigger',
+          status: 'RUNNING' as ExecutionStatusEnum,
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          durationMs: 0,
+          inputData: triggerInputData,
+          outputData: {}
+        },
+        // All other steps start as PENDING
+        ...steps.map((step: any) => ({
+          stepId: step.step_id,
+          componentFqn: step.component_ref || 'unknown',
+          status: 'PENDING' as ExecutionStatusEnum,
+          startTime: new Date().toISOString(),
+          endTime: new Date().toISOString(),
+          durationMs: 0,
+          inputData: {},
+          outputData: {}
+        }))
+      ]
+    };
+    
+    console.log('📊 Initial execution trace created:', currentTrace);
+    
+    // Update visualizer with initial PENDING state
+    console.log('🔄 Updating visualizer with initial state...');
+    this.updateExecutionState(flowFqn, currentTrace);
+    
+    // Execute trigger first
+    console.log('⏳ Executing trigger...');
+    await this.delay(500); // Simulate trigger execution time
+    
+    // Complete trigger execution - CREATE NEW TRACE OBJECT
+    const triggerOutput = {
+      data: triggerInputData,
+      timestamp: new Date().toISOString(),
+      source: 'trigger'
+    };
+    
+    currentTrace = {
+      ...currentTrace,
+      steps: currentTrace.steps.map((step, index) => 
+        index === 0 ? {
+          ...step,
+          status: 'SUCCESS' as ExecutionStatusEnum,
+          endTime: new Date().toISOString(),
+          durationMs: 500,
+          outputData: triggerOutput
+        } : step
+      )
+    };
+    
+    console.log('✅ Trigger completed, updating visualizer...');
+    this.updateExecutionState(flowFqn, currentTrace);
+    console.log('✅ Trigger completed');
+    
+    // Execute each step progressively
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      const stepIndex = i + 1; // +1 because trigger is at index 0
+      
+      console.log(`🔄 Starting execution of step ${i + 1}/${steps.length}: ${step.step_id}`);
+      
+      // Set step to RUNNING - CREATE NEW TRACE OBJECT
+      currentTrace = {
+        ...currentTrace,
+        steps: currentTrace.steps.map((stepTrace, index) => 
+          index === stepIndex ? {
+            ...stepTrace,
+            status: 'RUNNING' as ExecutionStatusEnum,
+            startTime: new Date().toISOString()
+          } : stepTrace
+        )
+      };
+      
+      console.log(`🔄 Setting step ${step.step_id} to RUNNING, updating visualizer...`);
+      this.updateExecutionState(flowFqn, currentTrace);
+      
+      // Simulate step execution time (random between 800-2000ms)
+      const executionTime = Math.random() * 1200 + 800;
+      console.log(`⏳ Simulating execution time: ${Math.round(executionTime)}ms`);
+      await this.delay(executionTime);
+      
+      try {
+        // Resolve step input from previous steps
+        const stepInput = this.resolveStepInputFromTrace(step, currentTrace);
+        console.log(`📥 Resolved step input for ${step.step_id}:`, stepInput);
+        
+        // Generate step output
+        const stepOutput = this.generateStepOutput(step, stepInput);
+        console.log(`📤 Generated step output for ${step.step_id}:`, stepOutput);
+        
+        // Complete step execution
+        currentTrace.steps[stepIndex] = {
+          ...currentTrace.steps[stepIndex],
+          status: 'SUCCESS' as ExecutionStatusEnum,
+          endTime: new Date().toISOString(),
+          durationMs: Math.round(executionTime),
+          inputData: stepInput,
+          outputData: stepOutput
+        };
+        
+        console.log(`✅ Step ${step.step_id} completed successfully, updating visualizer...`);
+        
+      } catch (error) {
+        // Handle step failure
+        console.error(`❌ Step ${step.step_id} failed:`, error);
+        
+        currentTrace.steps[stepIndex] = {
+          ...currentTrace.steps[stepIndex],
+          status: 'FAILURE' as ExecutionStatusEnum,
+          endTime: new Date().toISOString(),
+          durationMs: Math.round(executionTime),
+          inputData: {},
+          outputData: { error: error instanceof Error ? error.message : 'Step execution failed' }
+        };
+        
+        console.error(`❌ Step ${step.step_id} failed:`, error);
+        
+        // Stop execution on failure
+        currentTrace.status = 'FAILED';
+        this.updateExecutionState(flowFqn, currentTrace);
+        break;
+      }
+      
+      // Update visualizer with step completion
+      this.updateExecutionState(flowFqn, currentTrace);
+    }
+    
+    // Complete flow execution
+    if (currentTrace.status !== 'FAILED') {
+      currentTrace.status = 'COMPLETED';
+    }
+    currentTrace.endTime = new Date().toISOString();
+    currentTrace.durationMs = Date.now() - new Date(currentTrace.startTime).getTime();
+    
+    console.log('🏁 Flow execution completed, final update...');
+    this.updateExecutionState(flowFqn, currentTrace);
+    
+    console.log('🏁 Progressive flow execution completed');
+    
+    // Return execution result
+    return {
+      executionId,
+      status: currentTrace.status === 'COMPLETED' ? 'SUCCESS' : 'FAILURE',
+      startTime: currentTrace.startTime,
+      endTime: currentTrace.endTime,
+      durationMs: currentTrace.durationMs,
+      logs: currentTrace.steps.map(step => ({
+        stepId: step.stepId,
+        timestamp: step.endTime,
+        level: step.status === 'SUCCESS' ? 'info' : 'error',
+        message: `Step ${step.stepId} ${step.status.toLowerCase()}`,
+        data: { inputData: step.inputData, outputData: step.outputData }
+      })),
+      finalOutput: currentTrace.steps[currentTrace.steps.length - 1]?.outputData || {},
+      trace: currentTrace
+    };
+  }
+  
+  /**
+   * Utility method to add delays for progressive execution
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  
+  /**
+   * Resolve step input from current execution trace
+   */
+  private resolveStepInputFromTrace(step: any, trace: FlowExecutionTrace): any {
+    const resolvedInput: Record<string, any> = {};
+    
+    // Process inputs_map to resolve data from previous steps
+    if (step.inputs_map) {
+      for (const [inputKey, sourceExpression] of Object.entries(step.inputs_map)) {
+        const resolvedValue = this.resolveInputFromTrace(sourceExpression as string, trace);
+        resolvedInput[inputKey] = resolvedValue;
+      }
+    } else {
+      // If no explicit inputs_map, use output from previous step or trigger
+      const completedSteps = trace.steps.filter(s => s.status === 'SUCCESS');
+      if (completedSteps.length > 0) {
+        const lastStep = completedSteps[completedSteps.length - 1];
+        resolvedInput.data = lastStep.outputData;
+      }
+    }
+    
+    return resolvedInput;
+  }
+  
+  /**
+   * Resolve input expression from execution trace
+   */
+  private resolveInputFromTrace(expression: string, trace: FlowExecutionTrace): any {
+    if (expression.startsWith('trigger.')) {
+      const triggerStep = trace.steps.find(s => s.stepId === 'trigger');
+      if (triggerStep && triggerStep.status === 'SUCCESS') {
+        const path = expression.substring(8); // Remove 'trigger.'
+        return this.dataGenerationService.getNestedValue(triggerStep.outputData, path);
+      }
+    } else if (expression.startsWith('steps.')) {
+      // Parse steps.stepId.outputs.field format
+      const match = expression.match(/^steps\.([^.]+)\.outputs\.(.+)$/);
+      if (match) {
+        const stepId = match[1];
+        const field = match[2];
+        const step = trace.steps.find(s => s.stepId === stepId);
+        if (step && step.status === 'SUCCESS') {
+          return this.dataGenerationService.getNestedValue(step.outputData, field);
+        }
+      }
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Generate realistic step output based on component type
+   */
+  private generateStepOutput(step: any, stepInput: any): any {
+    const componentRef = step.component_ref;
+    
+    // Generate output based on component type
+    if (componentRef === 'StdLib:JsonSchemaValidator') {
+      return {
+        validData: stepInput.data || stepInput,
+        isValid: true,
+        validationErrors: []
+      };
+    } else if (componentRef === 'StdLib:Fork') {
+      return {
+        'branch-1': { result: 'branch1_output', success: true },
+        'branch-2': { result: 'branch2_output', success: true },
+        'branch-3': { result: 'branch3_output', success: true }
+      };
+    } else if (componentRef === 'StdLib:MapData') {
+      return {
+        mappedData: stepInput,
+        transformationApplied: true,
+        outputFields: Object.keys(stepInput)
+      };
+    } else if (componentRef === 'StdLib:HttpCall') {
+      return {
+        statusCode: 200,
+        responseBody: { success: true, data: stepInput },
+        headers: { 'content-type': 'application/json' },
+        duration: Math.random() * 500 + 100
+      };
+    } else if (componentRef === 'StdLib:SubFlowInvoker') {
+      return {
+        subFlowResult: { status: 'completed', data: stepInput },
+        executionId: `subflow-${Date.now()}`,
+        duration: Math.random() * 1000 + 500
+      };
+    } else {
+      // Generic component output
+      return {
+        result: `output_from_${step.step_id}`,
+        inputProcessed: stepInput,
+        success: true,
+        timestamp: new Date().toISOString()
+      };
     }
   }
 

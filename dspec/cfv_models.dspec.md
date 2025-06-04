@@ -843,19 +843,29 @@ model cfv_models.ColorTheme {
 
 model cfv_models.NodeColors {
     id: "CFV_MOD_UI_004"
-    description: "Color configuration for different node types and states."
+    description: "Color configuration for different node types and states using refined pastel backgrounds and subtle borders."
     
-    // Execution Status Colors
-    successColor?: String { default: "#4CAF50"; description: "Color for successful execution." }
-    failureColor?: String { default: "#F44336"; description: "Color for failed execution." }
-    runningColor?: String { default: "#FF9800"; description: "Color for running execution." }
-    skippedColor?: String { default: "#9E9E9E"; description: "Color for skipped execution." }
-    notExecutedColor?: String { default: "#E0E0E0"; description: "Color for not executed nodes." }
+    // Execution Status Colors (Refined Palette)
+    successColor?: String { default: "#22C55E"; description: "Subtle green border color for successful execution." }
+    successBackgroundColor?: String { default: "#F0FDF4"; description: "Light green background for successful execution." }
+    failureColor?: String { default: "#EF4444"; description: "Subtle red border color for failed execution." }
+    failureBackgroundColor?: String { default: "#FEF2F2"; description: "Light red background for failed execution." }
+    runningColor?: String { default: "#F59E0B"; description: "Subtle amber border color for running execution." }
+    runningBackgroundColor?: String { default: "#FFFBEB"; description: "Light amber background for running execution." }
+    skippedColor?: String { default: "#94A3B8"; description: "Subtle gray border color for skipped execution." }
+    skippedBackgroundColor?: String { default: "#F8FAFC"; description: "Light gray background for skipped execution." }
     
-    // Node Type Colors
-    stepNodeColor?: String { default: "#2196F3"; description: "Default color for step nodes." }
-    triggerNodeColor?: String { default: "#4CAF50"; description: "Default color for trigger nodes." }
-    subFlowInvokerColor?: String { default: "#9C27B0"; description: "Default color for sub-flow invoker nodes." }
+    // Node Type Default Colors (Design Mode)
+    stepNodeColor?: String { default: "#E2E8F0"; description: "Subtle border color for step nodes in design mode." }
+    stepNodeBackgroundColor?: String { default: "#F8FAFC"; description: "Light blue-gray background for step nodes in design mode." }
+    triggerNodeColor?: String { default: "#D1FAE5"; description: "Subtle green border color for trigger nodes in design mode." }
+    triggerNodeBackgroundColor?: String { default: "#F7FEF7"; description: "Very light green background for trigger nodes in design mode." }
+    subFlowInvokerColor?: String { default: "#E9D5FF"; description: "Subtle purple border color for sub-flow invoker nodes in design mode." }
+    subFlowInvokerBackgroundColor?: String { default: "#FDFCFF"; description: "Very light purple background for sub-flow invoker nodes in design mode." }
+    
+    // Execution State Specific Colors
+    pendingColor?: String { default: "#94A3B8"; description: "Subtle gray border color for pending execution." }
+    pendingBackgroundColor?: String { default: "#F8FAFC"; description: "Light gray background for pending execution." }
 }
 
 model cfv_models.EdgeColors {
@@ -863,37 +873,42 @@ model cfv_models.EdgeColors {
     description: "Color configuration for different edge types and states."
     
     // Flow Edge Colors
-    dataFlowColor?: String { default: "#81C784"; description: "Color for data flow edges (pastel green)." }
+    dataFlowColor?: String { default: "#81C784"; description: "Color for data flow edges (pastel green) in design mode." }
     controlFlowColor?: String { default: "#666"; description: "Color for control flow edges." }
     
     // System Edge Colors
     invocationEdgeColor?: String { default: "#FF9800"; description: "Color for invocation edges." }
     triggerLinkEdgeColor?: String { default: "#4CAF50"; description: "Color for trigger link edges." }
     
-    // Execution State Colors
-    executedPathColor?: String { default: "#4CAF50"; description: "Color for executed paths." }
-    notExecutedPathColor?: String { default: "#ccc"; description: "Color for not executed paths." }
+    // Execution State Colors (Debug Mode)
+    executedPathColor?: String { default: "#4B5563"; description: "Dark gray color for executed paths in debug mode." }
+    notExecutedPathColor?: String { default: "#ccc"; description: "Light gray color for not executed paths." }
+    criticalPathColor?: String { default: "#2196f3"; description: "Blue color for critical path edges." }
 }
 
 model cfv_models.NodeStyleOptions {
     id: "CFV_MOD_UI_006"
-    description: "Styling options for nodes."
+    description: "Styling options for nodes with refined visual design."
     
-    // Border Options
-    defaultBorderWidth?: Number { default: 2; description: "Default border width in pixels." }
-    selectedBorderWidth?: Number { default: 3; description: "Border width for selected nodes." }
-    notExecutedBorderWidth?: Number { default: 2; description: "Border width for not executed nodes." }
+    // Border Options (Refined)
+    defaultBorderWidth?: Number { default: 1; description: "Default border width in pixels (refined to 1px for subtle appearance)." }
+    selectedBorderWidth?: Number { default: 1; description: "Border width for selected nodes (consistent with default)." }
     
     // Border Styles
-    defaultBorderStyle?: String { default: "solid"; description: "Default border style." }
-    notExecutedBorderStyle?: String { default: "solid"; description: "Border style for not executed nodes." }
+    defaultBorderStyle?: String { default: "solid"; description: "Default border style (solid for clean appearance)." }
     
-    // Opacity Options
-    notExecutedOpacity?: Number { default: 0.7; description: "Opacity for not executed nodes." }
-    
-    // Shadow Options
+    // Shadow Options (Enhanced)
     enableShadows?: Boolean { default: true; description: "Whether to show node shadows." }
-    shadowColor?: String { default: "rgba(0,0,0,0.1)"; description: "Shadow color for nodes." }
+    defaultShadow?: String { default: "0 4px 12px rgba(0, 0, 0, 0.15)"; description: "Default shadow for nodes (enhanced visibility)." }
+    selectedShadow?: String { default: "0 6px 20px rgba(59, 130, 246, 0.4)"; description: "Shadow for selected nodes (blue tint)." }
+    
+    // Background Options
+    enableBackgrounds?: Boolean { default: true; description: "Whether to use light pastel backgrounds." }
+    
+    // Opacity Options (Removed - no longer using opacity for states)
+    // Animation Options
+    enableTransitions?: Boolean { default: true; description: "Whether to enable smooth transitions between states." }
+    transitionDuration?: String { default: "all 0.2s ease"; description: "CSS transition duration and easing." }
 }
 
 model cfv_models.EdgeStyleOptions {

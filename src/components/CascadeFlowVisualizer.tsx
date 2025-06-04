@@ -143,28 +143,28 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
       ...props.uiOptions?.sidebarOptions
     },
     colorTheme: {
-      primaryColor: '#1976D2',
-      secondaryColor: '#4CAF50',
-      backgroundColor: '#f5f5f5',
-      sidebarBackgroundColor: '#fafafa',
+      primaryColor: '#3B82F6',
+      secondaryColor: '#10B981',
+      backgroundColor: '#f8fafc',
+      sidebarBackgroundColor: '#ffffff',
       nodeColors: {
-        successColor: '#4CAF50',
-        failureColor: '#F44336',
-        runningColor: '#FF9800',
-        skippedColor: '#9E9E9E',
-        notExecutedColor: '#E0E0E0',
-        stepNodeColor: '#2196F3',
-        triggerNodeColor: '#4CAF50',
-        subFlowInvokerColor: '#9C27B0',
+        successColor: '#10B981',
+        failureColor: '#EF4444',
+        runningColor: '#F59E0B',
+        skippedColor: '#6B7280',
+        notExecutedColor: '#E5E7EB',
+        stepNodeColor: '#3B82F6',
+        triggerNodeColor: '#059669',
+        subFlowInvokerColor: '#8B5CF6',
         ...props.uiOptions?.colorTheme?.nodeColors
       },
       edgeColors: {
         dataFlowColor: '#81C784',
-        controlFlowColor: '#666',
-        invocationEdgeColor: '#FF9800',
-        triggerLinkEdgeColor: '#4CAF50',
-        executedPathColor: '#4CAF50',
-        notExecutedPathColor: '#ccc',
+        controlFlowColor: '#9CA3AF',
+        invocationEdgeColor: '#F59E0B',
+        triggerLinkEdgeColor: '#10B981',
+        executedPathColor: '#10B981',
+        notExecutedPathColor: '#D1D5DB',
         ...props.uiOptions?.colorTheme?.edgeColors
       },
       ...props.uiOptions?.colorTheme
@@ -585,12 +585,14 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
               style={{
                 width: '100%',
                 padding: '8px 12px',
-                backgroundColor: systemViewActive ? '#1976D2' : '#f5f5f5',
-                color: systemViewActive ? 'white' : '#333',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
+                backgroundColor: systemViewActive ? '#3B82F6' : '#f8fafc',
+                color: systemViewActive ? 'white' : '#374151',
+                border: `1px solid ${systemViewActive ? '#3B82F6' : '#E5E7EB'}`,
+                borderRadius: '6px',
                 cursor: 'pointer',
-                fontSize: '14px'
+                fontSize: '14px',
+                fontWeight: '500',
+                transition: 'all 0.2s ease'
               }}
             >
               {systemViewActive ? '📋 Flow Detail View' : '🌐 System Overview'}
@@ -610,25 +612,26 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                     style={{ 
                       padding: '8px', 
                       backgroundColor: 'white',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '4px',
+                      border: '1px solid #E5E7EB',
+                      borderRadius: '6px',
                       cursor: hasFlows ? 'pointer' : 'default',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between'
+                      justifyContent: 'space-between',
+                      transition: 'all 0.2s ease'
                     }}
                     onClick={() => hasFlows && toggleModuleExpansion(module.fqn)}
                   >
                     <div>
-                      <div style={{ fontWeight: '500', fontSize: '13px' }}>{module.fqn}</div>
+                      <div style={{ fontWeight: '500', fontSize: '13px', color: '#374151' }}>{module.fqn}</div>
                       {module.status === 'error' && (
-                        <div style={{ color: '#d32f2f', fontSize: '11px', marginTop: '2px' }}>
+                        <div style={{ color: '#EF4444', fontSize: '11px', marginTop: '2px' }}>
                           ⚠ {module.errors?.[0]?.message}
                         </div>
                       )}
                     </div>
                     {hasFlows && (
-                      <div style={{ fontSize: '12px', color: '#666' }}>
+                      <div style={{ fontSize: '12px', color: '#9CA3AF' }}>
                         {isExpanded ? '▼' : '▶'}
                       </div>
                     )}
@@ -646,10 +649,11 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                               padding: '6px 8px', 
                               marginBottom: '2px',
                               cursor: 'pointer',
-                              backgroundColor: currentFlowFqn === flowFqn ? '#e3f2fd' : '#f9f9f9',
-                              border: `1px solid ${currentFlowFqn === flowFqn ? '#1976D2' : '#e0e0e0'}`,
+                              backgroundColor: currentFlowFqn === flowFqn ? '#EBF4FF' : '#F9FAFB',
+                              border: `1px solid ${currentFlowFqn === flowFqn ? '#3B82F6' : '#E5E7EB'}`,
                               borderRadius: '4px',
-                              fontSize: '12px'
+                              fontSize: '12px',
+                              transition: 'all 0.2s ease'
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -680,15 +684,15 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                       padding: '8px', 
                       marginBottom: '4px',
                       cursor: 'pointer',
-                      backgroundColor: currentFlowFqn === flowFqn ? '#e3f2fd' : 'white',
-                      border: `1px solid ${currentFlowFqn === flowFqn ? '#1976D2' : '#e0e0e0'}`,
-                      borderRadius: '4px',
+                      backgroundColor: currentFlowFqn === flowFqn ? '#EBF4FF' : 'white',
+                      border: `1px solid ${currentFlowFqn === flowFqn ? '#3B82F6' : '#E5E7EB'}`,
+                      borderRadius: '6px',
                       transition: 'all 0.2s ease'
                     }}
                     onClick={() => handleFlowNavigation(flowFqn)}
                     onMouseEnter={(e) => {
                       if (currentFlowFqn !== flowFqn) {
-                        e.currentTarget.style.backgroundColor = '#f5f5f5';
+                        e.currentTarget.style.backgroundColor = '#F9FAFB';
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -697,8 +701,8 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                       }
                     }}
                   >
-                    <div style={{ fontWeight: '500', fontSize: '13px' }}>{flow.name}</div>
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+                    <div style={{ fontWeight: '500', fontSize: '13px', color: '#374151' }}>{flow.name}</div>
+                    <div style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '2px' }}>
                       {module.fqn}
                     </div>
                   </div>
@@ -815,13 +819,13 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
             }}
           />
 
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#333' }}>Inspector</h3>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#374151' }}>Inspector</h3>
           
           {/* Tab Navigation */}
           <div style={{ 
             display: 'flex', 
             marginBottom: '16px',
-            borderBottom: '1px solid #e0e0e0',
+            borderBottom: '1px solid #E5E7EB',
             flexWrap: 'wrap'
           }}>
             {availableTabs.map(tab => (
@@ -831,14 +835,16 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                 style={{
                   padding: '8px 12px',
                   border: 'none',
-                  backgroundColor: activeInspectorTab === tab.id ? '#1976D2' : 'transparent',
-                  color: activeInspectorTab === tab.id ? 'white' : (tab.visible ? '#666' : '#ccc'),
+                  backgroundColor: activeInspectorTab === tab.id ? '#3B82F6' : 'transparent',
+                  color: activeInspectorTab === tab.id ? 'white' : (tab.visible ? '#6B7280' : '#D1D5DB'),
                   cursor: 'pointer',
                   fontSize: '12px',
-                  borderRadius: '4px 4px 0 0',
+                  borderRadius: '6px 6px 0 0',
                   marginRight: '4px',
                   textTransform: 'capitalize',
-                  opacity: tab.visible ? 1 : 0.5
+                  opacity: tab.visible ? 1 : 0.5,
+                  fontWeight: '500',
+                  transition: 'all 0.2s ease'
                 }}
                 title={!tab.visible ? 'Not available for current selection' : ''}
               >
@@ -852,12 +858,12 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
               <div style={{ 
                 padding: '12px', 
                 backgroundColor: 'white', 
-                border: '1px solid #e0e0e0',
-                borderRadius: '4px',
+                border: '1px solid #E5E7EB',
+                borderRadius: '6px',
                 marginBottom: '16px'
               }}>
-                <div style={{ fontWeight: '500', marginBottom: '4px' }}>Selected: {selectedElement.id}</div>
-                <div style={{ fontSize: '12px', color: '#666' }}>Type: {selectedElement.sourceType}</div>
+                <div style={{ fontWeight: '500', marginBottom: '4px', color: '#374151' }}>Selected: {selectedElement.id}</div>
+                <div style={{ fontSize: '12px', color: '#9CA3AF' }}>Type: {selectedElement.sourceType}</div>
               </div>
               
               {/* Show content only if current tab is available, otherwise show not available message */}
@@ -932,8 +938,115 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                       }}>
                         {currentFlowFqn ? (
                           <div>
-                            <div style={{ marginBottom: '12px' }}>
-                              <div style={{ fontWeight: '500', marginBottom: '8px' }}>Test Cases for {currentFlowFqn}</div>
+                            {/* Debug Execution Section */}
+                            <div style={{ marginBottom: '16px' }}>
+                              <div style={{ fontWeight: '500', marginBottom: '8px' }}>Debug Execution</div>
+                              <div style={{ marginBottom: '8px' }}>
+                                <button
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px',
+                                    backgroundColor: '#FF9800',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    marginBottom: '4px'
+                                  }}
+                                  onClick={async () => {
+                                    try {
+                                      console.log('🎯 Executing entire flow from trigger');
+                                      
+                                      // Generate trigger input data
+                                      const flowDef = moduleRegistry.getFlowDefinition(currentFlowFqn);
+                                      const triggerData = debugTestActionsService.resolveTriggerInputData(
+                                        flowDef?.trigger || {},
+                                        undefined,
+                                        'happy_path'
+                                      );
+                                      
+                                      console.log('🎯 Executing entire flow from trigger with input:', triggerData);
+                                      
+                                      // Execute the entire flow
+                                      await debugTestActionsService.runDebugExecution(
+                                        'trigger',
+                                        triggerData,
+                                        { useMocks: true, timeoutMs: 30000 }
+                                      );
+                                    } catch (error) {
+                                      console.error('❌ Flow execution failed:', error);
+                                    }
+                                  }}
+                                >
+                                  🚀 Execute Entire Flow (Progressive)
+                                </button>
+                                
+                                {selectedElement && selectedElement.sourceType === 'flowNode' && selectedElement.id !== 'trigger' && (
+                                  <button
+                                    style={{
+                                      width: '100%',
+                                      padding: '8px',
+                                      backgroundColor: '#2196F3',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '12px'
+                                    }}
+                                    onClick={async () => {
+                                      try {
+                                        console.log('🎯 Executing up to selected step:', selectedElement.id);
+                                        
+                                        // Generate trigger input data
+                                        const flowDef = moduleRegistry.getFlowDefinition(currentFlowFqn);
+                                        const triggerData = debugTestActionsService.resolveTriggerInputData(
+                                          flowDef?.trigger || {},
+                                          undefined,
+                                          'happy_path'
+                                        );
+                                        
+                                        // Execute up to selected step
+                                        await debugTestActionsService.runDebugExecution(
+                                          selectedElement.id,
+                                          triggerData,
+                                          { useMocks: true, timeoutMs: 30000 }
+                                        );
+                                      } catch (error) {
+                                        console.error('❌ Step execution failed:', error);
+                                      }
+                                    }}
+                                  >
+                                    🎯 Execute Up To: {selectedElement.id}
+                                  </button>
+                                )}
+                              </div>
+                              
+                              {/* Execution Status */}
+                              {currentExecutionResults && (
+                                <div style={{
+                                  padding: '8px',
+                                  backgroundColor: currentExecutionResults.status === 'COMPLETED' ? '#e8f5e8' : 
+                                                  currentExecutionResults.status === 'FAILED' ? '#ffeaea' : '#fff3cd',
+                                  border: `1px solid ${currentExecutionResults.status === 'COMPLETED' ? '#4CAF50' : 
+                                                      currentExecutionResults.status === 'FAILED' ? '#F44336' : '#FF9800'}`,
+                                  borderRadius: '4px',
+                                  fontSize: '12px'
+                                }}>
+                                  <div style={{ fontWeight: '500', marginBottom: '4px' }}>
+                                    Execution Status: {currentExecutionResults.status}
+                                  </div>
+                                  <div>
+                                    Steps: {currentExecutionResults.steps?.length || 0} | 
+                                    Duration: {currentExecutionResults.durationMs || 0}ms
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Test Case Generation */}
+                            <div style={{ marginBottom: '16px' }}>
+                              <div style={{ fontWeight: '500', marginBottom: '8px' }}>Test Case Generation</div>
                               <button
                                 style={{
                                   width: '100%',
@@ -947,18 +1060,39 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                                   marginBottom: '8px'
                                 }}
                                 onClick={() => {
-                                  // Generate default test cases
-                                  console.log('Generating test cases for:', currentFlowFqn);
+                                  // Generate and run a test case
+                                  const testCase = debugTestActionsService.generateTestCaseTemplate(currentFlowFqn, 'happyPath');
+                                  console.log('Generated test case:', testCase);
+                                  
+                                  // Auto-populate trigger input
+                                  const flowDef = moduleRegistry.getFlowDefinition(currentFlowFqn);
+                                  testCase.triggerInput = debugTestActionsService.resolveTriggerInputData(
+                                    flowDef?.trigger || {},
+                                    undefined,
+                                    'happy_path'
+                                  );
+                                  
+                                  // Run the test case
+                                  debugTestActionsService.runTestCase(testCase).then(result => {
+                                    console.log('Test case result:', result);
+                                  }).catch(error => {
+                                    console.error('Test case failed:', error);
+                                  });
                                 }}
                               >
-                                Generate Default Test Cases
+                                Generate & Run Happy Path Test
                               </button>
                             </div>
                             
-                            <div style={{ marginBottom: '12px' }}>
-                              <div style={{ fontWeight: '500', marginBottom: '4px' }}>Default Test Templates</div>
-                              {['Happy Path', 'Error Handling', 'Performance'].map(testType => (
-                                <div key={testType} style={{ 
+                            {/* Test Templates */}
+                            <div style={{ marginBottom: '16px' }}>
+                              <div style={{ fontWeight: '500', marginBottom: '4px' }}>Test Templates</div>
+                              {[
+                                { type: 'happyPath', label: 'Happy Path', desc: 'Tests normal execution flow with valid inputs', color: '#4CAF50' },
+                                { type: 'errorCase', label: 'Error Handling', desc: 'Tests error scenarios and edge cases', color: '#FF5722' },
+                                { type: 'custom', label: 'Custom Scenario', desc: 'Create custom test with specific conditions', color: '#9C27B0' }
+                              ].map(testType => (
+                                <div key={testType.type} style={{ 
                                   padding: '8px', 
                                   marginBottom: '4px',
                                   backgroundColor: '#f5f5f5',
@@ -968,61 +1102,143 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
                                   cursor: 'pointer'
                                 }}
                                 onClick={() => {
-                                  console.log('Creating test case:', testType, 'for', currentFlowFqn);
+                                  const testCase = debugTestActionsService.generateTestCaseTemplate(
+                                    currentFlowFqn, 
+                                    testType.type as 'happyPath' | 'errorCase' | 'custom'
+                                  );
+                                  console.log(`Creating ${testType.label} test case:`, testCase);
+                                  
+                                  // Auto-populate trigger input based on test type
+                                  const flowDef = moduleRegistry.getFlowDefinition(currentFlowFqn);
+                                  const dataType = testType.type === 'happyPath' ? 'happy_path' : 
+                                                  testType.type === 'errorCase' ? 'error_cases' : 'fork_paths';
+                                  testCase.triggerInput = debugTestActionsService.resolveTriggerInputData(
+                                    flowDef?.trigger || {},
+                                    undefined,
+                                    dataType
+                                  );
+                                  
+                                  // For demo, just log the test case
+                                  console.log(`Generated ${testType.label} test case:`, testCase);
                                 }}
                                 >
-                                  <div style={{ fontWeight: '500' }}>{testType} Test</div>
-                                  <div style={{ color: '#666' }}>
-                                    {testType === 'Happy Path' && 'Tests normal execution flow with valid inputs'}
-                                    {testType === 'Error Handling' && 'Tests error scenarios and edge cases'}
-                                    {testType === 'Performance' && 'Tests execution timing and resource usage'}
-                                  </div>
+                                  <div style={{ fontWeight: '500', color: testType.color }}>{testType.label} Test</div>
+                                  <div style={{ color: '#666' }}>{testType.desc}</div>
                                 </div>
                               ))}
                             </div>
                             
-                            <div style={{ marginBottom: '12px' }}>
-                              <div style={{ fontWeight: '500', marginBottom: '4px' }}>Test Execution</div>
-                              <button
-                                style={{
-                                  width: '100%',
-                                  padding: '8px',
-                                  backgroundColor: '#2196F3',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  fontSize: '12px'
-                                }}
-                                onClick={() => {
-                                  if (props.onRunTestCase) {
-                                    // Create a sample test case
-                                    const testCase = {
-                                      id: 'test-' + Date.now(),
-                                      flowFqn: currentFlowFqn,
-                                      description: 'Sample test case',
-                                      triggerInput: {},
-                                      assertions: []
-                                    };
-                                    props.onRunTestCase(testCase);
-                                  }
-                                }}
-                              >
-                                Run Test Cases
-                              </button>
+                            {/* Data Generation Tools */}
+                            <div style={{ marginBottom: '16px' }}>
+                              <div style={{ fontWeight: '500', marginBottom: '4px' }}>Data Generation</div>
+                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                <button
+                                  style={{
+                                    flex: 1,
+                                    padding: '6px 8px',
+                                    backgroundColor: '#607D8B',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '11px'
+                                  }}
+                                  onClick={() => {
+                                    const flowDef = moduleRegistry.getFlowDefinition(currentFlowFqn);
+                                    const triggerData = debugTestActionsService.resolveTriggerInputData(
+                                      flowDef?.trigger || {},
+                                      undefined,
+                                      'happy_path'
+                                    );
+                                    console.log('Generated trigger data:', triggerData);
+                                  }}
+                                >
+                                  Generate Trigger Data
+                                </button>
+                                
+                                {selectedElement && selectedElement.sourceType === 'flowNode' && (
+                                  <button
+                                    style={{
+                                      flex: 1,
+                                      padding: '6px 8px',
+                                      backgroundColor: '#795548',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '11px'
+                                    }}
+                                    onClick={async () => {
+                                      try {
+                                        const stepInput = await debugTestActionsService.resolveStepInputData(
+                                          selectedElement.id,
+                                          currentFlowFqn
+                                        );
+                                        console.log(`Generated input for ${selectedElement.id}:`, stepInput);
+                                      } catch (error) {
+                                        console.error('Failed to generate step input:', error);
+                                      }
+                                    }}
+                                  >
+                                    Generate Step Input
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             
+                            {/* Execution Results */}
                             <div>
-                              <div style={{ fontWeight: '500', marginBottom: '4px' }}>Test Results</div>
+                              <div style={{ fontWeight: '500', marginBottom: '4px' }}>Execution Results</div>
                               <div style={{ 
                                 padding: '8px',
                                 backgroundColor: '#f9f9f9',
                                 border: '1px solid #e0e0e0',
                                 borderRadius: '4px',
                                 fontSize: '12px',
-                                color: '#666'
+                                color: '#666',
+                                maxHeight: '200px',
+                                overflowY: 'auto'
                               }}>
-                                No test results yet. Run tests to see results here.
+                                {currentExecutionResults ? (
+                                  <div>
+                                    <div style={{ fontWeight: '500', marginBottom: '8px' }}>
+                                      Latest Execution: {currentExecutionResults.flowFqn}
+                                    </div>
+                                    <div style={{ marginBottom: '4px' }}>
+                                      Status: <span style={{ 
+                                        color: currentExecutionResults.status === 'COMPLETED' ? '#4CAF50' : 
+                                              currentExecutionResults.status === 'FAILED' ? '#F44336' : '#FF9800'
+                                      }}>
+                                        {currentExecutionResults.status}
+                                      </span>
+                                    </div>
+                                    <div style={{ marginBottom: '4px' }}>
+                                      Duration: {currentExecutionResults.durationMs || 0}ms
+                                    </div>
+                                    <div style={{ marginBottom: '8px' }}>
+                                      Steps Executed: {currentExecutionResults.steps?.length || 0}
+                                    </div>
+                                    
+                                    {currentExecutionResults.steps && currentExecutionResults.steps.length > 0 && (
+                                      <div>
+                                        <div style={{ fontWeight: '500', marginBottom: '4px' }}>Step Status:</div>
+                                        {currentExecutionResults.steps.map((step: any, index: number) => (
+                                          <div key={step.stepId || index} style={{ 
+                                            fontSize: '11px', 
+                                            marginBottom: '2px',
+                                            color: step.status === 'SUCCESS' ? '#4CAF50' : 
+                                                  step.status === 'FAILURE' ? '#F44336' : 
+                                                  step.status === 'RUNNING' ? '#FF9800' : '#666'
+                                          }}>
+                                            {step.stepId}: {step.status} ({step.durationMs || 0}ms)
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  'No execution results yet. Run debug execution or tests to see results here.'
+                                )}
                               </div>
                             </div>
                           </div>

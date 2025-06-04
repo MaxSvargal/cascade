@@ -36,7 +36,7 @@ directive cfv_consumer_directives.CustomNodeRendering {
     }
 
     visual_trace_status_pattern: {
-        recommendation: "CRITICAL: Only display execution status when `data.executionStatus` is defined. In design mode (no trace data), nodes should have NO status indicator - no 'Not Executed', no status badges, no execution-related UI elements. Use `data.executionStatus` to apply distinct styles: green for SUCCESS, red for FAILURE, gray for SKIPPED, blue for RUNNING, yellow for PENDING. Consider animations for RUNNING. Nodes without executionStatus should appear in clean design mode styling."
+        recommendation: "CRITICAL: Only display execution status when `data.executionStatus` is defined. In design mode (no trace data), nodes should have clean styling with light themed backgrounds and subtle borders - no status indicators, no 'Not Executed' badges, no execution-related UI elements. Use `data.executionStatus` to apply distinct styles with light pastel backgrounds and subtle colored borders: light green background with green border for SUCCESS, light red background with red border for FAILURE, light gray background with gray border for SKIPPED, light amber background with amber border for RUNNING, light themed background with themed border for PENDING. Node types should maintain their color identity: steps use blue/gray theme, triggers use green theme, sub-flow invokers use purple theme. Borders should be 1px solid with subtle colors from popular palettes (e.g., Tailwind CSS colors). Consider subtle animations for RUNNING state. Nodes without executionStatus should appear in clean design mode with light themed backgrounds and minimal borders."
     }
 
     react_flow_integration: {
@@ -192,3 +192,59 @@ directive cfv_consumer_directives.InspectorTabImplementation {
             flow_context_dependency: "Both sections require `props.currentFlowFqn: string | null` for flow context.",
             module_registry_dependency: "Use `props.moduleRegistry: cfv_models.IModuleRegistry` for flow definition and schema lookups.",
             enhanced_actions_dependency: "Requires `props.actions: cfv_models.UnifiedDebugTestActions`
+        }
+    }
+}
+
+directive cfv_consumer_directives.SubFlowInvokerNavigation {
+    id: "CFV_DIR_NAV_001"
+    title: "Directive for SubFlowInvoker Double-Click Navigation"
+    target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer"
+    description: "Provides guidance for implementing double-click navigation functionality on SubFlowInvoker nodes to switch to the invoked flow."
+    default_language: "TypeScriptReact"
+
+    implementation_pattern: {
+        event_handling: "Implement onNodeDoubleClick handler in the main CascadeFlowVisualizer component that checks if the double-clicked node is of type 'subFlowInvoker'.",
+        navigation_logic: "Extract the `invokedFlowFqn` from the node's data and attempt to load the target flow module. If the module is not loaded, use the `requestModule` callback to load it.",
+        fallback_behavior: "If the target flow cannot be loaded, provide user feedback (e.g., toast notification) indicating the flow is not available.",
+        visual_indication: "SubFlowInvoker nodes should have visual indicators (e.g., navigation arrow, cursor pointer, tooltip) to indicate they are navigable."
+    }
+
+    integration_requirements: {
+        node_data_access: "Access `data.invokedFlowFqn` from SubFlowInvokerNodeData to determine the target flow.",
+        module_loading: "Use the existing `requestModule` prop callback to load the target flow module if not already loaded.",
+        view_switching: "Update the current view to display the target flow after successful loading."
+    }
+}
+
+directive cfv_consumer_directives.RefinedNodeStyling {
+    id: "CFV_DIR_STYLE_001"
+    title: "Directive for Refined Node Styling with Light Pastel Backgrounds"
+    target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer"
+    description: "Provides guidance for implementing the refined node styling approach using light pastel backgrounds, subtle borders, and enhanced shadows."
+    default_language: "TypeScriptReact"
+
+    design_principles: {
+        clean_design_mode: "In design mode (no execution status), nodes should have light themed backgrounds with subtle 1px borders. Each node type maintains its color identity: steps use blue-gray theme, triggers use green theme, sub-flow invokers use purple theme.",
+        execution_mode_styling: "In debug/execution mode, nodes should use light pastel backgrounds with subtle colored borders based on execution status. Success uses light green background with green border, failure uses light red with red border, running uses light amber with amber border.",
+        color_palette: "Use popular color palettes (e.g., Tailwind CSS colors) for consistency and professional appearance. Avoid bright or harsh colors in favor of subtle, easy-on-the-eyes tones.",
+        shadow_enhancement: "Use enhanced shadows for better visual hierarchy: default shadow '0 4px 12px rgba(0, 0, 0, 0.15)' and selected shadow '0 6px 20px rgba(59, 130, 246, 0.4)'."
+    }
+
+    implementation_guidelines: {
+        border_specifications: "Use 1px solid borders with subtle colors. Avoid thick borders (2px+) or dashed borders for cleaner appearance.",
+        background_colors: "Apply light pastel backgrounds that complement the border colors. Examples: '#F8FAFC' for steps, '#F7FEF7' for triggers, '#FDFCFF' for sub-flow invokers.",
+        status_indicators: "Remove 'ready' or 'not executed' status badges. Only show execution status when actual execution data is available.",
+        transition_effects: "Use smooth CSS transitions 'all 0.2s ease' for state changes and hover effects."
+    }
+
+    color_specifications: {
+        success_state: "Background: '#F0FDF4', Border: '#22C55E' (subtle green)",
+        failure_state: "Background: '#FEF2F2', Border: '#EF4444' (subtle red)",
+        running_state: "Background: '#FFFBEB', Border: '#F59E0B' (subtle amber)",
+        skipped_state: "Background: '#F8FAFC', Border: '#94A3B8' (subtle gray)",
+        step_node_default: "Background: '#F8FAFC', Border: '#E2E8F0' (blue-gray theme)",
+        trigger_node_default: "Background: '#F7FEF7', Border: '#D1FAE5' (green theme)",
+        subflow_node_default: "Background: '#FDFCFF', Border: '#E9D5FF' (purple theme)"
+    }
+}

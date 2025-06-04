@@ -8,29 +8,47 @@ import { SubFlowInvokerNodeData } from '@/models/cfv_models_generated';
 const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data, selected }) => {
   const getStatusColor = () => {
     switch (data.executionStatus) {
-      case 'SUCCESS': return '#4CAF50';
-      case 'FAILURE': return '#F44336';
-      case 'RUNNING': return '#FF9800';
-      case 'SKIPPED': return '#9E9E9E';
-      default: return '#9C27B0'; // Purple for sub-flow invokers
+      case 'SUCCESS': return '#10B981'; // Softer green
+      case 'FAILURE': return '#EF4444'; // Softer red
+      case 'RUNNING': return '#F59E0B'; // Softer amber
+      case 'SKIPPED': return '#6B7280'; // Softer gray
+      default: return '#8B5CF6'; // Softer purple for sub-flow invokers
     }
   };
 
   const getStatusIcon = () => {
     switch (data.executionStatus) {
-      case 'SUCCESS': return '✅';
-      case 'FAILURE': return '❌';
-      case 'RUNNING': return '⏳';
-      case 'SKIPPED': return '⏭️';
-      default: return '🔗';
+      case 'SUCCESS': return '●';
+      case 'FAILURE': return '●';
+      case 'RUNNING': return '●';
+      case 'SKIPPED': return '○';
+      default: return '○';
     }
+  };
+
+  const getStatusBadgeStyle = () => {
+    const color = getStatusColor();
+    return {
+      fontSize: '8px',
+      color: color,
+      backgroundColor: `${color}15`, // Very light background
+      border: `1px solid ${color}30`, // Subtle border
+      padding: '2px 6px',
+      borderRadius: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '3px',
+      fontWeight: '500',
+      letterSpacing: '0.5px',
+      textTransform: 'uppercase' as const
+    };
   };
 
   // Enhanced styling for clean design mode vs execution mode
   const getNodeStyle = () => {
     const baseStyle = {
-      padding: '12px 16px',
-      borderRadius: '12px',
+      padding: '14px 18px',
+      borderRadius: '8px',
       minWidth: '200px',
       maxWidth: '320px',
       transition: 'all 0.2s ease',
@@ -39,29 +57,52 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
       display: 'flex' as const,
       flexDirection: 'column' as const,
       position: 'relative' as const,
-      cursor: 'pointer' as const // Indicate it's clickable for navigation
+      cursor: 'pointer' as const, // Indicate it's clickable for navigation
     };
 
     if (!data.executionStatus) {
-      // Clean design mode - no execution status
+      // Clean design mode - light purple background for pending
       return {
         ...baseStyle,
-        border: `2px solid ${selected ? '#1976D2' : '#9C27B0'}`,
-        backgroundColor: '#F3E5F5',
-        color: '#7B1FA2',
+        backgroundColor: '#FDFCFF', // Very light purple
+        border: '1px solid #E9D5FF', // Subtle purple border
         boxShadow: selected 
-          ? '0 4px 12px rgba(25, 118, 210, 0.3)' 
-          : '0 2px 8px rgba(156, 39, 176, 0.2)'
+          ? '0 6px 20px rgba(139, 92, 246, 0.4)' 
+          : '0 4px 12px rgba(139, 92, 246, 0.15)'
       };
     } else {
-      // Has execution status - show execution styling
+      // Debug mode - colored backgrounds and borders based on execution status
+      let backgroundColor = '';
+      let borderColor = '';
+      switch (data.executionStatus) {
+        case 'SUCCESS':
+          backgroundColor = '#FAF5FF'; // Light purple background
+          borderColor = '#8B5CF6'; // Subtle purple border
+          break;
+        case 'FAILURE':
+          backgroundColor = '#FEF2F2'; // Light red background
+          borderColor = '#EF4444'; // Subtle red border
+          break;
+        case 'RUNNING':
+          backgroundColor = '#FFFBEB'; // Light amber background
+          borderColor = '#F59E0B'; // Subtle amber border
+          break;
+        case 'SKIPPED':
+          backgroundColor = '#F8FAFC'; // Light gray background
+          borderColor = '#94A3B8'; // Subtle gray border
+          break;
+        default:
+          backgroundColor = '#FAF5FF'; // Light purple background
+          borderColor = '#8B5CF6'; // Subtle purple border
+      }
+      
       return {
         ...baseStyle,
-        border: `2px solid ${selected ? '#1976D2' : getStatusColor()}`,
-        backgroundColor: '#F3E5F5',
+        backgroundColor,
+        border: `1px solid ${borderColor}`,
         boxShadow: selected 
-          ? '0 4px 12px rgba(25, 118, 210, 0.3)' 
-          : `0 2px 8px ${getStatusColor()}20`
+          ? '0 6px 20px rgba(139, 92, 246, 0.4)' 
+          : '0 4px 12px rgba(139, 92, 246, 0.2)'
       };
     }
   };
@@ -77,52 +118,54 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
       {/* Navigation indicator */}
       <div style={{
         position: 'absolute',
-        top: '4px',
-        right: '4px',
-        fontSize: '12px',
-        color: '#9C27B0',
-        fontWeight: 'bold'
+        top: '6px',
+        right: '8px',
+        fontSize: '10px',
+        color: '#8B5CF6',
+        fontWeight: '600'
       }}>
-        ⤴
+        ↗
       </div>
       
       <div style={{ 
-        fontWeight: 'bold', 
+        fontWeight: '600', 
         marginBottom: '8px', 
-        color: '#7B1FA2',
-        fontSize: '14px',
+        color: '#1F2937',
+        fontSize: '13px',
         textAlign: 'center',
         wordWrap: 'break-word',
-        lineHeight: '1.2'
+        lineHeight: '1.3'
       }}>
-        🔗 {data.label}
+        {data.label}
       </div>
       
       <div style={{ 
-        fontSize: '11px', 
-        color: '#9C27B0',
+        fontSize: '10px', 
+        color: '#8B5CF6',
         marginBottom: '8px',
         textAlign: 'center',
         fontWeight: '500',
-        backgroundColor: '#E1BEE7',
-        padding: '4px 8px',
+        backgroundColor: '#F3F0FF',
+        padding: '3px 8px',
         borderRadius: '6px',
+        border: '1px solid #E9E5FF',
         wordWrap: 'break-word'
       }}>
-        Invokes: {data.invokedFlowFqn}
+        → {data.invokedFlowFqn}
       </div>
       
       {data.resolvedComponentFqn && (
         <div style={{ 
           fontSize: '10px', 
-          color: '#666',
-          marginBottom: '6px',
+          color: '#6B7280',
+          marginBottom: '8px',
           textAlign: 'center',
           wordWrap: 'break-word',
-          fontFamily: 'monospace',
-          backgroundColor: '#F5F5F5',
-          padding: '2px 6px',
-          borderRadius: '4px'
+          fontFamily: 'ui-monospace, monospace',
+          backgroundColor: '#F9FAFB',
+          padding: '3px 6px',
+          borderRadius: '4px',
+          border: '1px solid #F3F4F6'
         }}>
           {data.resolvedComponentFqn}
         </div>
@@ -133,42 +176,31 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: '6px'
+          marginBottom: '8px'
         }}>
-          <div 
-            style={{ 
-              fontSize: '10px', 
-              color: 'white',
-              backgroundColor: getStatusColor(),
-              padding: '4px 8px',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              fontWeight: '500'
-            }}
-          >
+          <div style={getStatusBadgeStyle()}>
             <span>{getStatusIcon()}</span>
-            <span>{data.executionStatus}</span>
+            <span>{data.executionStatus.toLowerCase()}</span>
           </div>
         </div>
       )}
 
       {data.executionDurationMs && (
         <div style={{ 
-          fontSize: '10px', 
-          color: '#888',
+          fontSize: '9px', 
+          color: '#9CA3AF',
           textAlign: 'center',
-          marginBottom: '4px'
+          marginBottom: '4px',
+          fontFamily: 'ui-monospace, monospace'
         }}>
-          ⏱️ {data.executionDurationMs}ms
+          {data.executionDurationMs}ms
         </div>
       )}
 
       {data.contextVarUsages && data.contextVarUsages.length > 0 && (
         <div style={{ 
-          fontSize: '9px', 
-          color: '#999',
+          fontSize: '8px', 
+          color: '#9CA3AF',
           textAlign: 'center',
           marginBottom: '4px',
           wordWrap: 'break-word'
@@ -180,17 +212,17 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
       
       {data.error && (
         <div style={{ 
-          fontSize: '10px', 
-          color: '#F44336', 
+          fontSize: '9px', 
+          color: '#DC2626', 
           marginTop: '6px',
           textAlign: 'center',
-          backgroundColor: '#FFEBEE',
+          backgroundColor: '#FEF2F2',
           padding: '4px 6px',
           borderRadius: '4px',
-          border: '1px solid #FFCDD2',
+          border: '1px solid #FECACA',
           wordWrap: 'break-word'
         }}>
-          ⚠️ {data.error.message}
+          {data.error.message}
         </div>
       )}
       

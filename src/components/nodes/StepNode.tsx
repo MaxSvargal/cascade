@@ -8,29 +8,47 @@ import { StepNodeData } from '@/models/cfv_models_generated';
 const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
   const getStatusColor = () => {
     switch (data.executionStatus) {
-      case 'SUCCESS': return '#4CAF50';
-      case 'FAILURE': return '#F44336';
-      case 'RUNNING': return '#FF9800';
-      case 'SKIPPED': return '#9E9E9E';
-      default: return '#2196F3';
+      case 'SUCCESS': return '#10B981'; // Softer green
+      case 'FAILURE': return '#EF4444'; // Softer red
+      case 'RUNNING': return '#F59E0B'; // Softer amber
+      case 'SKIPPED': return '#6B7280'; // Softer gray
+      default: return '#3B82F6'; // Softer blue
     }
   };
 
   const getStatusIcon = () => {
     switch (data.executionStatus) {
-      case 'SUCCESS': return '✅';
-      case 'FAILURE': return '❌';
-      case 'RUNNING': return '⏳';
-      case 'SKIPPED': return '⏭️';
-      default: return '⚪';
+      case 'SUCCESS': return '●';
+      case 'FAILURE': return '●';
+      case 'RUNNING': return '●';
+      case 'SKIPPED': return '○';
+      default: return '○';
     }
+  };
+
+  const getStatusBadgeStyle = () => {
+    const color = getStatusColor();
+    return {
+      fontSize: '8px',
+      color: color,
+      backgroundColor: `${color}15`, // Very light background
+      border: `1px solid ${color}30`, // Subtle border
+      padding: '2px 6px',
+      borderRadius: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '3px',
+      fontWeight: '500',
+      letterSpacing: '0.5px',
+      textTransform: 'uppercase' as const
+    };
   };
 
   // Enhanced styling for clean design mode vs execution mode
   const getNodeStyle = () => {
     const baseStyle = {
-      padding: '12px 16px',
-      borderRadius: '12px',
+      padding: '14px 18px',
+      borderRadius: '8px',
       minWidth: '180px',
       maxWidth: '280px',
       transition: 'all 0.2s ease',
@@ -38,29 +56,52 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
       overflow: 'hidden' as const,
       display: 'flex' as const,
       flexDirection: 'column' as const,
-      position: 'relative' as const
+      position: 'relative' as const,
     };
 
     if (!data.executionStatus) {
-      // Clean design mode - no execution status
+      // Clean design mode - light blue background for pending
       return {
         ...baseStyle,
-        border: `2px solid ${selected ? '#1976D2' : '#E0E0E0'}`,
-        backgroundColor: 'white',
-        color: '#333',
+        backgroundColor: '#F8FAFC', // Very light blue-gray
+        border: '1px solid #E2E8F0', // Subtle border
         boxShadow: selected 
-          ? '0 4px 12px rgba(25, 118, 210, 0.3)' 
-          : '0 2px 8px rgba(0,0,0,0.1)'
+          ? '0 6px 20px rgba(59, 130, 246, 0.4)' 
+          : '0 4px 12px rgba(0, 0, 0, 0.15)'
       };
     } else {
-      // Has execution status - show execution styling
+      // Debug mode - colored backgrounds and borders based on execution status
+      let backgroundColor = '';
+      let borderColor = '';
+      switch (data.executionStatus) {
+        case 'SUCCESS':
+          backgroundColor = '#F0FDF4'; // Light green background
+          borderColor = '#22C55E'; // More subtle green border
+          break;
+        case 'FAILURE':
+          backgroundColor = '#FEF2F2'; // Light red background
+          borderColor = '#EF4444'; // Subtle red border
+          break;
+        case 'RUNNING':
+          backgroundColor = '#FFFBEB'; // Light amber background
+          borderColor = '#F59E0B'; // Subtle amber border
+          break;
+        case 'SKIPPED':
+          backgroundColor = '#F8FAFC'; // Light gray background
+          borderColor = '#94A3B8'; // Subtle gray border
+          break;
+        default:
+          backgroundColor = '#F8FAFC'; // Light gray background
+          borderColor = '#94A3B8'; // Subtle gray border
+      }
+      
       return {
         ...baseStyle,
-        border: `2px solid ${selected ? '#1976D2' : getStatusColor()}`,
-        backgroundColor: 'white',
+        backgroundColor,
+        border: `1px solid ${borderColor}`,
         boxShadow: selected 
-          ? '0 4px 12px rgba(25, 118, 210, 0.3)' 
-          : `0 2px 8px ${getStatusColor()}20`
+          ? '0 6px 20px rgba(59, 130, 246, 0.4)' 
+          : '0 4px 12px rgba(0, 0, 0, 0.15)'
       };
     }
   };
@@ -71,28 +112,29 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
       <Handle type="target" position={Position.Left} />
       
       <div style={{ 
-        fontWeight: 'bold', 
+        fontWeight: '600', 
         marginBottom: '8px',
-        color: '#333',
-        fontSize: '14px',
+        color: '#1F2937',
+        fontSize: '13px',
         textAlign: 'center',
         wordWrap: 'break-word',
-        lineHeight: '1.2'
+        lineHeight: '1.3'
       }}>
-        🔧 {data.label}
+        {data.label}
       </div>
       
       {data.resolvedComponentFqn && (
         <div style={{ 
-          fontSize: '11px', 
-          color: '#666',
-          marginBottom: '6px',
+          fontSize: '10px', 
+          color: '#6B7280',
+          marginBottom: '8px',
           textAlign: 'center',
           wordWrap: 'break-word',
-          fontFamily: 'monospace',
-          backgroundColor: '#F5F5F5',
-          padding: '2px 6px',
-          borderRadius: '4px'
+          fontFamily: 'ui-monospace, monospace',
+          backgroundColor: '#F9FAFB',
+          padding: '3px 6px',
+          borderRadius: '4px',
+          border: '1px solid #F3F4F6'
         }}>
           {data.resolvedComponentFqn}
         </div>
@@ -103,42 +145,31 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: '6px'
+          marginBottom: '8px'
         }}>
-          <div 
-            style={{ 
-              fontSize: '10px', 
-              color: 'white',
-              backgroundColor: getStatusColor(),
-              padding: '4px 8px',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              fontWeight: '500'
-            }}
-          >
+          <div style={getStatusBadgeStyle()}>
             <span>{getStatusIcon()}</span>
-            <span>{data.executionStatus}</span>
+            <span>{data.executionStatus.toLowerCase()}</span>
           </div>
         </div>
       )}
 
       {data.executionDurationMs && (
         <div style={{ 
-          fontSize: '10px', 
-          color: '#888',
+          fontSize: '9px', 
+          color: '#9CA3AF',
           textAlign: 'center',
-          marginBottom: '4px'
+          marginBottom: '4px',
+          fontFamily: 'ui-monospace, monospace'
         }}>
-          ⏱️ {data.executionDurationMs}ms
+          {data.executionDurationMs}ms
         </div>
       )}
 
       {data.contextVarUsages && data.contextVarUsages.length > 0 && (
         <div style={{ 
-          fontSize: '9px', 
-          color: '#999',
+          fontSize: '8px', 
+          color: '#9CA3AF',
           textAlign: 'center',
           marginBottom: '4px',
           wordWrap: 'break-word'
@@ -150,17 +181,17 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
       
       {data.error && (
         <div style={{ 
-          fontSize: '10px', 
-          color: '#F44336', 
+          fontSize: '9px', 
+          color: '#DC2626', 
           marginTop: '6px',
           textAlign: 'center',
-          backgroundColor: '#FFEBEE',
+          backgroundColor: '#FEF2F2',
           padding: '4px 6px',
           borderRadius: '4px',
-          border: '1px solid #FFCDD2',
+          border: '1px solid #FECACA',
           wordWrap: 'break-word'
         }}>
-          ⚠️ {data.error.message}
+          {data.error.message}
         </div>
       )}
       
