@@ -280,21 +280,24 @@ directive cfv_consumer_directives.AutoZoomToFit {
         react_flow_integration: "Use React Flow's `fitView()` method from the useReactFlow hook to automatically adjust zoom and pan to show all nodes.",
         timing_considerations: "Execute fitView() after graph layout is complete and nodes are positioned. Use useEffect with dependencies on currentFlowFqn and graph data.",
         animation_settings: "Use smooth animation for better UX: fitView({ duration: 800, padding: 0.1 }) to provide 10% padding around nodes.",
-        performance_optimization: "Debounce fitView calls to prevent excessive zoom adjustments during rapid navigation or data updates."
+        performance_optimization: "Debounce fitView calls to prevent excessive zoom adjustments during rapid navigation or data updates.",
+        width_compensation_awareness: "ENHANCED: The layout service now automatically compensates for wide nodes (e.g., SubFlowInvoker nodes with long FQNs) by adding proper spacing to prevent right-side overlap. Auto-zoom should account for this enhanced spacing."
     }
 
     integration_requirements: {
         react_flow_hook: "Use useReactFlow() hook to access fitView method within React Flow context.",
         dependency_tracking: "Track changes to currentFlowFqn, graph nodes, and layout completion status.",
         conditional_execution: "Only execute fitView when nodes are present and positioned (avoid empty graphs).",
-        user_override: "Respect user's manual zoom/pan actions - only auto-fit on initial load, not during user interaction."
+        user_override: "Respect user's manual zoom/pan actions - only auto-fit on initial load, not during user interaction.",
+        enhanced_spacing_support: "ENHANCED: Work with the enhanced layout service that provides proper width compensation for long nodes, ensuring auto-zoom accounts for the additional spacing."
     }
 
     user_experience: {
         smooth_transitions: "Use animated transitions for zoom changes to provide smooth visual feedback.",
         appropriate_padding: "Maintain 10-15% padding around the graph to ensure nodes aren't touching screen edges.",
         preserve_user_control: "After initial auto-fit, allow user to manually zoom/pan without interference.",
-        loading_states: "Coordinate with loading states to ensure fitView occurs after content is ready."
+        loading_states: "Coordinate with loading states to ensure fitView occurs after content is ready.",
+        wide_node_handling: "ENHANCED: Ensure proper zoom levels for flows with wide nodes (SubFlowInvoker, long labels) by accounting for the enhanced spacing compensation."
     }
 
     technical_implementation: {
@@ -303,7 +306,8 @@ directive cfv_consumer_directives.AutoZoomToFit {
         error_handling: "Wrap fitView calls in try-catch to handle cases where React Flow context is not available.",
         timing_delay: "Use small timeout (100ms) to ensure DOM updates are complete before fitting view.",
         zoom_constraints: "Set minZoom to 0.1 for very long flows and increase padding to 15% for better visibility.",
-        square_layout_support: "Coordinate with layout service to prefer square-shaped arrangements for long flows."
+        square_layout_support: "Coordinate with layout service to prefer square-shaped arrangements for long flows.",
+        enhanced_width_compensation: "ENHANCED: The layout service now provides proper width compensation for long nodes, ensuring auto-zoom works correctly with the enhanced spacing calculations."
     }
 }
 

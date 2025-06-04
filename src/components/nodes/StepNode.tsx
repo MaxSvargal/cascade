@@ -56,14 +56,38 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
 
   // Enhanced styling for clean design mode vs execution mode
   const getNodeStyle = () => {
+    // ENHANCED: Check if this is an Integration.ExternalServiceAdapter for dynamic sizing
+    const isExternalServiceAdapter = data.resolvedComponentFqn === 'Integration.ExternalServiceAdapter';
+    const dslObject = data.dslObject || {};
+    const config = dslObject.config || {};
+    
+    // DYNAMIC WIDTH: Calculate width based on content for ExternalServiceAdapter
+    let dynamicWidth = 180; // Base width for regular step nodes
+    let dynamicHeight = 'auto'; // Base height
+    
+    if (isExternalServiceAdapter) {
+      const label = data.label || '';
+      const adapterType = config.adapterType || '';
+      const operation = config.operation || '';
+      
+      // Calculate width based on content length
+      const labelLength = label.length;
+      const adapterTypeLength = adapterType.length;
+      const operationLength = operation.length;
+      const maxContentLength = Math.max(labelLength, adapterTypeLength, operationLength);
+      
+      // Scale width based on content
+      dynamicWidth = Math.min(450, Math.max(220, 180 + (maxContentLength - 15) * 7)); // 7px per extra character, max 450px
+    }
+    
     const baseStyle = {
       padding: data.executionStatus ? '24px 28px 14px 28px' : '14px 18px', // Debug mode padding vs design mode
       borderRadius: '8px',
-      minWidth: '180px',
-      maxWidth: '280px',
+      width: `${dynamicWidth}px`, // Use calculated dynamic width
+      height: dynamicHeight,
       transition: 'all 0.2s ease',
       boxSizing: 'border-box' as const,
-      overflow: 'hidden' as const,
+      overflow: 'visible' as const, // Allow content to be visible
       display: 'flex' as const,
       flexDirection: 'column' as const,
       position: 'relative' as const,
@@ -116,6 +140,11 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
     }
   };
 
+  // Check if this is an Integration.ExternalServiceAdapter
+  const isExternalServiceAdapter = data.resolvedComponentFqn === 'Integration.ExternalServiceAdapter';
+  const dslObject = data.dslObject || {};
+  const config = dslObject.config || {};
+
   return (
     <div style={getNodeStyle()}>
       {/* Left handle for inputs (from previous steps) */}
@@ -153,6 +182,62 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
       }}>
         {data.label}
       </div>
+      
+      {/* ENHANCED: Display adapter configuration for Integration.ExternalServiceAdapter */}
+      {isExternalServiceAdapter && config.adapterType && (
+        <div style={{ 
+          fontSize: '10px', 
+          color: '#7C3AED',
+          marginBottom: '8px',
+          textAlign: 'center',
+          fontFamily: 'ui-monospace, monospace',
+          backgroundColor: '#F5F3FF',
+          padding: '3px 8px',
+          borderRadius: '6px',
+          border: '1px solid #DDD6FE',
+          cursor: 'default',
+          transition: 'all 0.2s ease',
+          position: 'relative',
+          whiteSpace: 'normal',
+          overflow: 'visible',
+          textOverflow: 'unset',
+          wordBreak: 'break-all',
+          lineHeight: '1.3',
+          maxWidth: '100%'
+        }}
+        title={`Adapter Type: ${config.adapterType}`}
+      >
+        🔌 {config.adapterType}
+      </div>
+      )}
+      
+      {/* ENHANCED: Display operation for Integration.ExternalServiceAdapter */}
+      {isExternalServiceAdapter && config.operation && (
+        <div style={{ 
+          fontSize: '10px', 
+          color: '#059669',
+          marginBottom: '8px',
+          textAlign: 'center',
+          fontFamily: 'ui-monospace, monospace',
+          backgroundColor: '#ECFDF5',
+          padding: '3px 8px',
+          borderRadius: '6px',
+          border: '1px solid #D1FAE5',
+          cursor: 'default',
+          transition: 'all 0.2s ease',
+          position: 'relative',
+          whiteSpace: 'normal',
+          overflow: 'visible',
+          textOverflow: 'unset',
+          wordBreak: 'break-all',
+          lineHeight: '1.3',
+          maxWidth: '100%'
+        }}
+        title={`Operation: ${config.operation}`}
+      >
+        ⚙️ {config.operation}
+      </div>
+      )}
       
       {data.resolvedComponentFqn && (
         <div style={{ 

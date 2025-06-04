@@ -1842,3 +1842,132 @@ specification cfv_internal_code.SubFlowInvokerNodeStyling {
         }
     }
 }
+
+specification cfv_internal_code.LayoutServiceWidthCompensation {
+    id: "CFV_INT_LAY_004"
+    title: "Enhanced Layout Service with Width Compensation for Long Nodes"
+    description: "Specification for automatic width compensation in adaptive spacing calculations to prevent right-side overlap issues with wide nodes."
+    
+    overview: "The LayoutService must automatically compensate for wide nodes (especially SubFlowInvoker nodes with long FQNs) by adding appropriate spacing to prevent right-side overlap between layers."
+    
+    width_compensation_algorithm: {
+        description: "Algorithm for calculating width overflow compensation",
+        
+        FUNCTION calculateWidthCompensation(nodes: Node[]) -> WidthCompensationResult {
+            // 1. Calculate actual node sizes
+            DECLARE nodesWithSizes = MAP nodes TO nodeWithSize WHERE
+                RETURN_VALUE {
+                    ...node,
+                    ...CALL calculateNodeSize WITH node
+                }
+            END_MAP
+            
+            // 2. Find maximum width and calculate overflow
+            DECLARE maxWidth = MAX(nodesWithSizes.map(n => n.width || 150))
+            DECLARE standardWidth = 150  // Standard baseline width
+            DECLARE widthOverflow = Math.max(0, maxWidth - standardWidth)
+            
+            // 3. Calculate compensation factors
+            DECLARE widthCompensation = widthOverflow * 0.6  // 60% of overflow as compensation
+            DECLARE bufferSpace = 20  // Additional buffer for very wide nodes
+            
+            // 4. Apply compensation to layer spacing
+            DECLARE compensatedLayerSpacing = baseLayerSpacing + widthCompensation + bufferSpace
+            
+            RETURN_VALUE {
+                maxWidth: maxWidth,
+                widthOverflow: widthOverflow,
+                widthCompensation: widthCompensation,
+                bufferSpace: bufferSpace,
+                compensatedLayerSpacing: compensatedLayerSpacing
+            }
+        }
+    }
+    
+    enhanced_adaptive_spacing: {
+        description: "Enhanced adaptive spacing calculation with width compensation",
+        
+        FUNCTION calculateAdaptiveSpacingWithWidthCompensation(nodes: Node[], baseSpacing: LayoutSpacing) -> LayoutSpacing {
+            IF nodes.length EQUALS 0 THEN
+                RETURN baseSpacing
+            END_IF
+            
+            // Calculate width compensation
+            DECLARE widthCompensation = CALL calculateWidthCompensation WITH nodes
+            
+            // Apply enhanced spacing with compensation
+            DECLARE adaptiveSpacing = {
+                nodeNode: Math.max(
+                    baseSpacing.nodeNode || 30,
+                    hasSubFlowNodes ? Math.max(maxWidth * 0.15, 40) : 30
+                ),
+                edgeNode: Math.max(
+                    baseSpacing.edgeNode || 8,
+                    hasSubFlowNodes ? 10 : 8
+                ),
+                edgeEdge: Math.max(
+                    baseSpacing.edgeEdge || 5,
+                    5
+                ),
+                // CRITICAL: Layer spacing with width compensation
+                layerSpacing: Math.max(
+                    baseSpacing.layerSpacing || 40,
+                    hasSubFlowNodes ? Math.max(maxWidth * 0.2, 50) : 40,
+                    widthCompensation.compensatedLayerSpacing
+                )
+            }
+            
+            LOG "🔧 ENHANCED spacing with width compensation applied:", {
+                nodeNode: adaptiveSpacing.nodeNode,
+                layerSpacing: adaptiveSpacing.layerSpacing,
+                maxWidth: widthCompensation.maxWidth,
+                widthOverflow: widthCompensation.widthOverflow,
+                widthCompensation: widthCompensation.widthCompensation,
+                bufferSpace: widthCompensation.bufferSpace
+            }
+            
+            RETURN adaptiveSpacing
+        }
+    }
+    
+    compensation_benefits: {
+        description: "Benefits of width compensation for layout quality",
+        prevents_overlap: "Prevents right-side overlap when nodes exceed standard 150px width",
+        handles_subflow_nodes: "Properly handles SubFlowInvoker nodes with long FQN displays",
+        maintains_readability: "Ensures adequate spacing for readability even with very wide nodes",
+        automatic_calculation: "Automatically calculates compensation without manual configuration",
+        proportional_scaling: "Uses proportional scaling (60% of overflow) for balanced compensation"
+    }
+    
+    test_scenarios: {
+        description: "Test scenarios for width compensation validation",
+        
+        normal_width_nodes: {
+            description: "Nodes with standard width (≤150px) should use base spacing",
+            expected_behavior: "No width compensation applied, uses standard adaptive spacing"
+        },
+        
+        wide_subflow_nodes: {
+            description: "SubFlowInvoker nodes with long FQNs (>150px width)",
+            expected_behavior: "Width compensation applied proportionally to overflow amount"
+        },
+        
+        mixed_width_nodes: {
+            description: "Mix of normal and wide nodes in same flow",
+            expected_behavior: "Compensation based on maximum width node in the flow"
+        },
+        
+        very_wide_nodes: {
+            description: "Extremely wide nodes (>300px)",
+            expected_behavior: "Significant compensation with buffer space to prevent overlap"
+        }
+    }
+    
+    implementation_requirements: {
+        automatic_detection: "Automatically detect wide nodes without manual configuration",
+        proportional_compensation: "Apply 60% of width overflow as compensation factor",
+        buffer_space: "Add 20px buffer space for additional safety margin",
+        logging_transparency: "Log compensation calculations for debugging and transparency",
+        backward_compatibility: "Maintain compatibility with existing layout options and presets"
+    }
+}

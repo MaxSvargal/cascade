@@ -101,15 +101,19 @@ design cfv_designs.GraphBuilderService {
 }
 
 design cfv_designs.LayoutService {
-    title: "LayoutService (Enhanced ELK.js Integration)"
-    description: "Advanced automatic graph layout service using ELK.js with multiple algorithms and intelligent node sizing."
+    title: "LayoutService (Enhanced ELK.js Integration with ExternalServiceAdapter Support)"
+    description: "Advanced automatic graph layout service using ELK.js with multiple algorithms, intelligent node sizing, and specialized support for Integration.ExternalServiceAdapter nodes."
     part_of: cfv_designs.CascadeFlowVisualizerComponent
     responsibilities: [
         "Provide multiple layout algorithms (layered, force, mrtree, radial, disco).",
         "Calculate content-based node sizing with configurable limits.",
         "Apply algorithm-specific optimizations and spacing configurations.",
         "Provide layout presets for different use cases (flowDetail, systemOverview, compact).",
-        "Handle layout failures gracefully with fallback to manual positioning."
+        "Handle layout failures gracefully with fallback to manual positioning.",
+        "ENHANCED: Calculate adaptive spacing with dual width compensation for wide nodes.",
+        "ENHANCED: Special handling for Integration.ExternalServiceAdapter nodes with long adapter configurations.",
+        "ENHANCED: Dynamic sizing for SubFlowInvoker and ExternalServiceAdapter node types.",
+        "ENHANCED: Prevent spacing issues between wide nodes and subsequent columned nodes."
     ]
     dependencies: [
         cfv_designs.GraphBuilderService,
@@ -119,9 +123,41 @@ design cfv_designs.LayoutService {
     exposes_interface: {
         layoutNodes: "async (nodes: Node[], edges: Edge[], options?: LayoutOptions) => Promise<{ nodes: Node[]; edges: Edge[] }>",
         calculateNodeSize: "(node: Node) => { width: number; height: number }",
+        calculateAdaptiveSpacing: "(nodes: Node[], baseSpacing: LayoutSpacing) => LayoutSpacing",
         layoutPresets: "Record<string, LayoutOptions>"
     }
-    source: "Enhanced implementation with advanced ELK.js features"
+    enhanced_width_compensation: {
+        description: "Dual compensation system for wide nodes that require extra spacing on both sides",
+        wide_node_detection: "Detect SubFlowInvoker nodes and Integration.ExternalServiceAdapter nodes requiring special handling",
+        width_overflow_detection: "Detect nodes that exceed standard width (150px) and calculate overflow amount",
+        dual_spacing_compensation: {
+            left_side_fork_compensation: "Add 40% of width overflow to fork spacing for columned wide nodes",
+            right_side_layer_compensation: "Add 80% of width overflow to layer spacing to prevent right-side overlap"
+        },
+        compensation_formulas: {
+            fork_spacing: "enhancedForkSpacing = Math.max(baseForkSpacing, 15 + (maxWidth - 200) * 0.4)",
+            layer_spacing: "layerSpacing += Math.max(0, (maxWidth - 150) * 0.8) + 30px buffer"
+        },
+        standard_width_baseline: "Use 150px as the standard node width baseline for compensation calculations",
+        buffer_space: "Add 30px buffer space (increased from 20px) to ensure adequate separation"
+    }
+    external_service_adapter_support: {
+        description: "Specialized handling for Integration.ExternalServiceAdapter nodes with dynamic sizing",
+        detection_method: "Identify nodes via resolvedComponentFqn === 'Integration.ExternalServiceAdapter'",
+        dynamic_sizing: {
+            width_calculation: "Based on adapterType, operation, and component FQN lengths",
+            minimum_width: "220px for ExternalServiceAdapter nodes",
+            maximum_width: "500px (same as SubFlowInvoker nodes)",
+            height_calculation: "100px base + additional lines for configuration content"
+        },
+        content_analysis: {
+            adapter_type_width: "adapterType.length * 7px + 60px padding",
+            operation_width: "operation.length * 7px + 40px padding",
+            component_fqn_width: "resolvedComponentFqn.length * 6px + 40px padding"
+        },
+        spacing_integration: "ExternalServiceAdapter nodes participate in dual width compensation system"
+    }
+    source: "Enhanced implementation with dual width compensation and ExternalServiceAdapter support"
 }
 
 design cfv_designs.SelectionService {
@@ -292,18 +328,20 @@ design cfv_designs.TestCaseService {
 }
 
 design cfv_designs.EnhancedGraphBuilderService {
-    title: "GraphBuilderService (Enhanced with Advanced Features)"
-    description: "Enhanced graph builder service with automatic layout integration, trace visualization, and advanced node/edge generation."
+    title: "GraphBuilderService (Enhanced with Advanced Features and ExternalServiceAdapter Support)"
+    description: "Enhanced graph builder service with automatic layout integration, trace visualization, advanced node/edge generation, and specialized support for Integration.ExternalServiceAdapter nodes."
     part_of: cfv_designs.CascadeFlowVisualizerComponent
     responsibilities: [
         "Generate enhanced node data with trace overlays and execution status.",
         "Create specialized node types (StepNode, TriggerNode, SubFlowInvokerNode, SystemFlowNode, SystemTriggerNode).",
+        "ENHANCED: Detect and handle Integration.ExternalServiceAdapter nodes with proper component resolution.",
         "Generate enhanced edge data with execution path information.",
         "Integrate automatic layout application with ELK.js.",
         "Apply trace visualization enhancements when trace data is available.",
         "Support multiple graph generation modes (design, trace, test_result).",
         "Handle component resolution with import-aware lookup.",
-        "Generate system overview graphs with flow relationships and invocations."
+        "Generate system overview graphs with flow relationships and invocations.",
+        "ENHANCED: Provide proper node data for specialized component types requiring dynamic sizing."
     ]
     dependencies: [
         cfv_designs.ModuleRegistryService,
@@ -316,7 +354,21 @@ design cfv_designs.EnhancedGraphBuilderService {
         generateFlowDetailGraphData: "(params: GenerateFlowDetailParams) => Promise<GraphData>",
         generateSystemOverviewGraphData: "(moduleRegistry: IModuleRegistry, parseContextVarsFn: (value: string) => string[], useAutoLayout?: boolean) => Promise<GraphData>"
     }
-    source: "Enhanced implementation with advanced features and integrations"
+    node_type_determination: {
+        description: "Enhanced logic for determining appropriate node types based on component characteristics",
+        subflow_invoker_detection: "Detect StdLib:SubFlowInvoker components and assign subFlowInvokerNode type",
+        external_service_adapter_detection: "Detect Integration.ExternalServiceAdapter components and assign stepNode type with enhanced data",
+        trigger_detection: "Detect trigger entry points and assign triggerNode type",
+        standard_step_detection: "Assign stepNode type for all other component types"
+    }
+    enhanced_node_data_generation: {
+        description: "Generate rich node data with component-specific information for layout and rendering",
+        resolved_component_fqn: "Include resolvedComponentFqn for component type identification",
+        dsl_object_inclusion: "Include complete DSL object for configuration access",
+        component_schema_integration: "Include component schema for validation and form generation",
+        trace_data_overlay: "Include execution trace data when available for visualization"
+    }
+    source: "Enhanced implementation with advanced features, integrations, and ExternalServiceAdapter support"
 }
 
 design cfv_designs.EnhancedModuleRegistryService {
@@ -352,26 +404,53 @@ design cfv_designs.EnhancedModuleRegistryService {
 // --- Component Design Enhancements ---
 
 design cfv_designs.EnhancedNodeComponents {
-    title: "Enhanced Node Component Library"
-    description: "Comprehensive set of React components for rendering different types of flow nodes with advanced features."
+    title: "Enhanced Node Component Library with ExternalServiceAdapter Support"
+    description: "Comprehensive set of React components for rendering different types of flow nodes with advanced features and specialized support for Integration.ExternalServiceAdapter nodes."
     part_of: cfv_designs.CascadeFlowVisualizerComponent
     responsibilities: [
         "Render step nodes with execution status styling and error display.",
+        "ENHANCED: Render Integration.ExternalServiceAdapter nodes with dynamic sizing and configuration display.",
         "Render trigger nodes with distinct visual styling.",
         "Render sub-flow invoker nodes with navigation capabilities.",
         "Render system flow nodes for overview visualization.",
         "Render system trigger nodes for system-level triggers.",
         "Support trace overlay visualization with execution timing and status.",
-        "Provide consistent styling and interaction patterns."
+        "Provide consistent styling and interaction patterns.",
+        "ENHANCED: Dynamic width calculation based on component content and configuration."
     ]
     components: [
-        "StepNode: Standard flow step with execution status",
+        "StepNode: Standard flow step with execution status and ExternalServiceAdapter support",
         "TriggerNode: Flow trigger entry point",
         "SubFlowInvokerNode: Sub-flow invocation with navigation",
         "SystemFlowNode: System overview flow representation",
         "SystemTriggerNode: System overview trigger representation"
     ]
-    source: "Enhanced implementation with comprehensive node types"
+    enhanced_step_node_features: {
+        description: "Enhanced StepNode component with specialized rendering for different component types",
+        external_service_adapter_support: {
+            detection: "Identify nodes via resolvedComponentFqn === 'Integration.ExternalServiceAdapter'",
+            dynamic_sizing: "Calculate width based on adapterType, operation, and component FQN lengths",
+            configuration_display: {
+                adapter_type_display: "Show adapterType with purple styling and 🔌 icon",
+                operation_display: "Show operation with green styling and ⚙️ icon",
+                component_fqn_display: "Show component FQN with standard styling"
+            },
+            content_wrapping: "Support text wrapping and proper line breaks for long configuration values",
+            hover_tooltips: "Provide hover tooltips for full configuration information"
+        },
+        dynamic_width_calculation: {
+            base_width: "180px for regular step nodes",
+            external_service_adapter_width: "220px minimum, up to 450px based on content",
+            content_scaling: "7px per extra character beyond 15 character baseline",
+            overflow_handling: "Set overflow: 'visible' to show full content without truncation"
+        },
+        visual_styling: {
+            clean_design_mode: "White background with transparent borders for pending nodes",
+            debug_mode: "Very light pastel backgrounds with subtle borders based on execution status",
+            status_indicators: "Compact status indicators with hover animation for execution details"
+        }
+    }
+    source: "Enhanced implementation with comprehensive node types and ExternalServiceAdapter support"
 }
 
 design cfv_designs.EnhancedEdgeComponents {

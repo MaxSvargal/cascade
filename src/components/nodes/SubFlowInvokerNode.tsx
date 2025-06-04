@@ -56,18 +56,28 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
 
   // Enhanced styling for clean design mode vs execution mode
   const getNodeStyle = () => {
+    // DYNAMIC WIDTH: Calculate width based on content length
+    const labelLength = data.label?.length || 0;
+    const fqnLength = data.invokedFlowFqn?.length || 0;
+    const maxContentLength = Math.max(labelLength, fqnLength);
+    
+    // ADAPTIVE WIDTH: Scale based on content length
+    let dynamicWidth = 160; // Base width
+    if (maxContentLength > 20) {
+      dynamicWidth = Math.min(400, 160 + (maxContentLength - 20) * 8); // 8px per extra character, max 400px
+    }
+    
     const baseStyle = {
-      padding: data.executionStatus ? '20px 16px 12px 16px' : '12px 16px', // Reduced padding
+      padding: data.executionStatus ? '20px 16px 12px 16px' : '12px 16px',
       borderRadius: '8px',
-      minWidth: '160px', // REDUCED: Much smaller minimum width
-      maxWidth: '240px', // REDUCED: Much smaller maximum width to prevent overlap
+      width: `${dynamicWidth}px`, // FIXED: Use calculated dynamic width instead of min/max
       transition: 'all 0.2s ease',
       boxSizing: 'border-box' as const,
-      overflow: 'hidden' as const,
+      overflow: 'visible' as const, // CHANGED: Allow content to be visible instead of hidden
       display: 'flex' as const,
       flexDirection: 'column' as const,
       position: 'relative' as const,
-      cursor: 'pointer' as const, // Indicate it's clickable for navigation
+      cursor: 'pointer' as const,
     };
 
     if (!data.executionStatus) {
@@ -169,9 +179,11 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
           cursor: 'pointer',
           transition: 'all 0.2s ease',
           position: 'relative',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          whiteSpace: 'normal',
+          overflow: 'visible',
+          textOverflow: 'unset',
+          wordBreak: 'break-all',
+          lineHeight: '1.3',
           maxWidth: '100%'
         }}
         title={`Double-click to navigate to ${data.invokedFlowFqn}`}
@@ -208,9 +220,11 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
           padding: '3px 6px',
           borderRadius: '4px',
           border: '1px solid #F3F4F6',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          whiteSpace: 'normal',
+          overflow: 'visible',
+          textOverflow: 'unset',
+          wordBreak: 'break-all',
+          lineHeight: '1.3',
           maxWidth: '100%'
         }}>
           {data.resolvedComponentFqn}

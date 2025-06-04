@@ -895,17 +895,103 @@ service EnhancedLayoutService {
         `
     }
     
+    method calculateAdaptiveSpacingWithWidthCompensation {
+        signature: `calculateAdaptiveSpacingWithWidthCompensation(nodes: Node[], baseSpacing: LayoutSpacing): LayoutSpacing`
+        
+        implementation: `
+            FUNCTION calculateAdaptiveSpacingWithWidthCompensation(nodes, baseSpacing) {
+                IF nodes.length EQUALS 0 THEN
+                    RETURN baseSpacing
+                END_IF
+                
+                // Calculate node sizes first
+                DECLARE nodesWithSizes = MAP nodes TO nodeWithSize WHERE
+                    RETURN_VALUE {
+                        ...node,
+                        ...CALL calculateNodeSize WITH node
+                    }
+                END_MAP
+                
+                // Find the largest dimensions and analyze node types
+                DECLARE maxWidth = MAX(nodesWithSizes.map(n => n.width || 150))
+                DECLARE maxHeight = MAX(nodesWithSizes.map(n => n.height || 80))
+                DECLARE averageWidth = AVERAGE(nodesWithSizes.map(n => n.width || 150))
+                DECLARE hasSubFlowNodes = nodes.some(n => n.type === 'subFlowInvokerNode')
+                DECLARE hasTriggerNodes = nodes.some(n => n.type === 'triggerNode')
+                
+                // ENHANCED: Calculate width overflow compensation - INCREASED for better right-side spacing
+                DECLARE standardWidth = 150  // Standard baseline width
+                DECLARE widthOverflow = Math.max(0, maxWidth - standardWidth)
+                DECLARE widthCompensation = widthOverflow * 0.8  // INCREASED from 0.6 to 0.8 (80% of overflow)
+                DECLARE bufferSpace = 30  // INCREASED from 20 to 30 for better spacing
+                
+                // USER REQUESTED: Reduced spacing - fork spacing by 2x, base spacing by 1.5x
+                DECLARE adaptiveSpacing = {
+                    // CRITICAL: Fork spacing reduced by 2x (divide by 2)
+                    nodeNode: Math.max(
+                        (baseSpacing.nodeNode || 30) / 1.5,  // Base reduction by 1.5x
+                        hasSubFlowNodes ? Math.max(maxWidth * 0.15, 40) / 2 : 20 // Fork spacing reduced by 2x
+                    ),
+                    
+                    // Vertical spacing: reduced by 1.5x
+                    edgeNode: Math.max(
+                        (baseSpacing.edgeNode || 8) / 1.5,   // Reduced by 1.5x
+                        hasSubFlowNodes ? 10 / 1.5 : 5 // Reduced by 1.5x
+                    ),
+                    
+                    // Edge-to-edge spacing: reduced by 1.5x
+                    edgeEdge: Math.max(
+                        (baseSpacing.edgeEdge || 5) / 1.5,   // Reduced by 1.5x
+                        3
+                    ),
+                    
+                    // CRITICAL: Layer spacing with ENHANCED width compensation for long nodes
+                    layerSpacing: Math.max(
+                        (baseSpacing.layerSpacing || 40) / 1.5,  // Base reduced by 1.5x
+                        hasSubFlowNodes ? Math.max(maxWidth * 0.2, 50) / 1.5 : 27, // Reduced by 1.5x
+                        // ENHANCED: Add INCREASED width compensation to prevent right-side overlap
+                        27 + widthCompensation + bufferSpace // Base 27 + enhanced compensation
+                    )
+                }
+                
+                LOG "🔧 ENHANCED spacing with INCREASED width compensation applied:", {
+                    nodeNode: adaptiveSpacing.nodeNode,
+                    edgeNode: adaptiveSpacing.edgeNode,
+                    layerSpacing: adaptiveSpacing.layerSpacing,
+                    maxWidth: maxWidth,
+                    widthOverflow: widthOverflow,
+                    widthCompensation: widthCompensation + " (80% of overflow)",
+                    bufferSpace: bufferSpace + " (increased)",
+                    hasSubFlows: hasSubFlowNodes,
+                    nodeCount: nodes.length,
+                    reductions: "Fork spacing: 2x reduction, Base spacing: 1.5x reduction"
+                }
+                
+                // Round to reasonable values
+                RETURN {
+                    nodeNode: Math.round(adaptiveSpacing.nodeNode),
+                    edgeNode: Math.round(adaptiveSpacing.edgeNode),
+                    edgeEdge: Math.round(adaptiveSpacing.edgeEdge),
+                    layerSpacing: Math.round(adaptiveSpacing.layerSpacing)
+                }
+            }
+        `
+    }
+    
     method applyElkLayeredLayout {
         signature: `applyElkLayeredLayout(nodes: Node[], edges: Edge[], options: LayoutOptions): Promise<{ nodes: Node[], edges: Edge[] }>`
         
         implementation: `
             FUNCTION applyElkLayeredLayout(nodes, edges, options) {
+                // ENHANCED: Calculate adaptive spacing with width compensation
+                DECLARE adaptiveSpacing = CALL calculateAdaptiveSpacingWithWidthCompensation WITH nodes, options.spacing || {}
+                
                 DECLARE elkOptions = {
                     'elk.algorithm': 'layered',
                     'elk.direction': options.direction || 'RIGHT',
-                    'elk.spacing.nodeNode': options.nodeSpacing || 80,
-                    'elk.layered.spacing.nodeNodeBetweenLayers': options.layerSpacing || 100,
-                    'elk.spacing.edgeNode': options.edgeSpacing || 40,
+                    'elk.spacing.nodeNode': adaptiveSpacing.nodeNode.toString(),
+                    'elk.layered.spacing.nodeNodeBetweenLayers': adaptiveSpacing.layerSpacing.toString(),
+                    'elk.spacing.edgeNode': adaptiveSpacing.edgeNode.toString(),
                     'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
                     'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
                     'elk.layered.cycleBreaking.strategy': 'GREEDY'

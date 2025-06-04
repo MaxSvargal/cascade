@@ -1390,7 +1390,7 @@ flows:
           expression: "{ userId: data.user_id, email: data.email, message: 'User registered successfully. Welcome email sent.' }"
         inputs_map: { data: "steps.create-user-record.outputs.responseData" }
         run_after: [send-welcome-notification] # After attempting to send email
-        `
+    `
   },
 
   // Payments Module (Minimal changes for brevity, ensure SubFlowInvoker and Trigger types are correct)
@@ -2388,7 +2388,7 @@ export const casinoPlatformComponentSchemas = {
         responseConfig: {
           type: "object",
           description: "Configuration for mapping flow completion/error to HTTP response. Handled by Core.",
-          properties: {
+      properties: {
             successStatusCode: {
               type: "integer",
               default: 200,
@@ -2458,7 +2458,7 @@ export const casinoPlatformComponentSchemas = {
     fqn: 'StdLib:JsonSchemaValidator',
     configSchema: {
       type: "object",
-      properties: {
+        properties: {
         schema: { type: "object", description: "JSON Schema object for validation (inline or $ref if Core supports)." }
       },
       required: ["schema"]
@@ -2567,7 +2567,7 @@ export const casinoPlatformComponentSchemas = {
       required: ["data"]
     },
     outputSchema: { // Represents the 'result' output port
-      description: "Transformed data."
+        description: "Transformed data."
     }
   },
   'StdLib:SubFlowInvoker': {
@@ -2796,8 +2796,8 @@ export const casinoPlatformComponentSchemas = {
   'Security.Authorize': {
     fqn: 'Security.Authorize',
     configSchema: {
-      type: "object",
-      properties: {
+    type: "object",
+    properties: {
         policySourceType: { type: "string", description: "How decisions are made (e.g., 'Static', 'Opa', or PluginIdentifierString)." }, // ["enum('Static', 'Opa', 'DatabaseLookup')", "PluginIdentifierString"]
         policySourceConfig: { type: "object", description: "Config for policySourceType. Structure per type/plugin schema. Use Core Secrets." },
         inputDataExpression: { type: "string", description: "JMESPath to construct/transform input 'data' for policy eval (sandboxed)." } // ExpressionString
@@ -2805,8 +2805,8 @@ export const casinoPlatformComponentSchemas = {
       required: ["policySourceType", "policySourceConfig"]
     },
     inputSchema: {
-      type: "object",
-      properties: {
+    type: "object",
+    properties: {
         data: {
           type: "object",
           description: "Context for auth decision (principal, action, resource)."
