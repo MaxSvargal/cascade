@@ -1157,3 +1157,150 @@ service DataGenerationService {
         `
     }
 }
+
+// --- GRAPH BUILDER SERVICE ---
+
+service GraphBuilderService {
+    description: "Generates detailed flow graphs and trace data"
+    
+    method generateFlowDetailGraphData {
+        signature: `generateFlowDetailGraphData(params: GenerateFlowDetailParams): Promise<GraphData>`
+        
+        implementation: `
+            FUNCTION generateFlowDetailGraphData(params) {
+                DECLARE { flowFqn, mode, moduleRegistry, parseContextVarsFn, componentSchemas, traceData, useAutoLayout } = params
+                
+                DECLARE flowDefinition = CALL moduleRegistry.getFlowDefinition WITH flowFqn
+                IF flowDefinition IS_NULL THEN
+                    RETURN_VALUE { nodes: [], edges: [] }
+                END_IF
+                
+                DECLARE nodes = []
+                DECLARE edges = []
+                
+                // 1. Generate trigger node
+                IF flowDefinition.trigger IS_DEFINED THEN
+                    DECLARE triggerTrace = FIND traceData?.steps WHERE stepId EQUALS 'trigger'
+                    DECLARE triggerNodeData = CREATE_TRIGGER_NODE_DATA WITH flowDefinition.trigger, triggerTrace, componentSchemas, parseContextVarsFn
+                    PUSH_TO nodes: { id: 'trigger', type: 'triggerNode', position: { x: 0, y: 0 }, data: triggerNodeData }
+                END_IF
+                
+                // 2. Generate step nodes
+                IF flowDefinition.steps IS_DEFINED THEN
+                    FOR_EACH step, index IN flowDefinition.steps
+                        DECLARE stepTrace = FIND traceData?.steps WHERE stepId EQUALS step.step_id
+                        DECLARE stepNodeData = CREATE_STEP_NODE_DATA WITH step, stepTrace, componentSchemas, parseContextVarsFn, moduleRegistry, flowFqn
+                        
+                        IF step.component_ref.includes('SubFlowInvoker') THEN
+                            PUSH_TO nodes: { id: step.step_id, type: 'subFlowInvokerNode', position: { x: 0, y: (index + 1) * 100 }, data: stepNodeData }
+                        ELSE
+                            PUSH_TO nodes: { id: step.step_id, type: 'stepNode', position: { x: 0, y: (index + 1) * 100 }, data: stepNodeData }
+                        END_IF
+                    END_FOR
+                END_IF
+                
+                // 3. Generate edges based on inputs_map, run_after, AND outputs_map
+                IF flowDefinition.steps IS_DEFINED THEN
+                    FOR_EACH step IN flowDefinition.steps
+                        // 3a. Control flow edges from trigger (for steps without run_after)
+                        IF NOT step.run_after OR step.run_after.length EQUALS 0 THEN
+                            DECLARE edgeData = { type: 'controlFlow', targetStepId: step.step_id, isExecutedPath: traceData ? true : undefined }
+                            PUSH_TO edges: { id: "trigger-${step.step_id}", source: 'trigger', target: step.step_id, type: 'flowEdge', data: edgeData }
+                        END_IF
+                        
+                        // 3b. Control flow edges from run_after
+                        IF step.run_after IS_DEFINED AND Array.isArray(step.run_after) THEN
+                            FOR_EACH sourceStepId IN step.run_after
+                                DECLARE edgeData = { type: 'controlFlow', sourceStepId: sourceStepId, targetStepId: step.step_id, isExecutedPath: traceData ? true : undefined }
+                                PUSH_TO edges: { id: "${sourceStepId}-${step.step_id}-control", source: sourceStepId, target: step.step_id, type: 'flowEdge', data: edgeData }
+                            END_FOR
+                        END_IF
+                        
+                        // 3c. Data flow edges from inputs_map
+                        IF step.inputs_map IS_DEFINED THEN
+                            FOR_EACH inputKey, sourceExpression IN step.inputs_map
+                                IF typeof sourceExpression EQUALS 'string' AND sourceExpression.startsWith('steps.') THEN
+                                    DECLARE match = sourceExpression.match(/steps\.([^.]+)/)
+                                    IF match IS_DEFINED THEN
+                                        DECLARE sourceStepId = match[1]
+                                        DECLARE edgeData = { type: 'dataFlow', sourceStepId: sourceStepId, targetStepId: step.step_id, isExecutedPath: traceData ? true : undefined }
+                                        PUSH_TO edges: { id: "${sourceStepId}-${step.step_id}-data-${inputKey}", source: sourceStepId, target: step.step_id, type: 'flowEdge', data: edgeData }
+                                    END_IF
+                                END_IF
+                            END_FOR
+                        END_IF
+                        
+                        // 3d. ENHANCED: Error routing edges from outputs_map
+                        IF step.outputs_map IS_DEFINED THEN
+                            // Handle both array and object formats for outputs_map
+                            IF Array.isArray(step.outputs_map) THEN
+                                FOR_EACH outputMapping IN step.outputs_map
+                                    IF outputMapping.target AND outputMapping.target.startsWith('steps.') THEN
+                                        DECLARE match = outputMapping.target.match(/steps\.([^.]+)\.inputs/)
+                                        IF match IS_DEFINED THEN
+                                            DECLARE targetStepId = match[1]
+                                            DECLARE edgeData = { 
+                                                type: 'controlFlow', 
+                                                sourceStepId: step.step_id, 
+                                                targetStepId: targetStepId, 
+                                                sourceHandle: outputMapping.source || 'error',
+                                                targetHandle: 'data',
+                                                isExecutedPath: traceData ? true : undefined 
+                                            }
+                                            PUSH_TO edges: { id: "${step.step_id}-${targetStepId}-error-${outputMapping.source || 'error'}", source: step.step_id, target: targetStepId, type: 'flowEdge', data: edgeData }
+                                        END_IF
+                                    END_IF
+                                END_FOR
+                            ELSE_IF typeof step.outputs_map EQUALS 'object' THEN
+                                FOR_EACH target, source IN step.outputs_map
+                                    IF target.startsWith('steps.') THEN
+                                        DECLARE match = target.match(/steps\.([^.]+)\.inputs/)
+                                        IF match IS_DEFINED THEN
+                                            DECLARE targetStepId = match[1]
+                                            DECLARE edgeData = { 
+                                                type: 'controlFlow', 
+                                                sourceStepId: step.step_id, 
+                                                targetStepId: targetStepId, 
+                                                sourceHandle: source || 'error',
+                                                targetHandle: 'data',
+                                                isExecutedPath: traceData ? true : undefined 
+                                            }
+                                            PUSH_TO edges: { id: "${step.step_id}-${targetStepId}-error-${source || 'error'}", source: step.step_id, target: targetStepId, type: 'flowEdge', data: edgeData }
+                                        END_IF
+                                    END_IF
+                                END_FOR
+                            END_IF
+                        END_IF
+                    END_FOR
+                END_IF
+                
+                // 4. Apply automatic layout if requested
+                IF useAutoLayout AND nodes.length > 0 THEN
+                    TRY
+                        DECLARE layouted = CALL layoutNodes WITH nodes, edges, layoutPresets.flowDetail.options
+                        
+                        // Apply trace enhancements if trace data is available
+                        IF traceData IS_DEFINED THEN
+                            DECLARE enhancedNodes = CALL enhanceNodesWithTrace WITH layouted.nodes, traceData
+                            DECLARE enhancedEdges = CALL enhanceEdgesWithTrace WITH layouted.edges, traceData
+                            RETURN_VALUE { nodes: enhancedNodes, edges: enhancedEdges }
+                        END_IF
+                        
+                        RETURN_VALUE layouted
+                    CATCH error
+                        LOG_WARNING "Auto-layout failed, using manual positions: " + error
+                    END_TRY
+                END_IF
+                
+                // Apply trace enhancements even without layout if trace data is available
+                IF traceData IS_DEFINED THEN
+                    DECLARE enhancedNodes = CALL enhanceNodesWithTrace WITH nodes, traceData
+                    DECLARE enhancedEdges = CALL enhanceEdgesWithTrace WITH edges, traceData
+                    RETURN_VALUE { nodes: enhancedNodes, edges: enhancedEdges }
+                END_IF
+                
+                RETURN_VALUE { nodes, edges }
+            }
+        `
+    }
+}

@@ -306,3 +306,19 @@ directive cfv_consumer_directives.AutoZoomToFit {
         square_layout_support: "Coordinate with layout service to prefer square-shaped arrangements for long flows."
     }
 }
+
+directive cfv_consumer_directives.GraphVisualization {
+    id: "CFV_DIR_GRAPH_001"
+    title: "Directive for Graph Visualization"
+    target_tool: "HumanDeveloper_React_CascadeVisualizerConsumer"
+    description: "Provides guidance for implementing the refined graph visualization approach."
+    default_language: "TypeScriptReact"
+
+    graph_visualization: {
+        node_representation: "Each step becomes a React Flow node. Trigger becomes a special trigger node. SubFlowInvoker steps become special sub-flow nodes with navigation capability.",
+        edge_generation: "ENHANCED: Edges are generated from three sources: 1) run_after dependencies (control flow), 2) inputs_map references to previous steps (data flow), 3) outputs_map error routing to target steps (error flow). CRITICAL: outputs_map entries like 'error: steps.fail-step.inputs.data' should create edges from the source step to the target step, showing error routing paths. This resolves cases where error handling steps appear disconnected from their triggering steps.",
+        layout_algorithm: "Use ELK.js layered layout for flows with clear sequential structure. Use grid layout for flows with many parallel branches or complex fork patterns.",
+        trace_overlay: "When trace data is available, enhance nodes with execution status (SUCCESS/FAILURE/RUNNING) and timing information. Highlight the executed path through the graph.",
+        error_path_visualization: "ENHANCED: Error routing edges from outputs_map should be visually distinct (e.g., red dashed lines) to show error handling paths separate from normal data/control flow."
+    }
+}

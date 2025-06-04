@@ -1235,7 +1235,7 @@ flows:
             required: [email, password, confirmPassword, firstName, lastName, dateOfBirth, country, termsAccepted]
             properties:
               email: { type: string, format: email }
-              password: { type: string, minLength: 10, pattern: "^.*[a-z])(?=.*[A-Z])(?=.*\\\\d)(?=.*[!@#$%^&*()_+\\\\-=\\[\\]{};':\"\\\\|,.<>\\/?~$" } # Stricter password
+              password: { type: string, minLength: 10, pattern: "" } # Stricter password
               confirmPassword: { type: string }
               firstName: { type: string, minLength: 1, maxLength: 50 }
               lastName: { type: string, minLength: 1, maxLength: 50 }

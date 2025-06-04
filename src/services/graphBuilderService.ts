@@ -160,13 +160,39 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
 
   // Generate edges based on inputs_map and run_after
   if (flowDefinition.steps) {
+    // First, collect all steps that are targets of outputs_map error routing
+    const errorTargetSteps = new Set<string>();
     flowDefinition.steps.forEach((step: any) => {
-      // Control flow edges from trigger
-      if (!step.run_after || step.run_after.length === 0) {
+      if (step.outputs_map) {
+        if (Array.isArray(step.outputs_map)) {
+          step.outputs_map.forEach((outputMapping: any) => {
+            if (outputMapping.target && outputMapping.target.startsWith('steps.')) {
+              const match = outputMapping.target.match(/steps\.([^.]+)\.inputs/);
+              if (match) {
+                errorTargetSteps.add(match[1]);
+              }
+            }
+          });
+        } else if (typeof step.outputs_map === 'object') {
+          Object.entries(step.outputs_map).forEach(([outputPort, targetExpression]: [string, any]) => {
+            if (typeof targetExpression === 'string' && targetExpression.startsWith('steps.')) {
+              const match = targetExpression.match(/steps\.([^.]+)\.inputs/);
+              if (match) {
+                errorTargetSteps.add(match[1]);
+              }
+            }
+          });
+        }
+      }
+    });
+
+    flowDefinition.steps.forEach((step: any) => {
+      // Control flow edges from trigger (for steps without run_after AND not error targets)
+      if ((!step.run_after || step.run_after.length === 0) && !errorTargetSteps.has(step.step_id)) {
         const edgeData: FlowEdgeData = {
           type: 'controlFlow',
           targetStepId: step.step_id,
-          isExecutedPath: traceData ? true : undefined // Simplified - would need actual path analysis
+          isExecutedPath: traceData ? true : undefined
         };
 
         edges.push({
@@ -226,6 +252,82 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
             }
           }
         });
+      }
+
+      // ENHANCED: Error routing edges from outputs_map
+      if (step.outputs_map) {
+        // Handle both array and object formats for outputs_map
+        if (Array.isArray(step.outputs_map)) {
+          step.outputs_map.forEach((outputMapping: any) => {
+            if (outputMapping.target && outputMapping.target.startsWith('steps.')) {
+              const match = outputMapping.target.match(/steps\.([^.]+)\.inputs/);
+              if (match) {
+                const targetStepId = match[1];
+                const edgeData: FlowEdgeData = {
+                  type: 'controlFlow',
+                  sourceStepId: step.step_id,
+                  targetStepId: targetStepId,
+                  sourceHandle: outputMapping.source || 'error',
+                  targetHandle: 'data',
+                  isExecutedPath: traceData ? true : undefined
+                };
+
+                edges.push({
+                  id: `${step.step_id}-${targetStepId}-error-${outputMapping.source || 'error'}`,
+                  source: step.step_id,
+                  target: targetStepId,
+                  type: 'flowEdge',
+                  data: edgeData,
+                  style: {
+                    stroke: '#f44336',
+                    strokeDasharray: '5,5',
+                    strokeWidth: 2
+                  },
+                  label: 'error',
+                  labelStyle: {
+                    fontSize: '10px',
+                    fill: '#f44336'
+                  }
+                });
+              }
+            }
+          });
+        } else if (typeof step.outputs_map === 'object') {
+          Object.entries(step.outputs_map).forEach(([outputPort, targetExpression]: [string, any]) => {
+            if (typeof targetExpression === 'string' && targetExpression.startsWith('steps.')) {
+              const match = targetExpression.match(/steps\.([^.]+)\.inputs/);
+              if (match) {
+                const targetStepId = match[1];
+                const edgeData: FlowEdgeData = {
+                  type: 'controlFlow',
+                  sourceStepId: step.step_id,
+                  targetStepId: targetStepId,
+                  sourceHandle: outputPort, // The key is the output port (e.g., 'error')
+                  targetHandle: 'data',
+                  isExecutedPath: traceData ? true : undefined
+                };
+
+                edges.push({
+                  id: `${step.step_id}-${targetStepId}-error-${outputPort}`,
+                  source: step.step_id,
+                  target: targetStepId,
+                  type: 'flowEdge',
+                  data: edgeData,
+                  style: {
+                    stroke: '#f44336',
+                    strokeDasharray: '5,5',
+                    strokeWidth: 2
+                  },
+                  label: outputPort, // Show the output port name as label
+                  labelStyle: {
+                    fontSize: '10px',
+                    fill: '#f44336'
+                  }
+                });
+              }
+            }
+          });
+        }
       }
     });
   }
