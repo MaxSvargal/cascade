@@ -505,145 +505,164 @@ const InspectorDebugTestTab: React.FC<{
 
   // Resolve input data and data lineage when selection changes
   React.useEffect(() => {
-    if (selectedElement) {
-      const resolveData = async () => {
-        try {
-          // Get component schema for the selected element
-          let componentSchema = null;
-          if (selectedElement.data?.componentSchema) {
-            componentSchema = selectedElement.data.componentSchema;
-          } else if (selectedElement.data?.resolvedComponentFqn) {
-            componentSchema = moduleRegistry.getComponentSchema(selectedElement.data.resolvedComponentFqn);
-          }
+    const resolveData = async () => {
+      if (!selectedElement || !currentFlowFqn) return;
 
-          // Check if this is a trigger node (either by stepId 'trigger' or triggerType)
-          const isTriggerNode = selectedElement.data?.stepId === 'trigger' || 
-                               selectedElement.data?.triggerType ||
-                               selectedElement.id === 'trigger';
+      try {
+        // Determine which flow to use for step resolution
+        let stepFlowFqn = currentFlowFqn;
+        
+        // If this is a SubFlowInvoker node, we might need to resolve from the invoked flow
+        if (selectedElement.data?.invokedFlowFqn && (
+          selectedElement.data?.resolvedComponentFqn?.includes('SubFlowInvoker') ||
+          selectedElement.data?.componentType?.includes('SubFlowInvoker')
+        )) {
+          console.log('🔍 Debug: SubFlowInvoker detected, using invoked flow:', selectedElement.data.invokedFlowFqn);
+          stepFlowFqn = selectedElement.data.invokedFlowFqn;
+        }
 
-          // Determine the correct flow FQN for this step
-          let stepFlowFqn = currentFlowFqn;
-          
-          // If we have flow information in the selected element, use that
-          if (selectedElement.flowFqn) {
-            stepFlowFqn = selectedElement.flowFqn;
-          } else if (selectedElement.data?.flowFqn) {
-            stepFlowFqn = selectedElement.data.flowFqn;
-          } else if (selectedElement.data?.fqn && selectedElement.data.fqn.includes('.')) {
-            // For system nodes, the fqn might be the flow FQN
-            stepFlowFqn = selectedElement.data.fqn;
-          } else {
-            // CRITICAL: First try to find the flow that contains this step by searching all modules
-            // This should take priority over currentFlowFqn to avoid mismatches
-            const allModules = moduleRegistry.getAllLoadedModules();
-            for (const module of allModules) {
-              if (module.definitions?.flows) {
-                for (const flow of module.definitions.flows) {
-                  const flowFqn = `${module.fqn}.${flow.name}`;
-                  if (flow.steps?.some((step: any) => step.step_id === selectedElement.id)) {
-                    stepFlowFqn = flowFqn;
-                    console.log(`🎯 Found step "${selectedElement.id}" in flow "${flowFqn}"`);
-                    break;
-                  }
-                  // Check if this is the trigger for this flow
-                  if (isTriggerNode && flow.trigger) {
-                    stepFlowFqn = flowFqn;
-                    console.log(`🎯 Found trigger "${selectedElement.id}" in flow "${flowFqn}"`);
-                    break;
-                  }
+        console.log('🔍 Debug: Resolving data for element:', {
+          elementId: selectedElement.id,
+          elementType: selectedElement.sourceType,
+          stepId: selectedElement.data?.stepId,
+          currentFlowFqn,
+          stepFlowFqn,
+          invokedFlowFqn: selectedElement.data?.invokedFlowFqn
+        });
+
+        // Get component schema
+        let componentSchema = null;
+        if (selectedElement.data?.componentSchema) {
+          componentSchema = selectedElement.data.componentSchema;
+        } else if (selectedElement.data?.resolvedComponentFqn) {
+          componentSchema = moduleRegistry.getComponentSchema(selectedElement.data.resolvedComponentFqn);
+        }
+
+        if (selectedElement.id === 'trigger' || selectedElement.data?.stepId === 'trigger') {
+          // For trigger nodes: generate trigger input data
+          const flowDef = moduleRegistry.getFlowDefinition(stepFlowFqn);
+          if (flowDef?.trigger) {
+            const triggerInputData = actions.resolveTriggerInputData(
+              flowDef.trigger,
+              componentSchema,
+              'happy_path'
+            );
+            setInputData(JSON.stringify(triggerInputData, null, 2));
+            
+            // For triggers, data lineage is simple
+            setDataLineage({
+              stepId: 'trigger',
+              sources: [{
+                inputKey: 'triggerData',
+                sourceExpression: 'external-trigger',
+                resolvedValue: triggerInputData,
+                sourceInfo: {
+                  type: 'trigger',
+                  stepId: 'trigger'
                 }
-                if (stepFlowFqn) break;
-              }
+              }],
+              transformationExpression: 'direct'
+            });
+          } else {
+            setInputData('{}');
+            setDataLineage({
+              stepId: 'trigger',
+              sources: [{
+                inputKey: 'triggerData',
+                sourceExpression: 'external-trigger',
+                resolvedValue: {},
+                sourceInfo: {
+                  type: 'trigger',
+                  stepId: 'trigger'
+                }
+              }],
+              transformationExpression: 'direct'
+            });
+          }
+        } else if (selectedElement.sourceType === 'flowNode' && selectedElement.data?.stepId) {
+          // For step nodes: resolve input from flow structure and previous steps
+          console.log('🔍 Debug: Attempting to resolve step input data for:', selectedElement.data.stepId, 'in flow:', stepFlowFqn);
+          
+          // Check if the step exists in the target flow before attempting resolution
+          const flowDef = moduleRegistry.getFlowDefinition(stepFlowFqn);
+          if (!flowDef) {
+            throw new Error(`Flow not found: ${stepFlowFqn}`);
+          }
+          
+          const stepExists = flowDef.steps?.some((s: any) => s.step_id === selectedElement.data.stepId);
+          if (!stepExists && selectedElement.data.stepId !== 'trigger') {
+            console.warn(`⚠️ Step '${selectedElement.data.stepId}' not found in flow '${stepFlowFqn}'. Available steps:`, flowDef.steps?.map((s: any) => s.step_id) || []);
+            
+            // Fallback: generate mock input data based on component schema
+            let mockInputData = {};
+            if (componentSchema?.inputSchema) {
+              mockInputData = actions.generateSchemaBasedInputData(
+                selectedElement.data.stepId,
+                'happy_path',
+                componentSchema
+              );
             }
             
-            // Only fallback to currentFlowFqn if we couldn't find the step in any flow
-            if (!stepFlowFqn && currentFlowFqn) {
-              console.warn(`⚠️ Could not find step "${selectedElement.id}" in any flow, falling back to current flow "${currentFlowFqn}"`);
-              stepFlowFqn = currentFlowFqn;
-            }
-          }
-
-          if (!stepFlowFqn) {
-            console.warn('Could not determine flow FQN for selected element:', selectedElement);
-            setInputData('{}');
-            setDataLineage(null);
-            setValidationResult(null);
+            setInputData(JSON.stringify(mockInputData, null, 2));
+            setDataLineage({
+              stepId: selectedElement.data.stepId,
+              sources: [{
+                inputKey: 'mockData',
+                sourceExpression: 'mock-generated',
+                resolvedValue: mockInputData,
+                sourceInfo: {
+                  type: 'literal',
+                  stepId: selectedElement.data.stepId,
+                  error: `Step not found in flow ${stepFlowFqn}`
+                }
+              }],
+              transformationExpression: 'mock'
+            });
             return;
           }
-
-          console.log(`🔍 Resolving data for step "${selectedElement.id}" in flow "${stepFlowFqn}"`);
-
-          if (isTriggerNode) {
-            // For trigger nodes: resolve input from trigger configuration
-            const flowDef = moduleRegistry.getFlowDefinition(stepFlowFqn);
-            if (flowDef?.trigger) {
-              const triggerInputData = actions.resolveTriggerInputData(
-                flowDef.trigger,
-                componentSchema,
-                'happy_path'
-              );
-              setInputData(JSON.stringify(triggerInputData, null, 2));
-              
-              // For triggers, data lineage starts from the trigger itself
-              setDataLineage({
-                flowFqn: stepFlowFqn,
-                paths: [{
-                  targetStepId: 'trigger',
-                  targetInputField: 'triggerData',
-                  source: {
-                    sourceType: 'external',
-                    id: 'external-trigger',
-                    dataPath: 'triggerData'
-                  },
-                  transformationExpression: 'direct'
-                }]
-              });
-            }
-          } else if (selectedElement.sourceType === 'flowNode' && selectedElement.data?.stepId) {
-            // For step nodes: resolve input from flow structure and previous steps
-            const resolvedInput = await actions.resolveStepInputData(
-              selectedElement.data.stepId, 
-              stepFlowFqn
-            );
-            
-            setInputData(JSON.stringify(resolvedInput.actualInputData, null, 2));
-            
-            // Resolve data lineage
-            const lineage = await actions.resolveDataLineage(
-              selectedElement.data.stepId,
-              stepFlowFqn
-            );
-            setDataLineage(lineage);
-          }
-
-          // Validate input data if we have a schema
-          if (componentSchema) {
-            try {
-              const parsedInput = JSON.parse(inputData);
-              const validation = actions.validateInputAgainstSchema(parsedInput, componentSchema);
-              setValidationResult(validation);
-            } catch (error) {
-              // Input is not valid JSON, skip validation
-              setValidationResult(null);
-            }
-          } else {
-            setValidationResult(null);
-          }
-
-        } catch (error) {
-          console.error('Error resolving input data:', error);
+          
+          const resolvedInput = await actions.resolveStepInputData(
+            selectedElement.data.stepId, 
+            stepFlowFqn
+          );
+          
+          setInputData(JSON.stringify(resolvedInput.actualInputData, null, 2));
+          
+          // Resolve data lineage
+          const lineage = await actions.resolveDataLineage(
+            selectedElement.data.stepId,
+            stepFlowFqn
+          );
+          setDataLineage(lineage);
+        } else {
+          // For other node types, set empty data
           setInputData('{}');
           setDataLineage(null);
+        }
+
+        // Validate input data if we have a schema
+        if (componentSchema) {
+          try {
+            const parsedInput = JSON.parse(inputData);
+            const validation = actions.validateInputAgainstSchema(parsedInput, componentSchema);
+            setValidationResult(validation);
+          } catch (error) {
+            // Input is not valid JSON, skip validation
+            setValidationResult(null);
+          }
+        } else {
           setValidationResult(null);
         }
-      };
 
-      resolveData();
-    } else {
-      setInputData('{}');
-      setDataLineage(null);
-      setValidationResult(null);
-    }
+      } catch (error) {
+        console.error('Error resolving input data:', error);
+        setInputData('{}');
+        setDataLineage(null);
+        setValidationResult(null);
+      }
+    };
+
+    resolveData();
   }, [selectedElement, currentFlowFqn, moduleRegistry, actions]);
 
   // Validate input data when it changes

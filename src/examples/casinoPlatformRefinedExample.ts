@@ -120,7 +120,7 @@ export const casinoPlatformModules: DslModuleInput[] = [
   {
     fqn: 'com.casino.core',
     content: `
-dsl_version: "1.1"
+dsl_version: "1.0"
 namespace: com.casino.core
 imports:
   - namespace: com.casino.kyc
@@ -154,7 +154,7 @@ definitions:
       value: 250000
       type: number
 
-    # Betting Limits by Tier (Simplified for brevity, real would be more complex)
+    # Betting Limits by Tier
     - name: bronze-max-bet
       value: 100
       type: number
@@ -190,18 +190,29 @@ definitions:
     - name: compliance-service-timeout-ms
       value: 4000
       type: number
-    - name: user-service-timeout-ms
+    - name: default-db-adapter-timeout-ms # For DB operations
       value: 3000
       type: number
-    - name: communication-service-timeout-ms
-      value: 2000
+    - name: communication-timeout-ms # For Comm plugins
+      value: 2500
       type: number
-    - name: auth-service-timeout-ms
+    - name: auth-plugin-timeout-ms # For Auth plugins
       value: 2000
       type: number
 
+    # Communication Config
+    - name: welcome-email-from
+      value: "welcome@example-casino.com"
+      type: string
+    - name: tier-upgrade-sms-sender-id
+      value: "CasinoVIP"
+      type: string
+    - name: default-policy-engine-url # For Security.Authorize with OPA
+      value: "http://opa-service:8181/v1/data/casino/authz" # Example OPA endpoint
+      type: string
+
   components:
-    # --- Named HTTP Call Components ---
+    # --- Named HTTP Call Components (for external services not covered by higher-level abstractions) ---
     - name: callComplianceJurisdictionCheck
       type: StdLib:HttpCall
       config:
@@ -214,194 +225,152 @@ definitions:
         url: "{{secrets.compliance-service-url}}/sanctions-screening"
         method: POST
         timeoutMs: "{{context.compliance-service-timeout-ms}}"
-    - name: callCreateUserAccount
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.user-service-url}}/users"
-        method: POST
-        timeoutMs: "{{context.user-service-timeout-ms}}"
-    - name: callSendWelcomeEmail
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.communication-service-url}}/send-email"
-        method: POST
-        timeoutMs: "{{context.communication-service-timeout-ms}}"
-    - name: callSendWelcomeSms
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.communication-service-url}}/send-sms"
-        method: POST
-        timeoutMs: "{{context.communication-service-timeout-ms}}"
-    - name: callAuthValidateSession
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.auth-service-url}}/validate-session"
-        method: POST
-        timeoutMs: "{{context.auth-service-timeout-ms}}"
-    - name: callGetUserProfile
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.user-service-url}}/users/{{inputs.data.userId}}/profile" # URL templated with input
-        method: GET
-        timeoutMs: "{{context.user-service-timeout-ms}}"
     - name: callRiskVelocityAnalysis
       type: StdLib:HttpCall
-      config:
-        url: "{{secrets.risk-service-url}}/velocity-analysis"
-        method: POST
-        timeoutMs: "{{context.risk-service-timeout-ms}}"
+      config: { url: "{{secrets.risk-service-url}}/velocity-analysis", method: POST, timeoutMs: "{{context.risk-service-timeout-ms}}" }
     - name: callRiskBehavioralAnalysis
       type: StdLib:HttpCall
-      config:
-        url: "{{secrets.risk-service-url}}/behavioral-analysis"
-        method: POST
-        timeoutMs: "{{context.risk-service-timeout-ms}}"
+      config: { url: "{{secrets.risk-service-url}}/behavioral-analysis", method: POST, timeoutMs: "{{context.risk-service-timeout-ms}}" }
     - name: callRiskDeviceFingerprint
       type: StdLib:HttpCall
-      config:
-        url: "{{secrets.risk-service-url}}/device-fingerprint"
-        method: POST
-        timeoutMs: "{{context.risk-service-timeout-ms}}"
+      config: { url: "{{secrets.risk-service-url}}/device-fingerprint", method: POST, timeoutMs: "{{context.risk-service-timeout-ms}}" }
     - name: callRiskGeoAnalysis
       type: StdLib:HttpCall
-      config:
-        url: "{{secrets.risk-service-url}}/geo-analysis"
-        method: POST
-        timeoutMs: "{{context.risk-service-timeout-ms}}"
-    - name: callUpdateUserBalance
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.user-service-url}}/users/{{inputs.data.userId}}/balance"
-        method: PATCH
-        timeoutMs: "{{context.user-service-timeout-ms}}"
-    - name: callGetUserStatus
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.user-service-url}}/users/{{inputs.data.userId}}/status"
-        method: GET
-        timeoutMs: "{{context.user-service-timeout-ms}}"
+      config: { url: "{{secrets.risk-service-url}}/geo-analysis", method: POST, timeoutMs: "{{context.risk-service-timeout-ms}}" }
     - name: callFraudVelocityCheck
       type: StdLib:HttpCall
-      config:
-        url: "{{secrets.fraud-service-url}}/velocity-check"
-        method: POST
-        timeoutMs: "{{context.risk-service-timeout-ms}}" # Assuming similar timeout
+      config: { url: "{{secrets.fraud-service-url}}/velocity-check", method: POST, timeoutMs: "{{context.risk-service-timeout-ms}}" }
     - name: callFraudDeviceAnalysis
       type: StdLib:HttpCall
-      config:
-        url: "{{secrets.fraud-service-url}}/device-analysis"
-        method: POST
-        timeoutMs: "{{context.risk-service-timeout-ms}}"
+      config: { url: "{{secrets.fraud-service-url}}/device-analysis", method: POST, timeoutMs: "{{context.risk-service-timeout-ms}}" }
     - name: callFraudBehavioralAnalysis
       type: StdLib:HttpCall
-      config:
-        url: "{{secrets.fraud-service-url}}/behavioral-analysis"
-        method: POST
-        timeoutMs: "{{context.risk-service-timeout-ms}}"
+      config: { url: "{{secrets.fraud-service-url}}/behavioral-analysis", method: POST, timeoutMs: "{{context.risk-service-timeout-ms}}" }
     - name: callPaymentValidateMethod
       type: StdLib:HttpCall
-      config:
-        url: "{{secrets.payment-service-url}}/validate-method"
-        method: POST
-        timeoutMs: "{{context.default-http-timeout-ms}}"
-    - name: callGetUserLifetimeStats
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.user-service-url}}/users/{{inputs.data.userId}}/lifetime-stats"
-        method: GET
-        timeoutMs: "{{context.user-service-timeout-ms}}"
-    - name: callUpdateUserTier
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.user-service-url}}/users/{{inputs.data.userId}}/tier"
-        method: PATCH
-        timeoutMs: "{{context.user-service-timeout-ms}}"
-    - name: callSendTierUpgradeNotification
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.communication-service-url}}/send-tier-upgrade"
-        method: POST
-        timeoutMs: "{{context.communication-service-timeout-ms}}"
+      config: { url: "{{secrets.payment-service-url}}/validate-method", method: POST, timeoutMs: "{{context.default-http-timeout-ms}}" }
 
-    # --- Named SubFlow Invokers ---
+    # --- Named Database Adapter Components (using Integration.ExternalServiceAdapter) ---
+    - name: dbCreateUserAccount
+      type: Integration.ExternalServiceAdapter
+      config:
+        adapterType: "StdLibPlugin:PostgresAdapter" # Conceptual plugin ID
+        adapterConfig: { connectionStringSecretName: "user-db-connection-string", timeoutMs: "{{context.default-db-adapter-timeout-ms}}" }
+        operation: "ExecuteDML_ReturnFirst" # Assumes plugin operation that executes DML and returns the first row (e.g., using RETURNING)
+    - name: dbGetUserProfile
+      type: Integration.ExternalServiceAdapter
+      config:
+        adapterType: "StdLibPlugin:PostgresAdapter"
+        adapterConfig: { connectionStringSecretName: "user-db-connection-string", timeoutMs: "{{context.default-db-adapter-timeout-ms}}" }
+        operation: "QuerySingleRow_ReturnFirst" # Assumes plugin operation that expects a single row and returns its first result
+    - name: dbUpdateUserBalance
+      type: Integration.ExternalServiceAdapter
+      config:
+        adapterType: "StdLibPlugin:PostgresAdapter"
+        adapterConfig: { connectionStringSecretName: "user-db-connection-string", timeoutMs: "{{context.default-db-adapter-timeout-ms}}" }
+        operation: "ExecuteDML" # For operations that don't need to return data beyond success/failure
+    - name: dbGetUserStatus
+      type: Integration.ExternalServiceAdapter
+      config:
+        adapterType: "StdLibPlugin:PostgresAdapter"
+        adapterConfig: { connectionStringSecretName: "user-db-connection-string", timeoutMs: "{{context.default-db-adapter-timeout-ms}}" }
+        operation: "QuerySingleRow_ReturnFirst"
+    - name: dbGetUserLifetimeStats
+      type: Integration.ExternalServiceAdapter
+      config:
+        adapterType: "StdLibPlugin:PostgresAdapter"
+        adapterConfig: { connectionStringSecretName: "user-db-connection-string", timeoutMs: "{{context.default-db-adapter-timeout-ms}}" }
+        operation: "QuerySingleRow_ReturnFirst"
+    - name: dbUpdateUserTier
+      type: Integration.ExternalServiceAdapter
+      config:
+        adapterType: "StdLibPlugin:PostgresAdapter"
+        adapterConfig: { connectionStringSecretName: "user-db-connection-string", timeoutMs: "{{context.default-db-adapter-timeout-ms}}" }
+        operation: "ExecuteDML"
+
+    # --- Named Communication Components ---
+    - name: sendWelcomeEmailComponent
+      type: Communication.SendEmail
+      config:
+        serviceType: "StdLibPlugin:SesAdapter" # Conceptual plugin ID
+        serviceConfig: { apiKeySecretName: "ses-api-key", region: "us-east-1", timeoutMs: "{{context.communication-timeout-ms}}" }
+        fromAddress: "{{context.welcome-email-from}}"
+        defaultFromName: "Casino Welcome Team"
+    - name: sendWelcomeSmsComponent
+      type: Communication.SendNotification
+      config:
+        channel: "SMS"
+        serviceType: "StdLibPlugin:TwilioSmsAdapter" # Conceptual plugin ID
+        serviceConfig: { accountSidSecretName: "twilio-account-sid", authTokenSecretName: "twilio-auth-token", defaultSenderId: "{{context.welcome-sms-sender-id}}", timeoutMs: "{{context.communication-timeout-ms}}" }
+    - name: sendTierUpgradeNotificationComponent
+      type: Communication.SendNotification
+      config:
+        channel: "SMS"
+        serviceType: "StdLibPlugin:TwilioSmsAdapter"
+        serviceConfig: { accountSidSecretName: "twilio-account-sid", authTokenSecretName: "twilio-auth-token", defaultSenderId: "{{context.tier-upgrade-sms-sender-id}}", timeoutMs: "{{context.communication-timeout-ms}}" }
+
+    # --- Named Security Components ---
+    - name: authorizePlaceBetAction
+      type: Security.Authorize
+      config:
+        policySourceType: "Opa" # Example: Using OPA for policies
+        policySourceConfig:
+          opaQueryUrl: "{{context.default-policy-engine-url}}"
+          policyPath: "place_bet" # e.g., /casino/authz/place_bet
+          # Additional OPA config like secret for auth token if OPA is protected, timeoutMs
+        inputDataExpression: "data" # Assumes input 'data' to Authorize is already { principal, action, resource }
+
+    # --- Named SubFlow Invokers (Unchanged from previous refinement) ---
     - name: invokeInitiateKYCFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.kyc.InitiateKYCFlow
-        waitForCompletion: true
+      config: { flowName: com.casino.kyc.InitiateKYCFlow, waitForCompletion: true }
     - name: invokeSetupDefaultLimitsFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.responsible.SetupDefaultLimitsFlow
-        waitForCompletion: true # Assuming synchronous setup
+      config: { flowName: com.casino.responsible.SetupDefaultLimitsFlow, waitForCompletion: true }
     - name: invokeProcessReferralBonusFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.bonuses.ProcessReferralBonusFlow
-        waitForCompletion: true # Or false if async
+      config: { flowName: com.casino.bonuses.ProcessReferralBonusFlow, waitForCompletion: true } # Or false if async
     - name: invokeTrackUserRegistrationFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.analytics.TrackUserRegistrationFlow
-        waitForCompletion: false
+      config: { flowName: com.casino.analytics.TrackUserRegistrationFlow, waitForCompletion: false }
     - name: invokeValidateBettingLimitsFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.responsible.ValidateBettingLimitsFlow
-        waitForCompletion: true
+      config: { flowName: com.casino.responsible.ValidateBettingLimitsFlow, waitForCompletion: true }
     - name: invokeApproveBetFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.compliance.ApproveBetFlow
-        waitForCompletion: true
+      config: { flowName: com.casino.compliance.ApproveBetFlow, waitForCompletion: true }
     - name: invokeProcessBetPaymentFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.payments.ProcessBetPaymentFlow
-        waitForCompletion: true
+      config: { flowName: com.casino.payments.ProcessBetPaymentFlow, waitForCompletion: true }
     - name: invokeExecuteGameFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.games.ExecuteGameFlow
-        waitForCompletion: true
+      config: { flowName: com.casino.games.ExecuteGameFlow, waitForCompletion: true }
     - name: invokeEvaluateBonusEligibilityFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.bonuses.EvaluateBonusEligibilityFlow
-        waitForCompletion: false
+      config: { flowName: com.casino.bonuses.EvaluateBonusEligibilityFlow, waitForCompletion: false }
     - name: invokeRecordGameplayAnalyticsFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.analytics.RecordGameplayAnalyticsFlow
-        waitForCompletion: false
+      config: { flowName: com.casino.analytics.RecordGameplayAnalyticsFlow, waitForCompletion: false }
     - name: invokeProcessPaymentTransactionFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.payments.ProcessPaymentTransactionFlow
-        waitForCompletion: true
+      config: { flowName: com.casino.payments.ProcessPaymentTransactionFlow, waitForCompletion: true }
     - name: invokeEvaluateDepositBonusFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.bonuses.EvaluateDepositBonusFlow
-        waitForCompletion: false
+      config: { flowName: com.casino.bonuses.EvaluateDepositBonusFlow, waitForCompletion: false }
     - name: invokeEvaluateUserTierFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.core.EvaluateUserTierFlow
-        waitForCompletion: false # Can be async
+      config: { flowName: com.casino.core.EvaluateUserTierFlow, waitForCompletion: false } # Can be async
     - name: invokeAwardTierUpgradeBonusFlow
       type: StdLib:SubFlowInvoker
-      config:
-        flowName: com.casino.bonuses.AwardTierUpgradeBonusFlow
-        waitForCompletion: false
+      config: { flowName: com.casino.bonuses.AwardTierUpgradeBonusFlow, waitForCompletion: false }
 
-    # --- Logic Components ---
-    - name: user-tier-classifier # This is a Switch
+    # --- Logic Components (Unchanged from previous refinement) ---
+    - name: user-tier-classifier
       type: StdLib:Switch
       config:
-        cases: # data input to switch: { totalLifetimeDeposits: number }
+        cases:
           - conditionExpression: "data.totalLifetimeDeposits >= {{context.platinum-tier-threshold}}"
-            outputName: is_platinum # Routes input data to this port if condition met
+            outputName: is_platinum
           - conditionExpression: "data.totalLifetimeDeposits >= {{context.gold-tier-threshold}}"
             outputName: is_gold
           - conditionExpression: "data.totalLifetimeDeposits >= {{context.silver-tier-threshold}}"
@@ -409,8 +378,6 @@ definitions:
           - conditionExpression: "data.totalLifetimeDeposits >= {{context.bronze-tier-threshold}}"
             outputName: is_bronze
         defaultOutputName: is_standard
-
-    # MapData to convert switch output to a tier string
     - name: mapDataToTierPlatinum
       type: StdLib:MapData
       config: { expression: "{ userTier: 'platinum', originalData: data }" }
@@ -426,12 +393,10 @@ definitions:
     - name: mapDataToTierStandard
       type: StdLib:MapData
       config: { expression: "{ userTier: 'standard', originalData: data }" }
-
-    # Dynamic Bet Limit Calculator - consumes { userTier: string } from merged tier data
     - name: bet-limit-calculator
       type: StdLib:MapData
       config:
-        expression: | # Expects input: { data: { userTier: "tier_name_string" } }
+        expression: |
           {
             maxBet: data.userTier == 'platinum' ? {{context.platinum-max-bet}} :
                    data.userTier == 'gold' ? {{context.gold-max-bet}} :
@@ -447,39 +412,21 @@ definitions:
                          data.userTier == 'bronze' ? 500 : 200
           }
 
-    # User Profile Management (Moved from bottom, examples of general purpose named components)
-    - name: GetUserProfileComponent # General purpose, distinct from callGetUserProfile which is specific
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.user-service-url}}/users/{{inputs.data.userId}}/profile"
-        method: GET
-        timeoutMs: "{{context.user-service-timeout-ms}}"
-
-    - name: UpdateUserProfileComponent
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.user-service-url}}/users/{{inputs.data.userId}}/profile"
-        method: PATCH
-        timeoutMs: "{{context.user-service-timeout-ms}}"
-
-    # Balance Management
-    - name: GetUserBalanceComponent
-      type: StdLib:HttpCall
-      config:
-        url: "{{secrets.user-service-url}}/users/{{inputs.data.userId}}/balance"
-        method: GET
-        timeoutMs: "{{context.user-service-timeout-ms}}"
-
-    # UpdateUserBalanceComponent is same as callUpdateUserBalance, can reuse or keep distinct name for clarity
-
 flows:
   # Comprehensive User Onboarding Flow
   - name: UserOnboardingFlow
     trigger:
-      type: StdLib.Trigger:Http # Corrected Trigger type
+      type: StdLib.Trigger:Http
       config:
         path: /api/users/onboard
         method: POST
+        # Note: Authentication for onboarding might be 'None' or a lightweight API key if it's a public endpoint.
+        # For this example, assuming 'None' for initial registration.
+        # authentication: { type: "None" }
+        responseConfig: # For explicit error handling from StdLib:FailFlow
+          errorStatusCode: 400 # Default for FailFlow if not overridden by FailFlow itself
+          # Default error body from StdLib:FailFlow or StandardErrorStructure
+          # errorBodyExpression: "data" # If FailFlow output is on 'data'
     steps:
       - step_id: validate-registration-data
         component_ref: StdLib:JsonSchemaValidator
@@ -493,24 +440,34 @@ flows:
               firstName: { type: string, minLength: 2, maxLength: 50 }
               lastName: { type: string, minLength: 2, maxLength: 50 }
               dateOfBirth: { type: string, format: date }
-              country: { type: string, minLength: 2, maxLength: 3 }
-              phoneNumber: { type: string, pattern: "^\\\\+[1-9]\\\\d{1,14}$" }
+              country: { type: string, minLength: 2, maxLength: 3 } # ISO 3166-1 alpha-2
+              phoneNumber: { type: string, pattern: "^\\\\+[1-9]\\\\d{1,14}$" } # E.164
               referralCode: { type: string }
         inputs_map:
-          data: "trigger.body" # HttpTrigger provides body directly
+          data: "trigger.body"
+        outputs_map: # Explicitly wire error output for FailFlow
+          error: "steps.fail-on-validation-error.inputs.data"
 
-      - step_id: trigger-geo-compliance-checks # This is the Fork
+      - step_id: fail-on-validation-error
+        component_ref: StdLib:FailFlow
+        config:
+          # errorMessageExpression uses 'data' which is the StandardErrorStructure from validator
+          errorMessageExpression: "{ message: 'Registration data validation failed: ' + data.message, type: 'UserOnboarding.ValidationError', details: data.details }"
+          language: JMESPath
+        # This step only runs if validate-registration-data.outputs.error is emitted
+
+      - step_id: trigger-geo-compliance-checks
         component_ref: StdLib:Fork
         config:
           outputNames: [for_jurisdiction, for_sanctions, for_age_verification]
-        inputs_map: # Data for all branches
+        inputs_map:
           data: "steps.validate-registration-data.outputs.validData"
-        run_after: [validate-registration-data]
+        run_after: [validate-registration-data] # Only runs if validation succeeds
 
       - step_id: check-jurisdiction
         component_ref: callComplianceJurisdictionCheck
         inputs_map:
-          data: "steps.trigger-geo-compliance-checks.outputs.for_jurisdiction" # Use forked data
+          data: "steps.trigger-geo-compliance-checks.outputs.for_jurisdiction"
         run_after: [trigger-geo-compliance-checks]
 
       - step_id: screen-sanctions
@@ -559,48 +516,62 @@ flows:
         condition: "steps.evaluate-compliance-results.outputs.result.canProceed == true"
 
       - step_id: create-user-account
-        component_ref: callCreateUserAccount
+        component_ref: dbCreateUserAccount # Refactored to DB adapter
         inputs_map:
-          data: "{ userData: steps.validate-registration-data.outputs.validData, kycStatus: steps.initiate-kyc-process.outputs.result.status, complianceData: steps.evaluate-compliance-results.outputs.result }" # Assuming subflow result is on .result
+          requestData: # Input for Integration.ExternalServiceAdapter
+            # Conceptual SQL query. Actual query depends on DB schema and plugin capabilities.
+            # Password hashing should ideally happen in a secure environment or via a crypto plugin before this step.
+            # The 'hash_password' function is purely conceptual here.
+            query: "INSERT INTO users (email, password_hash, first_name, last_name, date_of_birth, country, phone_number, kyc_status, compliance_flags_json, user_tier, total_lifetime_deposits, created_at) VALUES ($1, hash_password($2), $3, $4, $5, $6, $7, $8, $9::jsonb, 'standard', 0, NOW()) RETURNING user_id, email, first_name, phone_number, created_at;"
+            params: "[ steps.validate-registration-data.outputs.validData.email, steps.validate-registration-data.outputs.validData.password, steps.validate-registration-data.outputs.validData.firstName, steps.validate-registration-data.outputs.validData.lastName, steps.validate-registration-data.outputs.validData.dateOfBirth, steps.validate-registration-data.outputs.validData.country, steps.validate-registration-data.outputs.validData.phoneNumber, steps.initiate-kyc-process.outputs.result.status, steps.evaluate-compliance-results.outputs.result.complianceFlags ]"
         run_after: [initiate-kyc-process]
 
       - step_id: setup-responsible-gambling
         component_ref: invokeSetupDefaultLimitsFlow
         inputs_map:
-          initialData: "{ userId: steps.create-user-account.outputs.response.body.userId, userTier: 'standard' }"
+          initialData: "{ userId: steps.create-user-account.outputs.responseData.user_id, userTier: 'standard' }" # Assuming responseData contains the first row if 'ReturnFirst'
         run_after: [create-user-account]
 
       - step_id: process-referral-bonus
         component_ref: invokeProcessReferralBonusFlow
         inputs_map:
-          initialData: "{ newUserId: steps.create-user-account.outputs.response.body.userId, referralCode: steps.validate-registration-data.outputs.validData.referralCode }"
+          initialData: "{ newUserId: steps.create-user-account.outputs.responseData.user_id, referralCode: steps.validate-registration-data.outputs.validData.referralCode }"
         run_after: [create-user-account]
         condition: "steps.validate-registration-data.outputs.validData.referralCode != null"
 
-      - step_id: trigger-welcome-communications # Fork step
+      - step_id: trigger-welcome-communications
         component_ref: StdLib:Fork
         config:
           outputNames: [for_email, for_sms, for_analytics]
-        inputs_map:
-          data: "{ userData: steps.create-user-account.outputs.response.body }" # Pass relevant user data
-        run_after: [setup-responsible-gambling] # Or create-user-account if no dependency
+        inputs_map: # Pass data from the created user account (DB response)
+          data: "{ userId: steps.create-user-account.outputs.responseData.user_id, email: steps.create-user-account.outputs.responseData.email, phoneNumber: steps.create-user-account.outputs.responseData.phone_number, firstName: steps.create-user-account.outputs.responseData.first_name }"
+        run_after: [setup-responsible-gambling]
 
       - step_id: send-welcome-email
-        component_ref: callSendWelcomeEmail
-        inputs_map:
-          data: "steps.trigger-welcome-communications.outputs.for_email.userData" # Pass data to email service
+        component_ref: sendWelcomeEmailComponent # Refactored to Communication.SendEmail
+        inputs_map: # Inputs for Communication.SendEmail
+          toAddresses: "steps.trigger-welcome-communications.outputs.for_email.email"
+          subject: "'Welcome to Our Casino, ' + steps.trigger-welcome-communications.outputs.for_email.firstName + '!'"
+          bodyText: "'Hi ' + steps.trigger-welcome-communications.outputs.for_email.firstName + ', thank you for registering! Your user ID is ' + steps.trigger-welcome-communications.outputs.for_email.userId"
+          # bodyHtml: "..." # Can also use HTML if templateId is not used
+          # templateId: "welcome-email-template-v1" # Optional: use a pre-defined template
+          # templateData: "{ firstName: steps.trigger-welcome-communications.outputs.for_email.firstName, userId: steps.trigger-welcome-communications.outputs.for_email.userId }"
+          data: "{ firstName: steps.trigger-welcome-communications.outputs.for_email.firstName, userId: steps.trigger-welcome-communications.outputs.for_email.userId }" # Context for expressions in subject/body/templateData
         run_after: [trigger-welcome-communications]
 
       - step_id: send-welcome-sms
-        component_ref: callSendWelcomeSms
-        inputs_map:
-          data: "steps.trigger-welcome-communications.outputs.for_sms.userData"
+        component_ref: sendWelcomeSmsComponent # Refactored to Communication.SendNotification
+        inputs_map: # Inputs for Communication.SendNotification
+          recipient: "steps.trigger-welcome-communications.outputs.for_sms.phoneNumber"
+          message: "'Welcome, ' + steps.trigger-welcome-communications.outputs.for_sms.firstName + '! Your Casino account (' + steps.trigger-welcome-communications.outputs.for_sms.userId + ') is ready.'"
+          # templateId: "welcome-sms-template-v1" # Optional
+          # data: "{ firstName: steps.trigger-welcome-communications.outputs.for_sms.firstName, userId: steps.trigger-welcome-communications.outputs.for_sms.userId }" # Context for expressions
         run_after: [trigger-welcome-communications]
 
       - step_id: track-registration-analytics
         component_ref: invokeTrackUserRegistrationFlow
         inputs_map:
-          initialData: "{ userId: steps.trigger-welcome-communications.outputs.for_analytics.userData.userId }" # Pass data to analytics subflow
+          initialData: "{ userId: steps.trigger-welcome-communications.outputs.for_analytics.userId, registrationTimestamp: steps.create-user-account.outputs.responseData.created_at }"
         run_after: [trigger-welcome-communications]
 
   # Sophisticated Betting Flow with Multi-Layer Validation
@@ -610,58 +581,78 @@ flows:
       config:
         path: /api/bets/place
         method: POST
+        # CONCEPTUAL: Authentication handled by Core via trigger config.
+        # This populates 'trigger.principal' if authentication is successful.
+        authentication:
+          type: "JwtValidator" # Example: Core uses a JWT validator middleware
+          # jwtValidatorConfigRef: "global-casino-jwt-validator" # Reference to a globally defined JWT validator config
+          # providerConfig for JwtValidator could include JWKS URI, issuer, audience, etc.
+        responseConfig:
+          errorStatusCode: 403 # For authorization failures
     steps:
-      - step_id: authenticate-session
-        component_ref: callAuthValidateSession
+      - step_id: authorize-bet-action
+        component_ref: authorizePlaceBetAction # Using Security.Authorize
         inputs_map:
-          data: "{ sessionToken: trigger.headers.authorization, userId: trigger.body.userId }"
-        # No output_map needed if next step consumes .response.body or similar default
+          data: "{ principal: trigger.principal, action: 'place_bet', resource: { type: 'game', id: trigger.body.gameId, attributes: { amount: trigger.body.amount, currency: trigger.body.currency } } }"
+        # If not authorized, Security.Authorize emits on its 'error' port (type: Security.Authorize.Unauthorized),
+        # which should terminate the flow and lead to the trigger's errorStatusCode (e.g., 403).
 
       - step_id: get-user-profile
-        component_ref: callGetUserProfile
+        component_ref: dbGetUserProfile # Refactored to DB adapter
         inputs_map:
-          data: "{ userId: trigger.body.userId }"
-        run_after: [authenticate-session]
-        condition: "steps.authenticate-session.outputs.response.body.valid == true" # Check for successful auth
+          requestData:
+            query: "SELECT user_id, user_tier, balance, daily_spent_today, session_spent_current, total_lifetime_deposits, current_session_id, account_status FROM user_profiles_view WHERE user_id = $1;" # Assuming a view with calculated daily/session spent
+            params: "[ trigger.principal.id ]" # Uses authenticated user ID from trigger.principal
+        run_after: [authorize-bet-action] # Only if authorized
 
-      - step_id: classify-user-tier-switch # The Switch step
-        component_ref: user-tier-classifier # Named Switch component
+      - step_id: check-account-status
+        component_ref: StdLib:FilterData
+        config:
+          expression: "data.account_status == 'active'"
+          matchOutput: activeAccountData
+          noMatchOutput: inactiveAccountError # This will be the data for the error output
         inputs_map:
-          data: "{ totalLifetimeDeposits: steps.get-user-profile.outputs.response.body.totalLifetimeDeposits }"
+          data: "steps.get-user-profile.outputs.responseData" # Pass the user profile data
         run_after: [get-user-profile]
+        outputs_map:
+          inactiveAccountError: "steps.fail-on-inactive-account.inputs.data"
 
-      # Map Switch outputs to a consistent tier string
+      - step_id: fail-on-inactive-account
+        component_ref: StdLib:FailFlow
+        config:
+          errorMessageExpression: "{ message: 'Account is not active. Current status: ' + data.account_status, type: 'PlaceBet.AccountInactive' }"
+        # This step runs if check-account-status emits on 'inactiveAccountError'
+
+      - step_id: classify-user-tier-switch
+        component_ref: user-tier-classifier
+        inputs_map:
+          data: "{ totalLifetimeDeposits: steps.check-account-status.outputs.activeAccountData.total_lifetime_deposits }" # Use data from activeAccountData
+        run_after: [check-account-status]
+
       - step_id: map-tier-platinum
         component_ref: mapDataToTierPlatinum
-        inputs_map:
-          data: "steps.classify-user-tier-switch.outputs.is_platinum"
+        inputs_map: { data: "steps.classify-user-tier-switch.outputs.is_platinum" }
         run_after: [classify-user-tier-switch]
       - step_id: map-tier-gold
         component_ref: mapDataToTierGold
-        inputs_map:
-          data: "steps.classify-user-tier-switch.outputs.is_gold"
+        inputs_map: { data: "steps.classify-user-tier-switch.outputs.is_gold" }
         run_after: [classify-user-tier-switch]
       - step_id: map-tier-silver
         component_ref: mapDataToTierSilver
-        inputs_map:
-          data: "steps.classify-user-tier-switch.outputs.is_silver"
+        inputs_map: { data: "steps.classify-user-tier-switch.outputs.is_silver" }
         run_after: [classify-user-tier-switch]
       - step_id: map-tier-bronze
         component_ref: mapDataToTierBronze
-        inputs_map:
-          data: "steps.classify-user-tier-switch.outputs.is_bronze"
+        inputs_map: { data: "steps.classify-user-tier-switch.outputs.is_bronze" }
         run_after: [classify-user-tier-switch]
       - step_id: map-tier-standard
         component_ref: mapDataToTierStandard
-        inputs_map:
-          data: "steps.classify-user-tier-switch.outputs.is_standard"
+        inputs_map: { data: "steps.classify-user-tier-switch.outputs.is_standard" }
         run_after: [classify-user-tier-switch]
 
-      - step_id: merge-classified-tier-data # Assuming StdLib:MergeStreams exists
+      - step_id: merge-classified-tier-data
         component_ref: StdLib:MergeStreams
-        config:
-          inputNames: [p, g, s, b, std]
-          mergedOutputName: classifiedTierInfo
+        config: { inputNames: [p, g, s, b, std], mergedOutputName: classifiedTierInfo }
         inputs_map:
           p: "steps.map-tier-platinum.outputs.result"
           g: "steps.map-tier-gold.outputs.result"
@@ -671,60 +662,64 @@ flows:
         run_after: [map-tier-platinum, map-tier-gold, map-tier-silver, map-tier-bronze, map-tier-standard]
 
       - step_id: calculate-betting-limits
-        component_ref: bet-limit-calculator # Named MapData component
+        component_ref: bet-limit-calculator
         inputs_map:
-          data: "steps.merge-classified-tier-data.outputs.classifiedTierInfo" # Pass { userTier: "..." }
+          data: "steps.merge-classified-tier-data.outputs.classifiedTierInfo"
         run_after: [merge-classified-tier-data]
 
       - step_id: validate-bet-amount
         component_ref: StdLib:FilterData
         config:
-          expression: | # Assuming input data has betAmount, maxBet, dailyLimit, dailySpent etc.
+          expression: |
             data.betAmount >= 1 &&
             data.betAmount <= data.maxBet &&
             data.betAmount <= (data.dailyLimit - data.dailySpent) &&
-            data.betAmount <= (data.sessionLimit - data.sessionSpent)
-          matchOutput: validBetData # Output port name for true
-          noMatchOutput: invalidBetData # Output port name for false
+            data.betAmount <= (data.sessionLimit - data.sessionSpent) &&
+            data.betAmount <= data.currentBalance
+          matchOutput: validBetData
+          noMatchOutput: invalidBetData
         inputs_map:
-          data: "{ betAmount: trigger.body.amount, maxBet: steps.calculate-betting-limits.outputs.result.maxBet, dailyLimit: steps.calculate-betting-limits.outputs.result.dailyLimit, sessionLimit: steps.calculate-betting-limits.outputs.result.sessionLimit, dailySpent: steps.get-user-profile.outputs.response.body.dailySpent, sessionSpent: steps.get-user-profile.outputs.response.body.sessionSpent }"
-        run_after: [calculate-betting-limits]
+          data: "{ betAmount: trigger.body.amount, currentBalance: steps.check-account-status.outputs.activeAccountData.balance, maxBet: steps.calculate-betting-limits.outputs.result.maxBet, dailyLimit: steps.calculate-betting-limits.outputs.result.dailyLimit, sessionLimit: steps.calculate-betting-limits.outputs.result.sessionLimit, dailySpent: steps.check-account-status.outputs.activeAccountData.daily_spent_today, sessionSpent: steps.check-account-status.outputs.activeAccountData.session_spent_current }"
+        run_after: [calculate-betting-limits, check-account-status]
+        outputs_map:
+          invalidBetData: "steps.fail-on-invalid-bet-amount.inputs.data"
+
+      - step_id: fail-on-invalid-bet-amount
+        component_ref: StdLib:FailFlow
+        config:
+          errorMessageExpression: "{ message: 'Bet amount validation failed or insufficient balance.', type: 'PlaceBet.InvalidAmountOrBalance', details: data }" # 'data' here is the input to validate-bet-amount
 
       - step_id: responsible-gambling-check
         component_ref: invokeValidateBettingLimitsFlow
         inputs_map:
-          initialData: "{ userId: trigger.body.userId, betAmount: steps.validate-bet-amount.outputs.validBetData.betAmount, gameType: trigger.body.gameType }"
+          initialData: "{ userId: trigger.principal.id, betAmount: steps.validate-bet-amount.outputs.validBetData.betAmount, gameType: trigger.body.gameType }"
         run_after: [validate-bet-amount]
         condition: "steps.validate-bet-amount.outputs.validBetData != null" # Proceed only if bet is valid
 
-      - step_id: trigger-comprehensive-risk-assessment # Fork step
+      - step_id: trigger-comprehensive-risk-assessment
         component_ref: StdLib:Fork
         config:
           outputNames: [for_velocity, for_behavioral, for_device, for_geo]
         inputs_map:
-          data: "{ userId: trigger.body.userId, betAmount: steps.validate-bet-amount.outputs.validBetData.betAmount, gameType: trigger.body.gameType, sessionData: steps.get-user-profile.outputs.response.body.currentSession }"
+          data: "{ userId: trigger.principal.id, betAmount: steps.validate-bet-amount.outputs.validBetData.betAmount, gameType: trigger.body.gameType, sessionData: steps.check-account-status.outputs.activeAccountData.current_session_id, ipAddress: trigger.headers['x-forwarded-for'] || trigger.headers['remote-addr'], userAgent: trigger.headers['user-agent'] }"
         run_after: [responsible-gambling-check]
         condition: "steps.responsible-gambling-check.outputs.result.approved == true"
 
       - step_id: assess-risk-velocity
         component_ref: callRiskVelocityAnalysis
-        inputs_map:
-          data: "steps.trigger-comprehensive-risk-assessment.outputs.for_velocity"
+        inputs_map: { data: "steps.trigger-comprehensive-risk-assessment.outputs.for_velocity" }
         run_after: [trigger-comprehensive-risk-assessment]
       - step_id: assess-risk-behavioral
         component_ref: callRiskBehavioralAnalysis
-        inputs_map:
-          data: "steps.trigger-comprehensive-risk-assessment.outputs.for_behavioral"
+        inputs_map: { data: "steps.trigger-comprehensive-risk-assessment.outputs.for_behavioral" }
         run_after: [trigger-comprehensive-risk-assessment]
       - step_id: assess-risk-device
         component_ref: callRiskDeviceFingerprint
-        inputs_map:
-          data: "steps.trigger-comprehensive-risk-assessment.outputs.for_device"
+        inputs_map: { data: "steps.trigger-comprehensive-risk-assessment.outputs.for_device" }
         run_after: [trigger-comprehensive-risk-assessment]
       - step_id: assess-risk-geo
         component_ref: callRiskGeoAnalysis
-        inputs_map:
-          data: "steps.trigger-comprehensive-risk-assessment.outputs.for_geo"
+        inputs_map: { data: "steps.trigger-comprehensive-risk-assessment.outputs.for_geo" }
         run_after: [trigger-comprehensive-risk-assessment]
 
       - step_id: aggregate-risk-scores
@@ -745,57 +740,60 @@ flows:
       - step_id: compliance-approval
         component_ref: invokeApproveBetFlow
         inputs_map:
-          initialData: "{ userId: trigger.body.userId, betData: steps.validate-bet-amount.outputs.validBetData, riskAssessment: steps.aggregate-risk-scores.outputs.result }"
+          initialData: "{ userId: trigger.principal.id, betData: steps.validate-bet-amount.outputs.validBetData, riskAssessment: steps.aggregate-risk-scores.outputs.result }"
         run_after: [aggregate-risk-scores]
         condition: "steps.aggregate-risk-scores.outputs.result.requiresManualReview == false"
 
       - step_id: process-bet-payment
         component_ref: invokeProcessBetPaymentFlow
         inputs_map:
-          initialData: "{ userId: trigger.body.userId, amount: steps.validate-bet-amount.outputs.validBetData.betAmount, gameType: trigger.body.gameType }"
+          initialData: "{ userId: trigger.principal.id, amount: steps.validate-bet-amount.outputs.validBetData.betAmount, currency: trigger.body.currency, gameType: trigger.body.gameType }"
         run_after: [compliance-approval]
         condition: "steps.compliance-approval.outputs.result.approved == true"
 
       - step_id: execute-game-logic
         component_ref: invokeExecuteGameFlow
         inputs_map:
-          initialData: "{ gameType: trigger.body.gameType, betAmount: steps.validate-bet-amount.outputs.validBetData.betAmount, userId: trigger.body.userId, gameParameters: trigger.body.gameParameters }"
+          initialData: "{ gameType: trigger.body.gameType, betAmount: steps.validate-bet-amount.outputs.validBetData.betAmount, userId: trigger.principal.id, gameParameters: trigger.body.gameParameters, transactionId: steps.process-bet-payment.outputs.result.transactionId }"
         run_after: [process-bet-payment]
-        # Condition for successful payment might be implicit if subflow invoker handles errors by not proceeding,
-        # or explicit: condition: "steps.process-bet-payment.outputs.result.success == true"
+        condition: "steps.process-bet-payment.outputs.result.success == true"
 
       - step_id: calculate-final-outcome
         component_ref: StdLib:MapData
         config:
-          expression: | # Expects data: { gameResult, betAmount, currentBalance, paymentTransactionId }
+          expression: |
             {
               netResult: data.gameResult.winnings - data.betAmount,
               houseProfit: data.betAmount - data.gameResult.winnings,
-              playerBalance: data.currentBalance + data.gameResult.winnings,
+              playerBalanceAfterWinnings: data.currentBalance + data.gameResult.winnings, # Balance before this bet + winnings
               gameOutcome: data.gameResult,
-              transactionId: data.paymentTransactionId # Use transactionId from payment
+              transactionId: data.transactionId
             }
         inputs_map:
-          data: "{ gameResult: steps.execute-game-logic.outputs.result, betAmount: steps.validate-bet-amount.outputs.validBetData.betAmount, currentBalance: steps.get-user-profile.outputs.response.body.balance, paymentTransactionId: steps.process-bet-payment.outputs.result.transactionId }"
+          data: "{ gameResult: steps.execute-game-logic.outputs.result, betAmount: steps.validate-bet-amount.outputs.validBetData.betAmount, currentBalance: steps.validate-bet-amount.outputs.validBetData.currentBalance, transactionId: steps.execute-game-logic.outputs.result.transactionId }" # Current balance from before bet payment was deducted
         run_after: [execute-game-logic]
 
       - step_id: update-user-balance
-        component_ref: callUpdateUserBalance
+        component_ref: dbUpdateUserBalance # Refactored to DB adapter
         inputs_map:
-          data: "{ userId: trigger.body.userId, newBalance: steps.calculate-final-outcome.outputs.result.playerBalance, transactionId: steps.calculate-final-outcome.outputs.result.transactionId }"
+          requestData:
+            # This query should reflect the game outcome: add winnings, update spend.
+            # The ProcessBetPaymentFlow would have already deducted the bet amount.
+            query: "UPDATE user_profiles SET balance = balance + $1, daily_spent_today = daily_spent_today + $2, session_spent_current = session_spent_current + $2 WHERE user_id = $3; CALL record_transaction($3, 'bet_settlement', $4, $1, $2);"
+            params: "[ steps.calculate-final-outcome.outputs.result.gameOutcome.winnings, steps.validate-bet-amount.outputs.validBetData.betAmount, trigger.principal.id, steps.calculate-final-outcome.outputs.result.transactionId ]" # Winnings to add, bet amount for spend
         run_after: [calculate-final-outcome]
 
       - step_id: trigger-bonus-evaluation
         component_ref: invokeEvaluateBonusEligibilityFlow
         inputs_map:
-          initialData: "{ userId: trigger.body.userId, gameOutcome: steps.calculate-final-outcome.outputs.result.gameOutcome, userTier: steps.merge-classified-tier-data.outputs.classifiedTierInfo.userTier }"
+          initialData: "{ userId: trigger.principal.id, gameOutcome: steps.calculate-final-outcome.outputs.result.gameOutcome, userTier: steps.merge-classified-tier-data.outputs.classifiedTierInfo.userTier, betAmount: steps.validate-bet-amount.outputs.validBetData.betAmount }"
         run_after: [update-user-balance]
 
       - step_id: record-analytics
         component_ref: invokeRecordGameplayAnalyticsFlow
         inputs_map:
-          initialData: "{ userId: trigger.body.userId, gameData: steps.calculate-final-outcome.outputs.result, riskData: steps.aggregate-risk-scores.outputs.result }"
-        run_after: [update-user-balance] # Can run in parallel with bonus evaluation
+          initialData: "{ userId: trigger.principal.id, gameData: steps.calculate-final-outcome.outputs.result, riskData: steps.aggregate-risk-scores.outputs.result, userTier: steps.merge-classified-tier-data.outputs.classifiedTierInfo.userTier }"
+        run_after: [update-user-balance]
 
   # Comprehensive Deposit Flow with Enhanced Security
   - name: ProcessDepositFlow
@@ -804,27 +802,49 @@ flows:
       config:
         path: /api/payments/deposit
         method: POST
+        # authentication: { type: "JwtValidator", ... } # Assume authenticated
+        responseConfig:
+          errorStatusCode: 400
     steps:
       - step_id: validate-deposit-request
         component_ref: StdLib:JsonSchemaValidator
         config:
-          schema: # Same as original
+          schema:
             type: object
-            required: [userId, amount, paymentMethod, currency]
+            required: [amount, paymentMethod, currency] # userId comes from trigger.principal
             properties:
-              userId: { type: string }
               amount: { type: number, minimum: 10, maximum: 100000 }
               paymentMethod: { type: string, enum: [credit_card, bank_transfer, crypto, e_wallet] }
               currency: { type: string, enum: [USD, EUR, GBP, CAD] }
               bonusCode: { type: string }
         inputs_map:
           data: "trigger.body"
+        outputs_map:
+          error: "steps.fail-deposit-validation-error.inputs.data"
+
+      - step_id: fail-deposit-validation-error
+        component_ref: StdLib:FailFlow
+        config:
+          errorMessageExpression: "{ message: 'Deposit data validation failed: ' + data.message, type: 'ProcessDeposit.ValidationError', details: data.details }"
 
       - step_id: get-user-status
-        component_ref: callGetUserStatus
+        component_ref: dbGetUserStatus
         inputs_map:
-          data: "{ userId: steps.validate-deposit-request.outputs.validData.userId }"
+          requestData:
+            query: "SELECT user_id, kyc_status, daily_deposits_sum_today, monthly_deposits_sum_current, daily_deposit_limit, monthly_deposit_limit, account_status FROM user_status_view WHERE user_id = $1;"
+            params: "[ trigger.principal.id ]"
         run_after: [validate-deposit-request]
+
+      - step_id: check-deposit-account-status
+        component_ref: StdLib:FilterData
+        config: { expression: "data.account_status == 'active'", matchOutput: activeAccountData, noMatchOutput: inactiveAccountError }
+        inputs_map: { data: "steps.get-user-status.outputs.responseData" }
+        run_after: [get-user-status]
+        outputs_map: { inactiveAccountError: "steps.fail-deposit-inactive-account.inputs.data" }
+
+      - step_id: fail-deposit-inactive-account
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'Account is not active for deposits. Current status: ' + data.account_status, type: 'ProcessDeposit.AccountInactive' }" }
 
       - step_id: kyc-status-check
         component_ref: StdLib:FilterData
@@ -833,42 +853,36 @@ flows:
           matchOutput: kycApprovedData
           noMatchOutput: kycRequiredData
         inputs_map:
-          data: "{ kycStatus: steps.get-user-status.outputs.response.body.kycStatus, amount: steps.validate-deposit-request.outputs.validData.amount }"
-        run_after: [get-user-status]
+          data: "{ kycStatus: steps.check-deposit-account-status.outputs.activeAccountData.kyc_status, amount: steps.validate-deposit-request.outputs.validData.amount }"
+        run_after: [check-deposit-account-status]
+        outputs_map: { kycRequiredData: "steps.fail-deposit-kyc-pending.inputs.data" }
 
-      - step_id: trigger-deposit-limit-checks # Fork
+      - step_id: fail-deposit-kyc-pending
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'KYC verification pending or insufficient for deposit amount.', type: 'ProcessDeposit.KycPending' }" }
+
+      - step_id: trigger-deposit-limit-checks
         component_ref: StdLib:Fork
         config:
           outputNames: [for_daily_limit, for_monthly_limit, for_velocity_check]
         inputs_map:
-          data: "{ amount: steps.validate-deposit-request.outputs.validData.amount, dailyDeposits: steps.get-user-status.outputs.response.body.dailyDeposits, monthlyDeposits: steps.get-user-status.outputs.response.body.monthlyDeposits, dailyLimit: steps.get-user-status.outputs.response.body.limits.dailyDepositLimit, monthlyLimit: steps.get-user-status.outputs.response.body.limits.monthlyDepositLimit, userId: steps.validate-deposit-request.outputs.validData.userId }"
+          data: "{ amount: steps.validate-deposit-request.outputs.validData.amount, dailyDeposits: steps.kyc-status-check.outputs.kycApprovedData.daily_deposits_sum_today, monthlyDeposits: steps.kyc-status-check.outputs.kycApprovedData.monthly_deposits_sum_current, dailyLimit: steps.kyc-status-check.outputs.kycApprovedData.daily_deposit_limit, monthlyLimit: steps.kyc-status-check.outputs.kycApprovedData.monthly_deposit_limit, userId: trigger.principal.id }"
         run_after: [kyc-status-check]
         condition: "steps.kyc-status-check.outputs.kycApprovedData != null"
 
       - step_id: check-daily-deposit-limit
         component_ref: StdLib:FilterData
-        config:
-          expression: "data.dailyDeposits + data.amount <= data.dailyLimit"
-          matchOutput: withinDailyLimitData
-          noMatchOutput: exceedsDailyLimitData
-        inputs_map:
-          data: "steps.trigger-deposit-limit-checks.outputs.for_daily_limit"
+        config: { expression: "data.dailyDeposits + data.amount <= data.dailyLimit", matchOutput: withinDailyLimitData, noMatchOutput: exceedsDailyLimitData }
+        inputs_map: { data: "steps.trigger-deposit-limit-checks.outputs.for_daily_limit" }
         run_after: [trigger-deposit-limit-checks]
-
       - step_id: check-monthly-deposit-limit
         component_ref: StdLib:FilterData
-        config:
-          expression: "data.monthlyDeposits + data.amount <= data.monthlyLimit"
-          matchOutput: withinMonthlyLimitData
-          noMatchOutput: exceedsMonthlyLimitData
-        inputs_map:
-          data: "steps.trigger-deposit-limit-checks.outputs.for_monthly_limit"
+        config: { expression: "data.monthlyDeposits + data.amount <= data.monthlyLimit", matchOutput: withinMonthlyLimitData, noMatchOutput: exceedsMonthlyLimitData }
+        inputs_map: { data: "steps.trigger-deposit-limit-checks.outputs.for_monthly_limit" }
         run_after: [trigger-deposit-limit-checks]
-
       - step_id: check-deposit-velocity
         component_ref: callFraudVelocityCheck
-        inputs_map:
-          data: "steps.trigger-deposit-limit-checks.outputs.for_velocity_check" # Pass { userId, amount }
+        inputs_map: { data: "steps.trigger-deposit-limit-checks.outputs.for_velocity_check" } # Pass { userId, amount }
         run_after: [trigger-deposit-limit-checks]
 
       - step_id: evaluate-deposit-eligibility
@@ -877,40 +891,48 @@ flows:
           expression: |
             {
               canProceed: data.withinDailyLimit && data.withinMonthlyLimit && data.velocityApproved,
-              limitFlags: {
-                daily: data.withinDailyLimit,
-                monthly: data.withinMonthlyLimit,
-                velocity: data.velocityApproved
-              },
+              limitFlags: { daily: data.withinDailyLimit, monthly: data.withinMonthlyLimit, velocity: data.velocityApproved },
               riskLevel: data.velocityApproved ? 'low' : 'high'
             }
         inputs_map:
           data: "{ withinDailyLimit: steps.check-daily-deposit-limit.outputs.withinDailyLimitData != null, withinMonthlyLimit: steps.check-monthly-deposit-limit.outputs.withinMonthlyLimitData != null, velocityApproved: steps.check-deposit-velocity.outputs.response.body.approved }"
         run_after: [check-daily-deposit-limit, check-monthly-deposit-limit, check-deposit-velocity]
+        outputs_map: # Check if canProceed is false, then fail
+          result: "steps.fail-deposit-limits-exceeded.inputs.data" # This is conceptual, need a filter before fail
+          # Better: Add a FilterData step here to check result.canProceed
 
-      - step_id: trigger-fraud-detection-screening # Fork
+      # Add FilterData step before fail-deposit-limits-exceeded
+      - step_id: filter-proceed-on-limits
+        component_ref: StdLib:FilterData
+        config: { expression: "data.canProceed == true", matchOutput: proceedData, noMatchOutput: failData }
+        inputs_map: { data: "steps.evaluate-deposit-eligibility.outputs.result" }
+        run_after: [evaluate-deposit-eligibility]
+        outputs_map: { failData: "steps.fail-deposit-limits-exceeded.inputs.data" }
+
+      - step_id: fail-deposit-limits-exceeded
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'Deposit limits exceeded or velocity check failed.', type: 'ProcessDeposit.LimitsExceeded', details: data.limitFlags }" }
+
+      - step_id: trigger-fraud-detection-screening
         component_ref: StdLib:Fork
         config:
           outputNames: [for_device_fp, for_behavioral_scan, for_payment_validation]
         inputs_map:
-          data: "{ depositData: steps.validate-deposit-request.outputs.validData, userProfile: steps.get-user-status.outputs.response.body }"
-        run_after: [evaluate-deposit-eligibility]
-        condition: "steps.evaluate-deposit-eligibility.outputs.result.canProceed == true"
+          data: "{ depositData: steps.validate-deposit-request.outputs.validData, userProfile: steps.kyc-status-check.outputs.kycApprovedData, ipAddress: trigger.headers['x-forwarded-for'] || trigger.headers['remote-addr'], userAgent: trigger.headers['user-agent'] }"
+        run_after: [filter-proceed-on-limits] # Run if filter-proceed-on-limits.outputs.proceedData
+        condition: "steps.filter-proceed-on-limits.outputs.proceedData != null"
 
       - step_id: screen-device-fingerprint
         component_ref: callFraudDeviceAnalysis
-        inputs_map:
-          data: "steps.trigger-fraud-detection-screening.outputs.for_device_fp"
+        inputs_map: { data: "steps.trigger-fraud-detection-screening.outputs.for_device_fp" }
         run_after: [trigger-fraud-detection-screening]
       - step_id: screen-behavioral-analysis
         component_ref: callFraudBehavioralAnalysis
-        inputs_map:
-          data: "steps.trigger-fraud-detection-screening.outputs.for_behavioral_scan"
+        inputs_map: { data: "steps.trigger-fraud-detection-screening.outputs.for_behavioral_scan" }
         run_after: [trigger-fraud-detection-screening]
       - step_id: screen-payment-method-validation
         component_ref: callPaymentValidateMethod
-        inputs_map:
-          data: "steps.trigger-fraud-detection-screening.outputs.for_payment_validation"
+        inputs_map: { data: "steps.trigger-fraud-detection-screening.outputs.for_payment_validation" }
         run_after: [trigger-fraud-detection-screening]
 
       - step_id: aggregate-fraud-scores
@@ -931,54 +953,55 @@ flows:
       - step_id: process-payment-transaction
         component_ref: invokeProcessPaymentTransactionFlow
         inputs_map:
-          initialData: "{ depositData: steps.validate-deposit-request.outputs.validData, fraudAssessment: steps.aggregate-fraud-scores.outputs.result }"
+          initialData: "{ userId: trigger.principal.id, depositData: steps.validate-deposit-request.outputs.validData, fraudAssessment: steps.aggregate-fraud-scores.outputs.result }"
         run_after: [aggregate-fraud-scores]
         condition: "steps.aggregate-fraud-scores.outputs.result.requiresManualReview == false"
 
-      - step_id: update-user-balance-after-deposit # Renamed for clarity
-        component_ref: callUpdateUserBalance
+      - step_id: update-user-balance-after-deposit
+        component_ref: dbUpdateUserBalance
         inputs_map:
-          data: "{ userId: steps.validate-deposit-request.outputs.validData.userId, amount: steps.process-payment-transaction.outputs.result.processedAmount, transactionId: steps.process-payment-transaction.outputs.result.transactionId }"
+          requestData:
+            query: "UPDATE user_profiles SET balance = balance + $1, total_lifetime_deposits = total_lifetime_deposits + $1, daily_deposits_sum_today = daily_deposits_sum_today + $1, monthly_deposits_sum_current = monthly_deposits_sum_current + $1 WHERE user_id = $2; CALL record_transaction($2, 'deposit', $3, $1);"
+            params: "[ steps.process-payment-transaction.outputs.result.processedAmount, trigger.principal.id, steps.process-payment-transaction.outputs.result.transactionId ]"
         run_after: [process-payment-transaction]
         condition: "steps.process-payment-transaction.outputs.result.success == true"
 
       - step_id: evaluate-deposit-bonus
         component_ref: invokeEvaluateDepositBonusFlow
         inputs_map:
-          initialData: "{ userId: steps.validate-deposit-request.outputs.validData.userId, depositAmount: steps.process-payment-transaction.outputs.result.processedAmount, bonusCode: steps.validate-deposit-request.outputs.validData.bonusCode }"
+          initialData: "{ userId: trigger.principal.id, depositAmount: steps.process-payment-transaction.outputs.result.processedAmount, bonusCode: steps.validate-deposit-request.outputs.validData.bonusCode }"
         run_after: [update-user-balance-after-deposit]
 
       - step_id: trigger-tier-evaluation
-        component_ref: invokeEvaluateUserTierFlow # Named SubFlowInvoker
+        component_ref: invokeEvaluateUserTierFlow
         inputs_map:
-          initialData: "{ userId: steps.validate-deposit-request.outputs.validData.userId, newDepositAmount: steps.process-payment-transaction.outputs.result.processedAmount }"
+          initialData: "{ userId: trigger.principal.id, newDepositAmount: steps.process-payment-transaction.outputs.result.processedAmount }"
         run_after: [update-user-balance-after-deposit]
 
   # User Tier Evaluation and Upgrade Flow
   - name: EvaluateUserTierFlow
     trigger:
-      type: StdLib.Trigger:EventBus # Corrected Trigger type
+      type: StdLib.Trigger:EventBus
       config:
-        eventType: deposit-completed # This is the filter for the EventBus
+        eventTypePattern: "casino.user.deposit.completed" # More specific event type
+        # filterExpression: "event.payload.country == 'US'" # Example filter on event payload
     steps:
       - step_id: get-updated-user-stats
-        component_ref: callGetUserLifetimeStats
+        component_ref: dbGetUserLifetimeStats
         inputs_map:
-          data: "{ userId: trigger.event.userId }" # EventBus trigger provides 'event'
+          requestData:
+            query: "SELECT user_id, current_tier, total_lifetime_deposits, email, phone_number FROM user_profiles WHERE user_id = $1;"
+            params: "[ trigger.event.payload.userId ]" # Assuming event schema from stdlib.yml is EventBusTriggerPayload { event: { payload: { userId: ...} } }
 
-      - step_id: calculate-new-tier-switch # Switch step
-        component_ref: user-tier-classifier # Named Switch component
-        inputs_map:
-          data: "{ totalLifetimeDeposits: steps.get-updated-user-stats.outputs.response.body.totalLifetimeDeposits }"
+      - step_id: calculate-new-tier-switch
+        component_ref: user-tier-classifier
+        inputs_map: { data: "{ totalLifetimeDeposits: steps.get-updated-user-stats.outputs.responseData.total_lifetime_deposits }" }
         run_after: [get-updated-user-stats]
 
-      # Map Switch outputs to a consistent tier string
       - step_id: map-new-tier-platinum
         component_ref: mapDataToTierPlatinum
-        inputs_map:
-          data: "steps.calculate-new-tier-switch.outputs.is_platinum"
+        inputs_map: { data: "steps.calculate-new-tier-switch.outputs.is_platinum" }
         run_after: [calculate-new-tier-switch]
-      # ... similar mappers for gold, silver, bronze, standard (mapDataToTierGold etc.)
       - step_id: map-new-tier-gold
         component_ref: mapDataToTierGold
         inputs_map: { data: "steps.calculate-new-tier-switch.outputs.is_gold" }
@@ -996,7 +1019,7 @@ flows:
         inputs_map: { data: "steps.calculate-new-tier-switch.outputs.is_standard" }
         run_after: [calculate-new-tier-switch]
 
-      - step_id: merge-new-tier-info # Assuming StdLib:MergeStreams
+      - step_id: merge-new-tier-info
         component_ref: StdLib:MergeStreams
         config: { inputNames: [p,g,s,b,std], mergedOutputName: newTierData }
         inputs_map:
@@ -1014,34 +1037,39 @@ flows:
           matchOutput: tierUpgradeData
           noMatchOutput: noChangeData
         inputs_map:
-          data: "{ newTier: steps.merge-new-tier-info.outputs.newTierData.userTier, currentTier: steps.get-updated-user-stats.outputs.response.body.currentTier, tierRanking: { standard: 0, bronze: 1, silver: 2, gold: 3, platinum: 4 } }"
-        run_after: [merge-new-tier-info]
+          data: "{ newTier: steps.merge-new-tier-info.outputs.newTierData.userTier, currentTier: steps.get-updated-user-stats.outputs.responseData.current_tier, tierRanking: { standard: 0, bronze: 1, silver: 2, gold: 3, platinum: 4 } }"
+        run_after: [merge-new-tier-info, get-updated-user-stats]
 
-      - step_id: trigger-process-tier-upgrade # Fork
+      - step_id: trigger-process-tier-upgrade
         component_ref: StdLib:Fork
         config:
           outputNames: [for_update_tier, for_award_bonus, for_send_notification]
         inputs_map:
-          data: "{ userId: trigger.event.userId, newTier: steps.merge-new-tier-info.outputs.newTierData.userTier, oldTier: steps.get-updated-user-stats.outputs.response.body.currentTier }"
+          data: "{ userId: steps.get-updated-user-stats.outputs.responseData.user_id, newTier: steps.merge-new-tier-info.outputs.newTierData.userTier, oldTier: steps.get-updated-user-stats.outputs.responseData.current_tier, email: steps.get-updated-user-stats.outputs.responseData.email, phoneNumber: steps.get-updated-user-stats.outputs.responseData.phone_number }"
         run_after: [check-tier-upgrade]
         condition: "steps.check-tier-upgrade.outputs.tierUpgradeData != null"
 
       - step_id: update-user-tier-in-db
-        component_ref: callUpdateUserTier # Named HTTP Call
+        component_ref: dbUpdateUserTier
         inputs_map:
-          data: "steps.trigger-process-tier-upgrade.outputs.for_update_tier" # Pass { userId, newTier }
+          requestData:
+            query: "UPDATE user_profiles SET current_tier = $1 WHERE user_id = $2;"
+            params: "[ steps.trigger-process-tier-upgrade.outputs.for_update_tier.newTier, steps.trigger-process-tier-upgrade.outputs.for_update_tier.userId ]"
         run_after: [trigger-process-tier-upgrade]
 
       - step_id: award-tier-upgrade-bonus
-        component_ref: invokeAwardTierUpgradeBonusFlow # Named SubFlowInvoker
+        component_ref: invokeAwardTierUpgradeBonusFlow
         inputs_map:
-          initialData: "steps.trigger-process-tier-upgrade.outputs.for_award_bonus" # Pass { userId, newTier, oldTier }
+          initialData: "steps.trigger-process-tier-upgrade.outputs.for_award_bonus"
         run_after: [trigger-process-tier-upgrade]
 
       - step_id: send-tier-upgrade-notification
-        component_ref: callSendTierUpgradeNotification # Named HTTP Call
+        component_ref: sendTierUpgradeNotificationComponent
         inputs_map:
-          data: "steps.trigger-process-tier-upgrade.outputs.for_send_notification" # Pass { userId, newTier, oldTier }
+          recipient: "steps.trigger-process-tier-upgrade.outputs.for_send_notification.phoneNumber" # Or .email
+          message: "'Congrats! You have been upgraded to the ' + steps.trigger-process-tier-upgrade.outputs.for_send_notification.newTier + ' tier! Enjoy your new benefits.'"
+          # templateId: "tier-upgrade-notification"
+          # data: "{ newTier: steps.trigger-process-tier-upgrade.outputs.for_send_notification.newTier, oldTier: steps.trigger-process-tier-upgrade.outputs.for_send_notification.oldTier }"
         run_after: [trigger-process-tier-upgrade]
     `
   },
@@ -1052,348 +1080,317 @@ flows:
     content: `
 dsl_version: "1.1"
 namespace: com.casino.users
-
+imports:
+  - namespace: com.casino.core # For shared context or components if any
+    as: core
 definitions:
   context:
     - name: kyc-verification-url
-      value: "https://api.kyc-provider.com/verify"
-      type: string
-    - name: max-daily-deposit
-      value: 50000
-      type: number
+      value: "https://api.kyc-provider.com/verify" # Example: if some KYC is still direct HTTP
     - name: default-http-timeout-ms
-      value: 30000 # Overriding core's default for this module if needed
-      type: number
+      value: 5000
   components:
-    - name: kyc-verifier-component
+    - name: kycVerifierComponent
       type: StdLib:HttpCall
       config:
         url: "{{context.kyc-verification-url}}"
         method: POST
         timeoutMs: "{{context.default-http-timeout-ms}}"
-        headers:
-          Authorization: "Bearer {{secrets.kyc-api-key}}"
-    - name: createUserAccountComponent
-      type: StdLib:HttpCall
+    - name: userDbAdapter # Shared or specific DB adapter for this module
+      type: Integration.ExternalServiceAdapter
       config:
-        url: "{{secrets.user-db-url}}/users" # Example, could be user-service-url
-        method: POST
-        timeoutMs: "{{context.default-http-timeout-ms}}"
-
-    - name: fraudVelocityCheckComponent
-      type: StdLib:HttpCall
-      config: { url: "{{secrets.fraud-service-url}}/velocity-check", method: POST, timeoutMs: "{{context.default-http-timeout-ms}}" }
-    - name: fraudDeviceCheckComponent
-      type: StdLib:HttpCall
-      config: { url: "{{secrets.fraud-service-url}}/device-check", method: POST, timeoutMs: "{{context.default-http-timeout-ms}}" }
-    - name: fraudGeoCheckComponent
-      type: StdLib:HttpCall
-      config: { url: "{{secrets.fraud-service-url}}/geo-check", method: POST, timeoutMs: "{{context.default-http-timeout-ms}}" }
-    - name: processDepositPaymentComponent
-      type: StdLib:HttpCall
-      config: { url: "{{secrets.payment-processor-url}}/deposit", method: POST, timeoutMs: "{{context.default-http-timeout-ms}}" }
-
+        adapterType: "StdLibPlugin:PostgresAdapter"
+        adapterConfig: { connectionStringSecretName: "user-db-connection-string" }
+        # Default operation might be set here, or overridden in step
 flows:
-  - name: UserRegistrationFlow # Example, less detailed than core onboarding
+  - name: UserRegistrationFlow # This flow is illustrative if com.casino.core.UserOnboardingFlow is the primary one.
     trigger:
       type: StdLib.Trigger:Http
-      config:
-        path: /api/users/register
-        method: POST
+      config: { path: /api/users/register, method: POST, responseConfig: { errorStatusCode: 400 } }
     steps:
       - step_id: validate-user-data
         component_ref: StdLib:JsonSchemaValidator
         config:
           schema:
             type: object
-            required: [email, password, firstName, lastName, dateOfBirth]
-            properties:
+            required: [email, password, firstName, lastName, dateOfBirth, country]
+            properties: # Simplified
               email: { type: string, format: email }
               password: { type: string, minLength: 8 }
-              firstName: { type: string, minLength: 1 }
-              lastName: { type: string, minLength: 1 }
+              firstName: { type: string }
+              lastName: { type: string }
               dateOfBirth: { type: string, format: date }
-        inputs_map:
-          data: "trigger.body"
+              country: { type: string }
+        inputs_map: { data: "trigger.body" }
+        outputs_map: { error: "steps.fail-user-reg-validation.inputs.data" }
 
-      - step_id: check-age-eligibility # Assuming age() is a valid expression function or this is MapData
-        component_ref: StdLib:FilterData
-        config:
-          expression: "age(data.dateOfBirth) >= 18" # Simplified, might be a MapData then Filter
-          matchOutput: eligibleData
-          noMatchOutput: underageData
-        inputs_map:
-          data: "steps.validate-user-data.outputs.validData"
+      - step_id: fail-user-reg-validation
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'User registration validation failed: ' + data.message, type: 'UserRegistration.ValidationError', details: data.details }" }
+
+      - step_id: perform-kyc-check # Assumes this KYC is simpler or a pre-check
+        component_ref: kycVerifierComponent
+        inputs_map: { data: "{ userData: steps.validate-user-data.outputs.validData }" }
         run_after: [validate-user-data]
+        condition: "steps.validate-user-data.outputs.validData != null"
 
-      - step_id: perform-kyc
-        component_ref: kyc-verifier-component
-        inputs_map:
-          data: "{ userData: steps.check-age-eligibility.outputs.eligibleData }" # Pass data
-        run_after: [check-age-eligibility]
-        condition: "steps.check-age-eligibility.outputs.eligibleData != null"
-
-      - step_id: create-user-account
-        component_ref: createUserAccountComponent
-        inputs_map:
-          data: "{ userData: steps.perform-kyc.outputs.response.body.verifiedUser }" # Assuming response structure
-        run_after: [perform-kyc]
-        # Condition for successful KYC
-
-  - name: DepositFlow # Example, less detailed than core deposit
-    trigger:
-      type: StdLib.Trigger:Http
-      config:
-        path: /api/users/deposit
-        method: POST
-    steps:
-      - step_id: check-deposit-limits # This would be more complex, similar to core
-        component_ref: StdLib:FilterData # Simplified for brevity
+      - step_id: create-user-in-db
+        component_ref: userDbAdapter
         config:
-          expression: "data.amount <= {{context.max-daily-deposit}}" # Simplified
-          matchOutput: withinLimitData
-          noMatchOutput: exceedsLimitData
+          operation: "ExecuteDML_ReturnFirst"
         inputs_map:
-          data: "trigger.body"
-
-      - step_id: trigger-fraud-detection # Fork
-        component_ref: StdLib:Fork
-        config:
-          outputNames: [for_velocity, for_device, for_geo]
-        inputs_map:
-          data: "steps.check-deposit-limits.outputs.withinLimitData" # Pass relevant data
-        run_after: [check-deposit-limits]
-        condition: "steps.check-deposit-limits.outputs.withinLimitData != null"
-
-      - step_id: run-velocity-check
-        component_ref: fraudVelocityCheckComponent
-        inputs_map:
-          data: "steps.trigger-fraud-detection.outputs.for_velocity"
-        run_after: [trigger-fraud-detection]
-      - step_id: run-device-check
-        component_ref: fraudDeviceCheckComponent
-        inputs_map:
-          data: "steps.trigger-fraud-detection.outputs.for_device"
-        run_after: [trigger-fraud-detection]
-      - step_id: run-geo-check
-        component_ref: fraudGeoCheckComponent
-        inputs_map:
-          data: "steps.trigger-fraud-detection.outputs.for_geo"
-        run_after: [trigger-fraud-detection]
-
-      - step_id: evaluate-fraud-results
-        component_ref: StdLib:MapData
-        config:
-          expression: |
-            {
-              riskScore: (data.velocityScore + data.deviceScore + data.geoScore) / 3,
-              approved: (data.velocityScore + data.deviceScore + data.geoScore) / 3 < 0.7
-            }
-        inputs_map:
-          data: "{ velocityScore: steps.run-velocity-check.outputs.response.body.riskScore, deviceScore: steps.run-device-check.outputs.response.body.riskScore, geoScore: steps.run-geo-check.outputs.response.body.riskScore }"
-        run_after: [run-velocity-check, run-device-check, run-geo-check]
-
-      - step_id: process-deposit
-        component_ref: processDepositPaymentComponent
-        inputs_map:
-          data: "trigger.body" # Pass deposit data
-        run_after: [evaluate-fraud-results]
-        condition: "steps.evaluate-fraud-results.outputs.result.approved == true"
+          requestData:
+            query: "INSERT INTO users (email, password_hash, first_name, last_name, date_of_birth, country, kyc_reference_id) VALUES ($1, hash_password($2), $3, $4, $5, $6, $7) RETURNING user_id;"
+            params: "[ steps.validate-user-data.outputs.validData.email, steps.validate-user-data.outputs.validData.password, steps.validate-user-data.outputs.validData.firstName, steps.validate-user-data.outputs.validData.lastName, steps.validate-user-data.outputs.validData.dateOfBirth, steps.validate-user-data.outputs.validData.country, steps.perform-kyc-check.outputs.response.body.kycReferenceId ]"
+        run_after: [perform-kyc-check]
+        condition: "steps.perform-kyc-check.outputs.response.body.status == 'VERIFIED'" # Or similar success condition
     `
   },
 
   // Games Module (Refactoring Fork usage in SlotGameFlow and BlackjackGameFlow)
   {
     fqn: 'com.casino.games',
-    content: `
-dsl_version: "1.1"
-namespace: com.casino.games
+    content: `dsl_version: "1.1"
+namespace: com.casino.users
 imports:
-  - namespace: com.casino.core
-    as: core # For subflow trigger if needed, or direct component defs
+  - namespace: com.casino.core # For shared context or components if any
+    as: core
+  # If communication components are defined in core or a shared comms module
+  - namespace: com.casino.communications # Assuming a module for communication components
+    as: comms
 
 definitions:
   context:
-    - name: rng-service-url
-      value: "https://api.rng-provider.com/generate"
+    - name: default-user-db-timeout-ms
+      value: 3000
+      type: number
+    - name: minimum-registration-age
+      value: 18
+      type: number
+    - name: welcome-email-subject
+      value: "Welcome to Our Platform!"
       type: string
-    - name: game-result-retention-days
-      value: 90
-      type: number
-    - name: default-rng-timeout-ms
-      value: 1000 # Reduced from 5000 for faster game simulation
-      type: number
+    - name: welcome-email-template-id # If using a template service via Communication.SendEmail
+      value: "user-registration-welcome-v1"
+      type: string
+
   components:
-    - name: rng-generator-component # RNG for a single value
-      type: StdLib:HttpCall
+    # --- Database Adapter ---
+    - name: userDbAdapter
+      type: Integration.ExternalServiceAdapter
       config:
-        url: "{{context.rng-service-url}}"
-        method: POST # Assuming POST to generate a number with params
-        timeoutMs: "{{context.default-rng-timeout-ms}}"
-        headers:
-          Authorization: "Bearer {{secrets.rng-api-key}}"
-        # Body would be like { min: 1, max: 10 } passed in inputs_map
+        adapterType: "StdLibPlugin:PostgresAdapter" # Conceptual
+        adapterConfig: { connectionStringSecretName: "user-db-connection-string", timeoutMs: "{{context.default-user-db-timeout-ms}}" }
 
-    - name: invokePlaceBetFlow # Example if games are triggered by PlaceBetFlow
-      type: StdLib:SubFlowInvoker
+    # --- KYC Pre-check (if any, simplified from core for this module) ---
+    - name: basicKycCheckComponent
+      type: StdLib:HttpCall # Example: could be a lightweight external check
       config:
-        flowName: com.casino.core.PlaceBetFlow # Note: this creates a circular dependency if PlaceBetFlow calls ExecuteGameFlow
-        # This trigger structure is problematic if PlaceBetFlow invokes ExecuteGameFlow which then has this as a trigger.
-        # A better model: PlaceBetFlow invokes a specific game logic flow (e.g. com.casino.games.SlotGameLogicFlow)
-        # For this example, I will assume ExecuteGameFlow is the one called by PlaceBetFlow,
-        # and these SlotGameFlow/BlackjackGameFlow are illustrative or older versions.
-        # Or, these are *logic flows* that ExecuteGameFlow (a Switch) routes to.
-        waitForCompletion: true
+        url: "{{secrets.basic-kyc-service-url}}/precheck"
+        method: POST
+        timeoutMs: 2000
 
-    - name: slotsEngineComponent # Assumed to be a SubFlowInvoker for slot logic
-      type: StdLib:SubFlowInvoker
-      config: { flowName: com.casino.games.SlotGameLogicFlow, waitForCompletion: true } # New flow for logic
-    - name: blackjackEngineComponent
-      type: StdLib:SubFlowInvoker
-      config: { flowName: com.casino.games.BlackjackGameLogicFlow, waitForCompletion: true } # New flow for logic
+    # --- Communication Component (using SendEmail abstraction) ---
+    - name: sendRegistrationEmailComponent
+      type: Communication.SendEmail # Assuming this is defined in comms module or here
+      config:
+        serviceType: "StdLibPlugin:GenericSmtpAdapter" # Conceptual
+        serviceConfig: { smtpHostSecretName: "smtp-host", smtpUserSecretName: "smtp-user", smtpPasswordSecretName: "smtp-pass" }
+        fromAddress: "{{core.context.welcome-email-from}}" # Example of using imported context
+        defaultFromName: "Platform Registration"
+
+    # --- Logic Components ---
+    - name: calculateAgeFromDOB
+      type: StdLib:MapData
+      config:
+        expression: |
+          {
+            dobTimestamp: parse_datetime(data.dateOfBirth, 'YYYY-MM-DD').to_millis(),
+            age: floor((to_millis(now()) - parse_datetime(data.dateOfBirth, 'YYYY-MM-DD').to_millis()) / (365.25 * 24 * 60 * 60 * 1000)),
+            inputData: data
+          }
+        # Assumes parse_datetime, to_millis, now(), floor are available expression functions
+
+    - name: conceptualPasswordHasher
+      type: StdLib:MapData # Placeholder for actual secure hashing
+      config:
+        # In a real system, use Crypto.SecureExecutor with a KMS or a secure hashing library via WASM/plugin
+        expression: "{ hashedPassword: 'hashed-' + data.password, originalData: data.originalData }"
+        # This is NOT secure for production. It's a placeholder.
 
 flows:
-  # This ExecuteGameFlow is what PlaceBetFlow should invoke
-  - name: ExecuteGameFlow
+  - name: UserRegistrationFlow
     trigger:
-      type: StdLib:Manual # Manually triggered by PlaceBetFlow (SubFlowInvoker)
-      # config:
-      #   flowName: com.casino.core.PlaceBetFlow # This was the original trigger, which is circular
-      # This flow now expects initialData from PlaceBetFlow:
-      # { gameType, betAmount, userId, gameParameters }
+      type: StdLib.Trigger:Http
+      config:
+        path: /api/users/register # Assuming this is a public registration endpoint
+        method: POST
+        responseConfig: { errorStatusCode: 400 } # Default for validation/logic errors
     steps:
-      - step_id: route-to-game-engine
+      - step_id: validate-registration-payload
+        component_ref: StdLib:JsonSchemaValidator
+        config:
+          schema:
+            type: object
+            required: [email, password, confirmPassword, firstName, lastName, dateOfBirth, country, termsAccepted]
+            properties:
+              email: { type: string, format: email }
+              password: { type: string, minLength: 10, pattern: "^.*[a-z])(?=.*[A-Z])(?=.*\\\\d)(?=.*[!@#$%^&*()_+\\\\-=\\[\\]{};':\"\\\\|,.<>\\/?~$" } # Stricter password
+              confirmPassword: { type: string }
+              firstName: { type: string, minLength: 1, maxLength: 50 }
+              lastName: { type: string, minLength: 1, maxLength: 50 }
+              dateOfBirth: { type: string, format: "date", description: "YYYY-MM-DD" } # ISO 8601 date
+              country: { type: string, pattern: "^[A-Z]{2}$" } # ISO 3166-1 alpha-2
+              termsAccepted: { type: boolean, const: true, description: "User must accept terms." }
+        inputs_map: { data: "trigger.body" }
+        outputs_map: { error: "steps.fail-on-payload-validation.inputs.data" }
+
+      - step_id: fail-on-payload-validation
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'Registration payload validation failed: ' + data.message, type: 'UserRegistration.PayloadValidationError', details: data.details }" }
+
+      - step_id: check-password-match
+        component_ref: StdLib:FilterData
+        config:
+          expression: "data.password == data.confirmPassword"
+          matchOutput: passwordsMatchData
+          noMatchOutput: passwordsMismatchError
+        inputs_map: { data: "steps.validate-registration-payload.outputs.validData" } # Original valid payload
+        run_after: [validate-registration-payload]
+        outputs_map: { passwordsMismatchError: "steps.fail-on-password-mismatch.inputs.data" }
+
+      - step_id: fail-on-password-mismatch
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'Passwords do not match.', type: 'UserRegistration.PasswordMismatchError' }" }
+
+      - step_id: calculate-age
+        component_ref: calculateAgeFromDOB # Named MapData
+        inputs_map: { data: "steps.check-password-match.outputs.passwordsMatchData" } # Use data where passwords matched
+        run_after: [check-password-match]
+
+      - step_id: verify-age-eligibility
+        component_ref: StdLib:FilterData
+        config:
+          expression: "data.age >= {{context.minimum-registration-age}}"
+          matchOutput: ageEligibleData
+          noMatchOutput: underageError
+        inputs_map: { data: "steps.calculate-age.outputs.result" } # Output from calculateAgeFromDOB
+        run_after: [calculate-age]
+        outputs_map: { underageError: "steps.fail-on-underage.inputs.data" }
+
+      - step_id: fail-on-underage
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'User must be at least ' + {{context.minimum-registration-age}} + ' years old.', type: 'UserRegistration.UnderageError', details: { age: data.age } }" }
+
+      - step_id: check-email-availability
+        component_ref: userDbAdapter
+        config:
+          operation: "QuerySingleRow_ReturnFirst" # Expects 0 or 1 row
+        inputs_map:
+          requestData:
+            query: "SELECT user_id FROM users WHERE email = $1;"
+            params: "[ steps.verify-age-eligibility.outputs.ageEligibleData.inputData.email ]" # original email from payload
+        run_after: [verify-age-eligibility]
+
+      - step_id: route-on-email-check # Switch based on DB query result
         component_ref: StdLib:Switch
         config:
-          cases: # Expects input data: { gameType: "..." }
-            - conditionExpression: "data.gameType == 'slots'"
-              outputName: slots_engine_selected # Routes input data
-            - conditionExpression: "data.gameType == 'blackjack'"
-              outputName: blackjack_engine_selected
-          defaultOutputName: unsupported_game_selected
-        inputs_map:
-          data: "trigger.initialData" # Use initialData from PlaceBetFlow
+          cases:
+            - conditionExpression: "data == null" # If dbAdapter returns null for no rows found
+              outputName: emailAvailable
+            # No language needed if 'data == null' is default expression lang
+          defaultOutputName: emailTakenError # If data is not null, email exists
+        inputs_map: { data: "steps.check-email-availability.outputs.responseData" } # responseData might be null or a row object
+        run_after: [check-email-availability]
 
-      - step_id: execute-slots-game
-        component_ref: slotsEngineComponent # Invoke the specific slot logic flow
-        inputs_map:
-          initialData: "steps.route-to-game-engine.outputs.slots_engine_selected"
-        run_after: [route-to-game-engine]
-        condition: "steps.route-to-game-engine.outputs.slots_engine_selected != null"
+      - step_id: fail-on-email-taken
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'Email address is already registered.', type: 'UserRegistration.EmailTakenError' }" }
+        # This step needs to be wired from route-on-email-check.outputs.emailTakenError
+        # Let's assume it's implicitly wired if the output port name matches the input port name of a step, or use an explicit outputs_map on the Switch.
+        # For clarity, adding explicit wiring from Switch:
+        # (This cannot be done directly on Switch, so we handle it by having fail-on-email-taken consume the 'emailTakenError' output if it's emitted)
 
-      - step_id: execute-blackjack-game
-        component_ref: blackjackEngineComponent # Invoke specific blackjack logic flow
+      - step_id: perform-basic-kyc-precheck # Optional pre-check
+        component_ref: basicKycCheckComponent
         inputs_map:
-          initialData: "steps.route-to-game-engine.outputs.blackjack_engine_selected"
-        run_after: [route-to-game-engine]
-        condition: "steps.route-to-game-engine.outputs.blackjack_engine_selected != null"
+          data: "{ firstName: steps.verify-age-eligibility.outputs.ageEligibleData.inputData.firstName, lastName: steps.verify-age-eligibility.outputs.ageEligibleData.inputData.lastName, dateOfBirth: steps.verify-age-eligibility.outputs.ageEligibleData.inputData.dateOfBirth, country: steps.verify-age-eligibility.outputs.ageEligibleData.inputData.country }"
+        run_after: [route-on-email-check]
+        condition: "steps.route-on-email-check.outputs.emailAvailable != null" # Proceed only if email is available
+        outputs_map: { error: "steps.fail-on-kyc-precheck.inputs.data" } # If KYC service fails
 
-      # Output from this flow would be the result of the executed game (e.g., from execute-slots-game.outputs.result)
-      # This needs to be mapped to a consistent output for PlaceBetFlow to consume.
-      # Using MergeStreams for simplicity to get the game result.
-      - step_id: merge-game-results
-        component_ref: StdLib:MergeStreams
+      - step_id: fail-on-kyc-precheck
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'Basic KYC pre-check failed: ' + data.message, type: 'UserRegistration.KycPrecheckFailed', details: data.details }" }
+
+      - step_id: filter-kyc-precheck-result
+        component_ref: StdLib:FilterData
         config:
-          inputNames: [slots, blackjack, unsupported] # Add unsupported to handle default
-          mergedOutputName: finalGameResult
-        inputs_map:
-          slots: "steps.execute-slots-game.outputs.result"
-          blackjack: "steps.execute-blackjack-game.outputs.result"
-          unsupported: "{ error: 'Unsupported game type', details: steps.route-to-game-engine.outputs.unsupported_game_selected }" # Handle unsupported
-        run_after: [execute-slots-game, execute-blackjack-game] # Ensure games have run
+          expression: "data.status == 'approved' || data.status == 'requires_further_review'" # Example statuses
+          matchOutput: kycOkData
+          noMatchOutput: kycRejectedError
+        inputs_map: { data: "steps.perform-basic-kyc-precheck.outputs.response.body" } # Assuming response structure
+        run_after: [perform-basic-kyc-precheck]
+        condition: "steps.perform-basic-kyc-precheck.outputs.response != null" # Ensure KYC call was successful
+        outputs_map: { kycRejectedError: "steps.fail-on-kyc-rejected.inputs.data" }
 
-  # Specific game logic flows
-  - name: SlotGameLogicFlow
-    trigger: { type: StdLib:Manual } # Triggered by ExecuteGameFlow
-    # initialData: { gameType, betAmount, userId, gameParameters, gameId (if any from trigger) }
-    steps:
-      - step_id: trigger-reel-generation # Fork
-        component_ref: StdLib:Fork
+      - step_id: fail-on-kyc-rejected
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'User registration cannot proceed due to KYC pre-check result.', type: 'UserRegistration.KycRejected', details: { status: data.status, reason: data.reason } }" }
+
+      - step_id: hash-user-password
+        component_ref: conceptualPasswordHasher # Placeholder
+        inputs_map:
+          data: "{ password: steps.verify-age-eligibility.outputs.ageEligibleData.inputData.password, originalData: steps.verify-age-eligibility.outputs.ageEligibleData.inputData }" # Pass original valid payload
+        run_after: [filter-kyc-precheck-result]
+        condition: "steps.filter-kyc-precheck-result.outputs.kycOkData != null"
+
+      - step_id: create-user-record
+        component_ref: userDbAdapter
         config:
-          outputNames: [for_reel1, for_reel2, for_reel3]
+          operation: "ExecuteDML_ReturnFirst"
         inputs_map:
-          data: "{ gameId: trigger.initialData.gameId, betAmount: trigger.initialData.betAmount }" # Pass data needed for RNG params potentially
+          requestData:
+            query: "INSERT INTO users (email, password_hash, first_name, last_name, date_of_birth, country, kyc_precheck_status, terms_accepted_at, created_at, last_login_at) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), NOW()) RETURNING user_id, email, first_name, created_at;"
+            params: "[ steps.hash-user-password.outputs.result.originalData.email, steps.hash-user-password.outputs.result.hashedPassword, steps.hash-user-password.outputs.result.originalData.firstName, steps.hash-user-password.outputs.result.originalData.lastName, steps.hash-user-password.outputs.result.originalData.dateOfBirth, steps.hash-user-password.outputs.result.originalData.country, steps.filter-kyc-precheck-result.outputs.kycOkData.status ]"
+        run_after: [hash-user-password]
+        outputs_map: { error: "steps.fail-on-db-create-user.inputs.data" }
 
-      - step_id: generate-reel1
-        component_ref: rng-generator-component
-        inputs_map:
-          data: "{ min: 1, max: 10 }" # Example params for RNG
-        run_after: [trigger-reel-generation]
-      - step_id: generate-reel2
-        component_ref: rng-generator-component
-        inputs_map:
-          data: "{ min: 1, max: 10 }"
-        run_after: [trigger-reel-generation]
-      - step_id: generate-reel3
-        component_ref: rng-generator-component
-        inputs_map:
-          data: "{ min: 1, max: 10 }"
-        run_after: [trigger-reel-generation]
+      - step_id: fail-on-db-create-user
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'Failed to create user record in database: ' + data.message, type: 'UserRegistration.DatabaseError', details: data.details }" }
 
-      - step_id: calculate-slot-outcome # Switch
-        component_ref: StdLib:Switch
+      - step_id: create-initial-user-profile # Example: Create a related profile record
+        component_ref: userDbAdapter
         config:
-          cases: # Input data: { reel1, reel2, reel3 }
-            - conditionExpression: "data.reel1 == data.reel2 && data.reel2 == data.reel3 && data.reel1 == 7"
-              outputName: jackpot_outcome
-            - conditionExpression: "data.reel1 == data.reel2 && data.reel2 == data.reel3"
-              outputName: triple_outcome
-            - conditionExpression: "data.reel1 == data.reel2 || data.reel2 == data.reel3 || data.reel1 == data.reel3"
-              outputName: double_outcome
-          defaultOutputName: no_win_outcome
+          operation: "ExecuteDML"
         inputs_map:
-          data: "{ reel1: steps.generate-reel1.outputs.response.body.value, reel2: steps.generate-reel2.outputs.response.body.value, reel3: steps.generate-reel3.outputs.response.body.value }"
-        run_after: [generate-reel1, generate-reel2, generate-reel3]
+          requestData:
+            query: "INSERT INTO user_profiles (user_id, display_name, preferred_language, timezone) VALUES ($1, $2, 'en', 'UTC');" # Default profile values
+            params: "[ steps.create-user-record.outputs.responseData.user_id, steps.create-user-record.outputs.responseData.first_name ]"
+        run_after: [create-user-record]
+        # Error handling for this step can be added if critical, or log and continue.
 
-      - step_id: map-jackpot-payout
-        component_ref: StdLib:MapData
-        config: { expression: "{ win: true, multiplier: 100, outcome: 'jackpot', reels: data.reels }" }
-        inputs_map: { data: "{ reels: [steps.calculate-slot-outcome.inputs.data.reel1, steps.calculate-slot-outcome.inputs.data.reel2, steps.calculate-slot-outcome.inputs.data.reel3], originalData: steps.calculate-slot-outcome.outputs.jackpot_outcome }" } # Pass original data if needed
-        run_after: [calculate-slot-outcome]
-      # ... similar mappers for triple, double, noWin
-      - step_id: map-triple-payout
-        component_ref: StdLib:MapData
-        config: { expression: "{ win: true, multiplier: 10, outcome: 'triple', reels: data.reels }" }
-        inputs_map: { data: "{ reels: [steps.calculate-slot-outcome.inputs.data.reel1, steps.calculate-slot-outcome.inputs.data.reel2, steps.calculate-slot-outcome.inputs.data.reel3], originalData: steps.calculate-slot-outcome.outputs.triple_outcome }" }
-        run_after: [calculate-slot-outcome]
-      - step_id: map-double-payout
-        component_ref: StdLib:MapData
-        config: { expression: "{ win: true, multiplier: 2, outcome: 'double', reels: data.reels }" }
-        inputs_map: { data: "{ reels: [steps.calculate-slot-outcome.inputs.data.reel1, steps.calculate-slot-outcome.inputs.data.reel2, steps.calculate-slot-outcome.inputs.data.reel3], originalData: steps.calculate-slot-outcome.outputs.double_outcome }" }
-        run_after: [calculate-slot-outcome]
-      - step_id: map-no-win-payout
-        component_ref: StdLib:MapData
-        config: { expression: "{ win: false, multiplier: 0, outcome: 'noWin', reels: data.reels }" }
-        inputs_map: { data: "{ reels: [steps.calculate-slot-outcome.inputs.data.reel1, steps.calculate-slot-outcome.inputs.data.reel2, steps.calculate-slot-outcome.inputs.data.reel3], originalData: steps.calculate-slot-outcome.outputs.no_win_outcome }" }
-        run_after: [calculate-slot-outcome]
-
-      - step_id: merge-slot-payouts # Merge to get the single result for this flow
-        component_ref: StdLib:MergeStreams
-        config: { inputNames: [j,t,d,n], mergedOutputName: slotResult }
+      - step_id: send-welcome-notification
+        component_ref: sendRegistrationEmailComponent # Using Communication.SendEmail
         inputs_map:
-          j: "steps.map-jackpot-payout.outputs.result"
-          t: "steps.map-triple-payout.outputs.result"
-          d: "steps.map-double-payout.outputs.result"
-          n: "steps.map-no-win-payout.outputs.result"
-        run_after: [map-jackpot-payout, map-triple-payout, map-double-payout, map-no-win-payout]
-      # This flow should output slotResult, which then becomes the output of ExecuteGameFlow if slots were chosen
+          toAddresses: "steps.create-user-record.outputs.responseData.email"
+          subject: "{{context.welcome-email-subject}}"
+          # bodyText: "'Hello ' + steps.create-user-record.outputs.responseData.first_name + ', welcome! Your account is ready.'"
+          templateId: "{{context.welcome-email-template-id}}"
+          templateData: "{ userName: steps.create-user-record.outputs.responseData.first_name, userId: steps.create-user-record.outputs.responseData.user_id }"
+          data: "{ userName: steps.create-user-record.outputs.responseData.first_name, userId: steps.create-user-record.outputs.responseData.user_id }" # Context for subject/template expressions
+        run_after: [create-initial-user-profile] # After profile creation
+        # Non-critical error: log and continue if email fails, user is already created.
 
-  # BlackjackGameLogicFlow would be similarly refactored with Fork for card dealing
-  # For brevity, I will not fully expand BlackjackGameLogicFlow here but the pattern is the same.
-  # It would also output its result, to be merged by ExecuteGameFlow.
-  - name: BlackjackGameLogicFlow
-    trigger: { type: StdLib:Manual }
-    steps:
-      # ... Fork to deal 4 cards using rng-generator-component ...
-      # ... MapData to calculate hand values ...
-      # ... Switch to determine winner ...
-      # ... MapData for payout based on winner ...
-      # ... Merge to final blackjack result ...
-      - step_id: placeholder-blackjack-logic
-        component_ref: StdLib:NoOp # Placeholder
-        inputs_map: { data: "trigger.initialData" }
-    # This flow's final result (e.g. from a merge step) is its output.
-    `
+      # Final output of the flow: the created user's basic info
+      - step_id: prepare-success-response
+        component_ref: StdLib:MapData
+        config:
+          expression: "{ userId: data.user_id, email: data.email, message: 'User registered successfully. Welcome email sent.' }"
+        inputs_map: { data: "steps.create-user-record.outputs.responseData" }
+        run_after: [send-welcome-notification] # After attempting to send email
+        `
   },
 
   // Payments Module (Minimal changes for brevity, ensure SubFlowInvoker and Trigger types are correct)
@@ -1650,318 +1647,1181 @@ flows:
         inputs_map:
           data: "{ eventType: 'userRegistration', payload: trigger.initialData }"
     `
+  },
+  // Bonuses Module
+  {
+    fqn: 'com.casino.bonuses',
+    content: `dsl_version: "1.1"
+namespace: com.casino.bonuses
+imports:
+  - namespace: com.casino.core # For potential context or shared components
+    as: core
+  - namespace: com.casino.users # For user data if needed directly
+    as: users
+
+definitions:
+  context:
+    - name: default-bonus-db-timeout-ms
+      value: 3000
+      type: number
+    - name: referral-bonus-amount-standard
+      value: 10 # e.g., 10 currency units
+      type: number
+    - name: referral-bonus-amount-vip-referrer
+      value: 25
+      type: number
+    - name: default-wagering-multiplier
+      value: 30 # e.g., 30x bonus amount
+      type: number
+
+  components:
+    # --- Database Adapters ---
+    - name: dbBonusAdapter
+      type: Integration.ExternalServiceAdapter
+      config:
+        adapterType: "StdLibPlugin:PostgresAdapter"
+        adapterConfig: { connectionStringSecretName: "bonus-db-connection-string", timeoutMs: "{{context.default-bonus-db-timeout-ms}}" }
+        # Default operation can be set here or in the step
+
+    # --- Communication for Bonus Notifications (if any) ---
+    - name: notifyBonusAwardedComponent
+      type: Communication.SendNotification
+      config:
+        channel: "Push" # Example
+        serviceType: "StdLibPlugin:FirebasePushAdapter"
+        serviceConfig: { serverKeySecretName: "firebase-server-key" }
+
+    # --- Logic Components ---
+    - name: calculateWageringRequirement
+      type: StdLib:MapData
+      config:
+        expression: "{ wageringRequired: data.bonusAmount * (data.customMultiplier || {{context.default-wagering-multiplier}}), bonusId: data.bonusId, userId: data.userId }"
+
+flows:
+  - name: ProcessReferralBonusFlow
+    trigger:
+      type: StdLib:Manual # Invoked by UserOnboardingFlow
+      # Expected initialData: { newUserId, referralCode }
+    steps:
+      - step_id: get-referrer-details
+        component_ref: dbBonusAdapter
+        config:
+          operation: "QuerySingleRow_ReturnFirst"
+        inputs_map:
+          requestData:
+            query: "SELECT user_id, user_tier FROM users WHERE referral_code = $1 AND user_id != $2;" # Ensure not self-referral
+            params: "[ trigger.initialData.referralCode, trigger.initialData.newUserId ]"
+        outputs_map:
+          error: "steps.fail-invalid-referral.inputs.data" # If referrer not found
+
+      - step_id: fail-invalid-referral
+        component_ref: StdLib:FailFlow
+        config:
+          errorMessageExpression: "{ message: 'Invalid or non-existent referral code.', type: 'ReferralBonus.InvalidCode' }"
+
+      - step_id: determine-referral-bonus-amount
+        component_ref: StdLib:MapData
+        inputs_map:
+          data: "steps.get-referrer-details.outputs.responseData" # Has user_tier
+        config:
+          expression: |
+            {
+              bonusAmount: data.user_tier == 'platinum' || data.user_tier == 'gold' ? {{context.referral-bonus-amount-vip-referrer}} : {{context.referral-bonus-amount-standard}},
+              referrerId: data.user_id,
+              newUserId: trigger.initialData.newUserId
+            }
+        run_after: [get-referrer-details]
+
+      - step_id: award-bonus-to-referrer
+        component_ref: dbBonusAdapter
+        config:
+          operation: "ExecuteDML"
+        inputs_map:
+          requestData:
+            query: "INSERT INTO user_bonuses (user_id, bonus_type, amount, status, awarded_at) VALUES ($1, 'referral_credited', $2, 'active', NOW()); UPDATE users SET balance = balance + $2 WHERE user_id = $1;"
+            params: "[ steps.determine-referral-bonus-amount.outputs.result.referrerId, steps.determine-referral-bonus-amount.outputs.result.bonusAmount ]"
+        run_after: [determine-referral-bonus-amount]
+
+      - step_id: award-bonus-to-new-user # New user might also get a bonus
+        component_ref: dbBonusAdapter
+        config:
+          operation: "ExecuteDML"
+        inputs_map:
+          requestData:
+            query: "INSERT INTO user_bonuses (user_id, bonus_type, amount, status, awarded_at) VALUES ($1, 'referral_received', $2, 'active', NOW()); UPDATE users SET balance = balance + $2 WHERE user_id = $1;"
+            params: "[ steps.determine-referral-bonus-amount.outputs.result.newUserId, {{context.referral-bonus-amount-standard}} ]" # Example: new user gets standard amount
+        run_after: [determine-referral-bonus-amount]
+      # Optionally, notify users
+
+  - name: EvaluateDepositBonusFlow
+    trigger:
+      type: StdLib:Manual # Invoked by ProcessDepositFlow
+      # Expected initialData: { userId, depositAmount, bonusCode (optional) }
+    steps:
+      - step_id: get-bonus-definition
+        component_ref: dbBonusAdapter
+        config:
+          operation: "QuerySingleRow_ReturnFirst"
+        inputs_map:
+          requestData:
+            query: "SELECT bonus_id, bonus_type, min_deposit, percentage_match, max_bonus_amount, wagering_multiplier, valid_until FROM bonus_definitions WHERE bonus_code = $1 AND is_active = TRUE AND valid_until >= NOW();"
+            params: "[ trigger.initialData.bonusCode ]"
+        condition: "trigger.initialData.bonusCode != null" # Only if a bonus code is provided
+        outputs_map:
+          error: "steps.log-no-bonus-code-or-invalid.inputs.data"
+
+      - step_id: log-no-bonus-code-or-invalid # Can be a NoOp or a specific logger if no active bonus
+        component_ref: StdLib:NoOp # Or StdLib:Logger
+        # config: { level: "INFO", messageExpression: "'No active bonus found for code: ' + trigger.initialData.bonusCode" }
+        # This step is for control flow if the bonus definition is not found
+
+      - step_id: check-deposit-eligibility
+        component_ref: StdLib:FilterData
+        config:
+          expression: "data.depositAmount >= data.bonusDef.min_deposit"
+          matchOutput: eligibleForBonus
+          noMatchOutput: notEligibleAmount
+        inputs_map:
+          data: "{ depositAmount: trigger.initialData.depositAmount, bonusDef: steps.get-bonus-definition.outputs.responseData }"
+        run_after: [get-bonus-definition]
+        condition: "steps.get-bonus-definition.outputs.responseData != null" # Only if bonus def was found
+        outputs_map:
+          notEligibleAmount: "steps.log-deposit-not-eligible.inputs.data"
+
+      - step_id: log-deposit-not-eligible
+        component_ref: StdLib:NoOp # Or Logger
+        # This step is for control flow if deposit amount is too low for the bonus
+
+      - step_id: calculate-bonus-award
+        component_ref: StdLib:MapData
+        config:
+          expression: |
+            {
+              bonusAmountToAward: Math.min(data.depositAmount * (data.bonusDef.percentage_match / 100), data.bonusDef.max_bonus_amount),
+              bonusId: data.bonusDef.bonus_id,
+              userId: trigger.initialData.userId,
+              wageringMultiplier: data.bonusDef.wagering_multiplier
+            }
+        inputs_map:
+          data: "{ depositAmount: trigger.initialData.depositAmount, bonusDef: steps.check-deposit-eligibility.outputs.eligibleForBonus }" # Use data from filter pass
+        run_after: [check-deposit-eligibility]
+        condition: "steps.check-deposit-eligibility.outputs.eligibleForBonus != null"
+
+      - step_id: calculate-wagering
+        component_ref: calculateWageringRequirement
+        inputs_map:
+          data: "{ bonusAmount: steps.calculate-bonus-award.outputs.result.bonusAmountToAward, customMultiplier: steps.calculate-bonus-award.outputs.result.wageringMultiplier, bonusId: steps.calculate-bonus-award.outputs.result.bonusId, userId: steps.calculate-bonus-award.outputs.result.userId }"
+        run_after: [calculate-bonus-award]
+
+      - step_id: award-deposit-bonus
+        component_ref: dbBonusAdapter
+        config:
+          operation: "ExecuteDML"
+        inputs_map:
+          requestData:
+            query: "INSERT INTO user_bonuses (user_id, bonus_definition_id, amount, wagering_requirement, status, awarded_at) VALUES ($1, $2, $3, $4, 'active_wagering', NOW()); UPDATE users SET bonus_balance = bonus_balance + $3 WHERE user_id = $1;"
+            params: "[ steps.calculate-wagering.outputs.result.userId, steps.calculate-wagering.outputs.result.bonusId, steps.calculate-bonus-award.outputs.result.bonusAmountToAward, steps.calculate-wagering.outputs.result.wageringRequired ]"
+        run_after: [calculate-wagering]
+      # Optionally notify user
+
+  - name: AwardTierUpgradeBonusFlow
+    trigger:
+      type: StdLib:Manual # Invoked by EvaluateUserTierFlow
+      # Expected initialData: { userId, newTier, oldTier }
+    steps:
+      - step_id: get-tier-bonus-definition
+        component_ref: dbBonusAdapter
+        config:
+          operation: "QuerySingleRow_ReturnFirst"
+        inputs_map:
+          requestData:
+            query: "SELECT bonus_id, fixed_amount, wagering_multiplier FROM bonus_definitions WHERE bonus_type = 'tier_upgrade' AND target_tier = $1 AND is_active = TRUE;"
+            params: "[ trigger.initialData.newTier ]"
+        outputs_map:
+          error: "steps.log-no-tier-bonus-def.inputs.data"
+
+      - step_id: log-no-tier-bonus-def
+        component_ref: StdLib:NoOp
+
+      - step_id: calculate-tier-wagering
+        component_ref: calculateWageringRequirement
+        inputs_map:
+          data: "{ bonusAmount: steps.get-tier-bonus-definition.outputs.responseData.fixed_amount, customMultiplier: steps.get-tier-bonus-definition.outputs.responseData.wagering_multiplier, bonusId: steps.get-tier-bonus-definition.outputs.responseData.bonus_id, userId: trigger.initialData.userId }"
+        run_after: [get-tier-bonus-definition]
+        condition: "steps.get-tier-bonus-definition.outputs.responseData != null"
+
+      - step_id: award-tier-bonus
+        component_ref: dbBonusAdapter
+        config:
+          operation: "ExecuteDML"
+        inputs_map:
+          requestData:
+            query: "INSERT INTO user_bonuses (user_id, bonus_definition_id, amount, wagering_requirement, status, awarded_at) VALUES ($1, $2, $3, $4, 'active_wagering', NOW()); UPDATE users SET bonus_balance = bonus_balance + $3 WHERE user_id = $1;"
+            params: "[ steps.calculate-tier-wagering.outputs.result.userId, steps.calculate-tier-wagering.outputs.result.bonusId, steps.get-tier-bonus-definition.outputs.responseData.fixed_amount, steps.calculate-tier-wagering.outputs.result.wageringRequired ]"
+        run_after: [calculate-tier-wagering]
+        condition: "steps.calculate-tier-wagering.outputs.result != null"
+      # Optionally notify
+
+  - name: EvaluateBonusEligibilityFlow # Generic bonus evaluation post-gameplay
+    trigger:
+      type: StdLib:Manual # Invoked by PlaceBetFlow
+      # Expected initialData: { userId, gameOutcome, userTier, betAmount }
+    steps:
+      # This flow could be complex:
+      # 1. Check if any active bonuses have wagering requirements met by this gameplay.
+      # 2. Check if this gameplay triggers any new "gameplay achievement" bonuses.
+      # 3. Check for loyalty point accumulation.
+      # For brevity, this is a placeholder.
+      - step_id: check-active-wagering-bonuses
+        component_ref: dbBonusAdapter
+        config:
+          operation: "QueryMultipleRows" # Conceptual
+        inputs_map:
+          requestData:
+            query: "SELECT ub.user_bonus_id, ub.wagering_requirement, ub.wagering_progress, bd.game_type_contribution->>'$1' as contribution_percent FROM user_bonuses ub JOIN bonus_definitions bd ON ub.bonus_definition_id = bd.bonus_id WHERE ub.user_id = $2 AND ub.status = 'active_wagering';"
+            params: "[ trigger.initialData.gameOutcome.gameType, trigger.initialData.userId ]"
+
+      - step_id: update-wagering-progress # This would likely be a SplitList -> MapData -> Aggregate -> DB Update pattern
+        component_ref: StdLib:NoOp # Placeholder for complex logic
+        inputs_map:
+          data: "{ activeBonuses: steps.check-active-wagering-bonuses.outputs.responseData, betAmount: trigger.initialData.betAmount, gameOutcome: trigger.initialData.gameOutcome }"
+        run_after: [check-active-wagering-bonuses]
+      # If wagering met, change bonus status to 'claimable' or auto-convert to real balance.`
+  },
+  // Compliance Module
+  {
+    fqn: 'com.casino.compliance',
+    content: `dsl_version: "1.1"
+namespace: com.casino.compliance
+imports:
+  - namespace: com.casino.core
+    as: core
+
+definitions:
+  context:
+    - name: default-compliance-db-timeout-ms
+      value: 2000
+      type: number
+    - name: aml-threshold-single-bet
+      value: 1000 # Amount above which a bet might need extra AML scrutiny
+      type: number
+    - name: aml-threshold-daily-bets
+      value: 5000 # Cumulative daily bets amount for AML check
+      type: number
+
+  components:
+    # --- Database Adapters ---
+    - name: dbComplianceAdapter
+      type: Integration.ExternalServiceAdapter
+      config:
+        adapterType: "StdLibPlugin:PostgresAdapter"
+        adapterConfig: { connectionStringSecretName: "compliance-db-connection-string", timeoutMs: "{{context.default-compliance-db-timeout-ms}}" }
+
+    # --- External AML Check Service (if any) ---
+    - name: callAmlCheckService
+      type: StdLib:HttpCall
+      config:
+        url: "{{secrets.aml-check-service-url}}/screen"
+        method: POST
+        timeoutMs: 3000
+
+flows:
+  - name: ApproveBetFlow
+    trigger:
+      type: StdLib:Manual # Invoked by PlaceBetFlow
+      # Expected initialData: { userId, betData: { amount, currency, gameType, ... }, riskAssessment: { overallRiskScore, riskLevel, ... } }
+    steps:
+      - step_id: check-bet-amount-aml
+        component_ref: StdLib:FilterData
+        config:
+          expression: "data.betData.amount >= {{context.aml-threshold-single-bet}} || data.riskAssessment.riskLevel == 'high'"
+          matchOutput: requiresAmlScreening
+          noMatchOutput: amlScreeningNotRequired
+        inputs_map:
+          data: "trigger.initialData"
+
+      - step_id: perform-external-aml-check
+        component_ref: callAmlCheckService
+        inputs_map:
+          data: "{ userId: trigger.initialData.userId, amount: trigger.initialData.betData.amount, currency: trigger.initialData.betData.currency, transactionDetails: trigger.initialData.betData }"
+        run_after: [check-bet-amount-aml]
+        condition: "steps.check-bet-amount-aml.outputs.requiresAmlScreening != null"
+        outputs_map:
+          error: "steps.fail-aml-check.inputs.data" # If AML service fails
+
+      - step_id: fail-aml-check
+        component_ref: StdLib:FailFlow
+        config:
+          errorMessageExpression: "{ message: 'External AML check failed or returned high risk.', type: 'Compliance.AmlCheckFailed', details: data }"
+
+      - step_id: evaluate-aml-result
+        component_ref: StdLib:MapData
+        config:
+          expression: "{ amlClear: data.amlStatus == 'clear', requiresManualReview: data.amlStatus == 'review' }"
+        inputs_map:
+          data: "{ amlStatus: steps.perform-external-aml-check.outputs.response.body.status }" # Assuming response structure
+        run_after: [perform-external-aml-check]
+        condition: "steps.perform-external-aml-check.outputs.response != null" # Only if external check was done and successful
+
+      - step_id: determine-final-approval
+        component_ref: StdLib:MapData
+        config:
+          # Bet is approved if AML screening wasn't required, OR if it was required and the result is clear.
+          # And risk assessment doesn't require manual review (handled in PlaceBetFlow before invoking this).
+          expression: |
+            {
+              approved: (data.amlScreeningNotRequired || (data.amlScreeningRequired && data.amlClear)) && !data.requiresManualReviewFromAml,
+              reason: data.amlScreeningRequired && !data.amlClear ? 'AML Flagged' :
+                      data.requiresManualReviewFromAml ? 'AML Requires Manual Review' : 'Approved',
+              complianceLogId: null # Would be set after logging
+            }
+        inputs_map:
+          data: "{ amlScreeningNotRequired: steps.check-bet-amount-aml.outputs.amlScreeningNotRequired != null, amlScreeningRequired: steps.check-bet-amount-aml.outputs.requiresAmlScreening != null, amlClear: steps.evaluate-aml-result.outputs.result.amlClear, requiresManualReviewFromAml: steps.evaluate-aml-result.outputs.result.requiresManualReview }"
+        run_after: [check-bet-amount-aml, evaluate-aml-result] # evaluate-aml-result might not run if amlScreeningNotRequired
+
+      - step_id: log-compliance-action
+        component_ref: dbComplianceAdapter
+        config:
+          operation: "ExecuteDML_ReturnFirst"
+        inputs_map:
+          requestData:
+            query: "INSERT INTO compliance_log (user_id, action_type, subject_details_json, decision, reason, risk_assessment_json, timestamp) VALUES ($1, 'bet_approval', $2::jsonb, $3, $4, $5::jsonb, NOW()) RETURNING log_id;"
+            params: "[ trigger.initialData.userId, trigger.initialData.betData, steps.determine-final-approval.outputs.result.approved ? 'APPROVED' : 'REVIEW_NEEDED_OR_DENIED', steps.determine-final-approval.outputs.result.reason, trigger.initialData.riskAssessment ]"
+        run_after: [determine-final-approval]
+
+      # This flow's output should be { approved: boolean, logId: string (optional) }
+      # The PlaceBetFlow checks this 'approved' status.
+      - step_id: prepare-flow-output
+        component_ref: StdLib:MapData
+        config:
+          expression: "{ approved: data.decision.approved, complianceLogId: data.log.log_id }"
+        inputs_map:
+          data: "{ decision: steps.determine-final-approval.outputs.result, log: steps.log-compliance-action.outputs.responseData }"
+        run_after: [log-compliance-action]`
+  },
+  // Responsible Gaming Module
+  {
+    fqn: 'com.casino.responsible',
+    content: `dsl_version: "1.1"
+namespace: com.casino.responsible
+imports:
+  - namespace: com.casino.core
+    as: core
+
+definitions:
+  context:
+    - name: default-responsible-db-timeout-ms
+      value: 2000
+      type: number
+    - name: default-daily-deposit-limit
+      value: 1000
+      type: number
+    - name: default-monthly-loss-limit
+      value: 5000
+      type: number
+    - name: default-session-time-limit-minutes
+      value: 180 # 3 hours
+      type: number
+    - name: cooling-off-period-days
+      value: [1, 7, 30] # Available options
+      type: array
+    - name: self-exclusion-period-months
+      value: [6, 12, 60] # 6m, 1y, 5y
+      type: array
+
+  components:
+    # --- Database Adapters ---
+    - name: dbResponsibleAdapter
+      type: Integration.ExternalServiceAdapter
+      config:
+        adapterType: "StdLibPlugin:PostgresAdapter"
+        adapterConfig: { connectionStringSecretName: "responsible-gaming-db-connection-string", timeoutMs: "{{context.default-responsible-db-timeout-ms}}" }
+
+    # --- Communication for alerts/interventions ---
+    - name: sendLimitApproachingAlertComponent
+      type: Communication.SendNotification
+      config:
+        channel: "InAppMessage" # Example, could be Email/SMS
+        serviceType: "StdLibPlugin:InAppMessagingAdapter"
+        serviceConfig: { apiKeySecretName: "in-app-messaging-key" }
+
+flows:
+  - name: SetupDefaultLimitsFlow
+    trigger:
+      type: StdLib:Manual # Invoked by UserOnboardingFlow
+      # Expected initialData: { userId, userTier }
+    steps:
+      - step_id: apply-default-limits
+        component_ref: dbResponsibleAdapter
+        config:
+          operation: "ExecuteDML"
+        inputs_map:
+          requestData:
+            query: |
+              INSERT INTO user_responsible_gaming_limits
+              (user_id, limit_type, limit_value, period, is_active, set_at, expires_at)
+              VALUES
+              ($1, 'deposit', $2, 'daily', TRUE, NOW(), NULL),
+              ($1, 'loss', $3, 'monthly', TRUE, NOW(), NULL),
+              ($1, 'session_time', $4, 'session', TRUE, NOW(), NULL)
+              ON CONFLICT (user_id, limit_type, period) DO NOTHING;
+            params: "[ trigger.initialData.userId, {{context.default-daily-deposit-limit}}, {{context.default-monthly-loss-limit}}, {{context.default-session-time-limit-minutes}} ]"
+      # Output can be a simple success indicator.
+      - step_id: set-output-success
+        component_ref: StdLib:MapData
+        config: { expression: "{ success: true, userId: trigger.initialData.userId, limitsSet: ['deposit_daily', 'loss_monthly', 'session_time'] }" }
+        run_after: [apply-default-limits]
+
+  - name: ValidateBettingLimitsFlow
+    trigger:
+      type: StdLib:Manual # Invoked by PlaceBetFlow
+      # Expected initialData: { userId, betAmount, gameType }
+    steps:
+      - step_id: get-user-current-spend-and-limits
+        component_ref: dbResponsibleAdapter
+        config:
+          operation: "QuerySingleRow_ReturnFirst"
+        inputs_map:
+          requestData:
+            # This query needs to fetch current daily/weekly/monthly spend/loss, session time, and active limits
+            query: "SELECT daily_loss_limit, current_daily_loss, session_time_limit, current_session_duration_minutes, etc FROM user_responsible_gaming_summary_view WHERE user_id = $1;"
+            params: "[ trigger.initialData.userId ]"
+        outputs_map:
+          error: "steps.fail-getting-limits.inputs.data"
+
+      - step_id: fail-getting-limits
+        component_ref: StdLib:FailFlow
+        config:
+          errorMessageExpression: "{ message: 'Failed to retrieve user responsible gaming limits.', type: 'ResponsibleGaming.LimitsFetchError' }"
+
+      - step_id: check-loss-limits
+        component_ref: StdLib:FilterData
+        config:
+          # Simplified: assumes betAmount is potential loss for this check
+          expression: "(data.limits.daily_loss_limit == null || (data.limits.current_daily_loss + data.betAmount) <= data.limits.daily_loss_limit) && (data.limits.session_time_limit == null || data.limits.current_session_duration_minutes < data.limits.session_time_limit)"
+          matchOutput: limitsOk
+          noMatchOutput: limitExceeded
+        inputs_map:
+          data: "{ limits: steps.get-user-current-spend-and-limits.outputs.responseData, betAmount: trigger.initialData.betAmount }"
+        run_after: [get-user-current-spend-and-limits]
+        outputs_map:
+          limitExceeded: "steps.fail-on-limit-exceeded.inputs.data"
+
+      - step_id: fail-on-limit-exceeded
+        component_ref: StdLib:FailFlow
+        config:
+          errorMessageExpression: "{ message: 'Bet exceeds responsible gaming limits (loss or session time).', type: 'ResponsibleGaming.LimitExceeded', details: data.limits }" # 'data' here is the input to check-loss-limits
+
+      - step_id: check-cooldown-or-exclusion
+        component_ref: dbResponsibleAdapter
+        config:
+          operation: "QuerySingleRow_ReturnFirst"
+        inputs_map:
+          requestData:
+            query: "SELECT status_type, end_date FROM user_gaming_status WHERE user_id = $1 AND status_type IN ('cooling_off', 'self_exclusion') AND (end_date IS NULL OR end_date >= NOW()) ORDER BY set_at DESC LIMIT 1;"
+            params: "[ trigger.initialData.userId ]"
+        run_after: [check-loss-limits] # Only if other limits are OK
+        condition: "steps.check-loss-limits.outputs.limitsOk != null"
+
+      - step_id: filter-active-restriction
+        component_ref: StdLib:FilterData
+        config:
+          expression: "data == null" # If query returns null, no active restriction
+          matchOutput: noRestriction
+          noMatchOutput: restrictionActive
+        inputs_map:
+          data: "steps.check-cooldown-or-exclusion.outputs.responseData" # This will be null if no row found
+        run_after: [check-cooldown-or-exclusion]
+        outputs_map:
+          restrictionActive: "steps.fail-on-active-restriction.inputs.data"
+
+      - step_id: fail-on-active-restriction
+        component_ref: StdLib:FailFlow
+        config:
+          errorMessageExpression: "{ message: 'Account has an active cooling-off period or self-exclusion.', type: 'ResponsibleGaming.RestrictionActive', details: data }" # 'data' here is the restriction details
+
+      # If all checks pass, the flow output indicates approval
+      - step_id: prepare-approval-output
+        component_ref: StdLib:MapData
+        config:
+          expression: "{ approved: true, userId: trigger.initialData.userId, checksPassed: ['loss_limit', 'session_limit', 'cooldown_exclusion'] }"
+        run_after: [filter-active-restriction]
+        condition: "steps.filter-active-restriction.outputs.noRestriction != null"
+
+  # Flow for user to set/update their own limits
+  - name: UpdateUserLimitsFlow
+    trigger:
+      type: StdLib.Trigger:Http # Authenticated endpoint
+      config:
+        path: /api/responsible/limits
+        method: POST
+        authentication: { type: "JwtValidator" } # Requires user to be logged in
+        responseConfig: { errorStatusCode: 400 }
+    steps:
+      - step_id: validate-limit-request
+        component_ref: StdLib:JsonSchemaValidator
+        # Schema would define limit_type (deposit, loss, wager, session_time), value, period (daily, weekly, monthly)
+        config:
+          schema:
+            type: object
+            required: [limit_type, value, period]
+            properties:
+              limit_type: { type: string, enum: ["deposit", "loss", "wager", "session_time"] }
+              value: { type: number, minimum: 0 } # 0 could mean remove limit, or specific handling
+              period: { type: string, enum: ["daily", "weekly", "monthly", "session"] }
+        inputs_map: { data: "trigger.body" }
+        outputs_map: { error: "steps.fail-limit-validation.inputs.data" }
+
+      - step_id: fail-limit-validation
+        component_ref: StdLib:FailFlow
+        config: { errorMessageExpression: "{ message: 'Invalid limit update request.', type: 'ResponsibleGaming.InvalidLimitRequest', details: data.details }" }
+
+      - step_id: persist-updated-limit
+        component_ref: dbResponsibleAdapter
+        config:
+          operation: "ExecuteDML"
+        inputs_map:
+          requestData:
+            query: |
+              INSERT INTO user_responsible_gaming_limits
+              (user_id, limit_type, limit_value, period, is_active, set_at, expires_at_calculation_logic) -- expires_at might be complex
+              VALUES ($1, $2, $3, $4, TRUE, NOW(), ...)
+              ON CONFLICT (user_id, limit_type, period) DO UPDATE SET
+              limit_value = EXCLUDED.limit_value,
+              is_active = TRUE,
+              set_at = NOW(),
+              previous_limit_value = user_responsible_gaming_limits.limit_value;
+            params: "[ trigger.principal.id, steps.validate-limit-request.outputs.validData.limit_type, steps.validate-limit-request.outputs.validData.value, steps.validate-limit-request.outputs.validData.period ]"
+        run_after: [validate-limit-request]
+      # Output success`
   }
 ];
 
 export const casinoPlatformComponentSchemas = {
-  // --- Trigger Types ---
-  'StdLib.Trigger:Http': {
-    fqn: 'StdLib.Trigger:Http',
-    configSchema: {
-      type: 'object',
-      properties: {
-        path: { type: 'string', description: "API path for the trigger (e.g., /api/users)." },
-        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], description: "HTTP method." }
-      },
-      required: ['path', 'method']
-    },
-    outputSchema: { // Data made available to the flow as 'trigger.*'
-      type: 'object',
-      properties: {
-        body: { type: ['object', 'array', 'null'], description: "Parsed JSON body if applicable, or raw if not JSON." },
-        headers: { type: 'object', additionalProperties: { type: 'string' }, description: "Request headers." },
-        query: { type: 'object', additionalProperties: { type: 'string' }, description: "Parsed query parameters." },
-        pathParams: { type: 'object', additionalProperties: { type: 'string' }, description: "Path parameters." }
-      }
-    }
-  },
-  'StdLib.Trigger:EventBus': {
-    fqn: 'StdLib.Trigger:EventBus',
-    configSchema: {
-      type: 'object',
-      properties: {
-        eventType: { type: 'string', description: "The specific event type or topic to subscribe to." }
-      },
-      required: ['eventType']
-    },
-    outputSchema: { // Data made available to the flow as 'trigger.*'
-      type: 'object',
-      properties: {
-        event: { type: 'object', description: 'The actual event payload from the bus.' },
-        metadata: {type: 'object', description: 'Event bus specific metadata, e.g., messageId, timestamp.'}
-      },
-      required: ['event']
-    }
-  },
-  'StdLib:Manual': { // Conceptual trigger type for subflows or direct invocations
-    fqn: 'StdLib:Manual',
-    configSchema: null, // No DSL configuration for the trigger itself
-    outputSchema: { // Represents trigger.initialData
-        type: 'object',
+  // --- Global Schema Definitions (for $ref, from stdlib.yml.md) ---
+  "definitions": {
+    "schemas": {
+      "StandardErrorStructure": {
+        $id: "#/definitions/schemas/StandardErrorStructure",
+        type: "object",
         properties: {
-            initialData: { type: 'object', description: 'The data passed when the flow was manually triggered.'}
+          type: {
+            type: "string",
+            description: "Category.ComponentName.SpecificErrorType (e.g., 'HttpCall.TimeoutError', 'AdapterError')"
+          },
+          message: {
+            type: "string",
+            description: "Human-readable error message."
+          },
+          code: {
+            type: "string",
+            description: "Optional internal/external code (e.g., HTTP status code)."
+          },
+          details: {
+            type: ["object", "null"],
+            description: "Optional, component-specific non-sensitive details.",
+            additionalProperties: true
+          },
+          timestamp: {
+            type: "string",
+            format: "date-time",
+            description: "ISO 8601 timestamp (added by Core)."
+          }
         },
-        required: ['initialData']
+        required: ["type", "message", "timestamp"]
+      },
+      "HttpResponse": {
+        $id: "#/definitions/schemas/HttpResponse",
+        type: "object",
+        properties: {
+          statusCode: { type: "integer" },
+          headers: {
+            type: "object",
+            additionalProperties: { type: "string" }
+          },
+          body: {
+            description: "Response body. Object if JSON, otherwise string (Base64 for binary).",
+            oneOf: [
+              { type: "object", additionalProperties: true },
+              { type: "array" },
+              { type: "string" },
+              { type: "null" }
+            ]
+          }
+        },
+        required: ["statusCode", "headers"]
+      },
+      "HttpTriggerRequest": {
+        $id: "#/definitions/schemas/HttpTriggerRequest",
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Actual request path." },
+          method: { type: "string", description: "HTTP method used." },
+          headers: {
+            type: "object",
+            additionalProperties: { type: "string" },
+            description: "Request headers."
+          },
+          queryParameters: {
+            type: "object",
+            additionalProperties: { type: ["string", "array"], items: { type: "string" } },
+            description: "Parsed query parameters."
+          },
+          body: {
+            description: "Request body. Object if JSON, string otherwise (Base64 for binary). Null if no body.",
+            oneOf: [
+              { type: "object", additionalProperties: true },
+              { type: "array" },
+              { type: "string" },
+              { type: "null" }
+            ]
+          },
+          principal: {
+            type: ["object", "null"],
+            description: "Authenticated principal details, if applicable. Structure depends on auth method.",
+            properties: {
+              id: { type: "string" },
+              type: { type: "string", description: "e.g., 'user', 'apiKey', 'service_account'" },
+              claims: { type: "object", additionalProperties: true, description: "Additional claims/attributes from token/auth provider." }
+            },
+            required: ["id", "type"]
+          }
+        },
+        required: ["path", "method", "headers"]
+      },
+      "ScheduledTriggerPayload": {
+        $id: "#/definitions/schemas/ScheduledTriggerPayload",
+        type: "object",
+        properties: {
+          triggerTime: {
+            type: "string",
+            format: "date-time",
+            description: "Actual ISO 8601 timestamp when the trigger fired."
+          },
+          scheduledTime: {
+            type: "string",
+            format: "date-time",
+            description: "ISO 8601 timestamp for which the execution was scheduled."
+          },
+          payload: {
+            description: "The initialPayload configured for the trigger, if any."
+            // type: "any" is not valid JSON schema, typically represented by not specifying type or using oneOf with multiple types
+          }
+        },
+        required: ["triggerTime", "scheduledTime"]
+      },
+      "StreamTriggerMessage": {
+        $id: "#/definitions/schemas/StreamTriggerMessage",
+        type: "object",
+        properties: {
+          message: {
+            description: "Consumed message payload, processed according to StreamIngestor's outputFormat."
+          },
+          metadata: {
+            type: "object",
+            description: "Source-specific metadata (e.g., Kafka offset, SQS receiptHandle). Structure per plugin. For Manual ack."
+          }
+        },
+        required: ["message"]
+      },
+      "StreamTriggerBatch": {
+        $id: "#/definitions/schemas/StreamTriggerBatch",
+        type: "object",
+        properties: {
+          messages: {
+            type: "array",
+            items: { $ref: "#/definitions/schemas/StreamTriggerMessage/properties/message" }
+          },
+          metadataList: {
+            type: "array",
+            items: { $ref: "#/definitions/schemas/StreamTriggerMessage/properties/metadata" }
+          }
+        },
+        required: ["messages"]
+      },
+      "EventBusTriggerPayload": {
+        $id: "#/definitions/schemas/EventBusTriggerPayload",
+        type: "object",
+        properties: {
+          event: {
+            type: "object",
+            properties: {
+              id: { type: "string", description: "Unique ID of the event." },
+              type: { type: "string", description: "Type of the event (e.g., 'user.created')." },
+              source: { type: "string", description: "Originator of the event." },
+              timestamp: { type: "string", format: "date-time", description: "ISO 8601 timestamp of event creation." },
+              payload: { description: "The actual event data." }
+            },
+            required: ["id", "type", "source", "timestamp", "payload"]
+          }
+        },
+        required: ["event"]
+      }
     }
   },
 
-  // --- StdLib Components Used in the Example ---
-  'StdLib:HttpCall': {
-    fqn: 'StdLib:HttpCall',
-    // From stdlib.yml.md for StdLib:HttpCall
-    configSchema: {
-      type: 'object',
+  // --- Trigger Schemas ---
+  'StdLib.Trigger:Http': {
+    fqn: 'StdLib.Trigger:Http',
+    configSchema: { // from stdlib.yml.md config_schema for StdLib.Trigger:Http
+      type: "object",
       properties: {
-        url: { type: ['string', 'object'], description: "Target URL (string or ExpressionString for dynamic construction)." }, // Allowing object for ExpressionString
-        method: { type: 'string', enum: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"], default: "GET" },
-        headers: { type: ['object', 'object'], description: "Request headers. Values support {{secrets.my_secret}}. (object or ExpressionString)" },
-        bodyExpression: { type: 'object', description: "Expression for request body (sandboxed). If omitted, input 'data' used." }, // Assuming ExpressionString is an object { language: ..., expression: ... }
-        bodyLanguage: { type: 'string', enum: ["JMESPath", "JsonPointer"], default: "JMESPath" },
-        contentType: { type: 'string', default: "application/json", description: "Content-Type header for request body." }, // ContentTypeString
-        queryParameters: { type: ['object', 'object'], description: "URL query parameters. (object or ExpressionString)" },
-        timeoutMs: { type: 'number', default: 5000, description: "Request timeout in ms." }, // PositiveInteger
-        followRedirects: { type: 'boolean', default: false, description: "Whether to follow HTTP 3xx redirects." }
+        path: {
+          type: "string",
+          description: "HTTP path prefix for this trigger (e.g., '/api/v1/orders'). Must be unique.",
+          pattern: "^/"
+        },
+        method: {
+          type: "string",
+          enum: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+          description: "HTTP method to listen for."
+        },
+        authentication: {
+          type: "object",
+          description: "Configuration for authentication middleware (e.g., API Key, JWT). Processed by Core before triggering.",
+          additionalProperties: true
+        },
+        requestSchema: {
+          type: "object", // JSON Schema
+          description: "Optional JSON Schema to validate the incoming request body (if applicable for method). Rejection occurs before flow trigger."
+        },
+        responseConfig: {
+          type: "object",
+          description: "Configuration for mapping flow completion/error to HTTP response. Handled by Core.",
+          properties: {
+            successStatusCode: {
+              type: "integer",
+              default: 200,
+              description: "HTTP status code for successful flow completion."
+            },
+            errorStatusCode: {
+              type: "integer",
+              default: 500,
+              description: "Default HTTP status code if flow fails or an unhandled error occurs."
+            },
+            successBodyExpression: { type: "string", description: "JMESPath/JsonPointer expression evaluated against flow's final output data to form the success response body." },
+            errorBodyExpression: { type: "string", description: "JMESPath/JsonPointer expression evaluated against flow's error object to form the error response body."}
+          },
+          additionalProperties: true
+        },
+        timeoutMs: {
+          type: "integer",
+          minimum: 1, // PositiveInteger
+          default: 30000,
+          description: "Maximum time Core will wait for the flow to complete for a synchronous HTTP response."
+        }
       },
-      required: ['url', 'method']
+      required: ["path", "method"]
     },
-    inputSchema: {
-      type: 'object',
+    outputSchema: { $ref: "#/definitions/schemas/HttpTriggerRequest" } // This is the output_to_flow_schema
+  },
+  'StdLib.Trigger:EventBus': {
+    fqn: 'StdLib.Trigger:EventBus',
+    configSchema: { // from stdlib.yml.md config_schema for StdLib.Trigger:EventBus
+      type: "object",
       properties: {
-        data: { type: 'object', description: "Context for expressions and default request body." }
-        // StdLib spec also shows headers, params here. If these are distinct from config, add them.
-        // For simplicity, assuming 'data' is the primary input and config handles most.
+        eventTypePattern: {
+          type: "string",
+          description: "Pattern to match event types (e.g., 'user.created', 'order.*.processed'). Core defines pattern syntax."
+        },
+        filterExpression: {
+          type: "string", // ExpressionString
+          description: "Optional expression (e.g., JMESPath) evaluated against the event's payload to further filter events."
+        },
+        filterLanguage: {
+          type: "string",
+          enum: ["JMESPath", "JsonPointer"],
+          default: "JMESPath"
+        }
+      },
+      required: ["eventTypePattern"]
+    },
+    outputSchema: { $ref: "#/definitions/schemas/EventBusTriggerPayload" } // This is the output_to_flow_schema
+  },
+  'StdLib.Trigger:Manual': { // Conceptual, from stdlib.yml.md
+    fqn: 'StdLib.Trigger:Manual',
+    configSchema: {
+      type: "object",
+      description: "Configuration is implicit: the 'initialData' provided at invocation time.",
+      properties: {
+        initialData: {
+          description: "The data payload provided when the flow is manually triggered."
+        }
       }
     },
-    // Output schema has 'response' and 'error' ports.
-    // 'response' port outputs an object adhering to HttpResponse schema.
-    // 'error' port outputs an object adhering to StandardErrorStructure schema.
-    // This level of detail for output ports is usually handled by the DSL runtime/linter
-    // based on the component's known behavior rather than fully defining all output port schemas here.
-    // For now, we'll represent the successful output.
-    outputSchema: { // Represents the 'response' output port's data structure
-        $ref: "#/definitions/schemas/HttpResponse" // Referencing global schema
+    outputSchema: { // Represents trigger.initialData which can be 'any'
+      description: "The data payload provided when the flow is manually triggered. Structure is defined by the invoker."
     }
   },
-  'StdLib:FilterData': {
-    fqn: 'StdLib:FilterData',
-    // From stdlib.yml.md for StdLib:FilterData
+  // --- StdLib & Other Components ---
+  'StdLib:JsonSchemaValidator': {
+    fqn: 'StdLib:JsonSchemaValidator',
     configSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        expression: { type: 'string', description: "Boolean expression (sandboxed)." }, // BooleanExpressionString
-        language: { type: 'string', enum: ["JMESPath", "JsonPointer"], default: "JMESPath", description: "Expression language." },
-        matchOutput: { type: 'string', default: "matchOutput", description: "Output port name for true evaluation." }, // OutputPortNameString
-        noMatchOutput: { type: 'string', default: "noMatchOutput", description: "Output port name for false evaluation." } // OutputPortNameString
+        schema: { type: "object", description: "JSON Schema object for validation (inline or $ref if Core supports)." }
       },
-      required: ['expression']
+      required: ["schema"]
     },
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        data: { type: 'object', required: true, description: "Input data to filter." }
+        data: { description: "Input data to validate." }
       },
-      required: ['data']
+      required: ["data"]
+    },
+    outputSchema: { // Represents the 'validData' output port
+      description: "Original input 'data' if conforms to schema."
     }
-    // Output ports (e.g., 'matchOutput', 'noMatchOutput', 'error') are dynamic.
-    // The data on 'matchOutput' or 'noMatchOutput' is the original input 'data'.
+  },
+  'StdLib:FailFlow': {
+    fqn: 'StdLib:FailFlow',
+    configSchema: {
+      type: "object",
+      properties: {
+        errorMessageExpression: { type: "string", description: "Expression for error message (sandboxed)." },
+        language: { type: "string", enum: ["JMESPath", "JsonPointer"], default: "JMESPath" }
+      },
+      required: ["errorMessageExpression"]
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        data: { description: "Context data for errorMessageExpression." }
+      }
+      // 'data' is not strictly required by stdlib.yml.md for FailFlow input, but often used.
+    },
+    outputSchema: null // Terminates flow, no output ports
+  },
+  'StdLib:Fork': {
+    fqn: 'StdLib:Fork',
+    configSchema: {
+      type: "object",
+      properties: {
+        outputNames: {
+          type: "array",
+          items: { type: "string" }, // OutputPortNameString
+          description: "List of names for output ports."
+        }
+      },
+      required: ["outputNames"]
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        data: { description: "Input data to duplicate." }
+      },
+      required: ["data"]
+    },
+    outputSchema: { // Conceptual: Data on dynamic output ports is a copy of input 'data'
+      description: "Copy of input data, available on dynamically named output ports."
+    }
+  },
+  'StdLib:HttpCall': {
+    fqn: 'StdLib:HttpCall',
+    configSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Target URL (sandboxed if expression)." }, // ["URLString", "ExpressionString"] -> string
+        method: { type: "string", enum: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"], default: "GET" },
+        headers: {
+          oneOf: [{type: "object"}, {type: "string"}], // ["object", "ExpressionString"]
+          description: "Request headers. Values support {{secrets.my_secret}}. Sandboxed if expression."
+        },
+        bodyExpression: { type: "string", description: "Expression for request body (sandboxed). If omitted, input 'data' used." },
+        bodyLanguage: { type: "string", enum: ["JMESPath", "JsonPointer"], default: "JMESPath" },
+        contentType: { type: "string", default: "application/json", description: "Content-Type header for request body." }, // ContentTypeString
+        queryParameters: {
+           oneOf: [{type: "object"}, {type: "string"}], // ["object", "ExpressionString"]
+           description: "URL query parameters. Sandboxed if expression."
+        },
+        timeoutMs: { type: "integer", minimum: 1, default: 5000, description: "Request timeout in ms." }, // PositiveInteger
+        followRedirects: { type: "boolean", default: false, description: "Whether to follow HTTP 3xx redirects." }
+      },
+      required: ["url"] // method has a default
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        data: { description: "Context for expressions and default request body." }
+      }
+      // 'data' is not strictly required per stdlib.yml.md but often used.
+    },
+    outputSchema: { $ref: "#/definitions/schemas/HttpResponse" } // Represents the 'response' output port
   },
   'StdLib:MapData': {
     fqn: 'StdLib:MapData',
-    // From stdlib.yml.md for StdLib:MapData
     configSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        expression: { type: 'string', required: true, description: "Transformation expression (sandboxed)." }, // ExpressionString
-        language: { type: 'string', enum: ["JMESPath", "JsonPointer"], default: "JMESPath", description: "Expression language." }
+        expression: { type: "string", description: "Transformation expression (sandboxed)." },
+        language: { type: "string", enum: ["JMESPath", "JsonPointer"], default: "JMESPath", description: "Expression language." }
       },
-      required: ['expression']
+      required: ["expression"]
     },
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        data: { type: 'object', required: true, description: "Input data to transform." }
+        data: { description: "Input data to transform." }
       },
-      required: ['data']
+      required: ["data"]
     },
     outputSchema: { // Represents the 'result' output port
-        type: 'object', // Or any, depending on the expression
-        description: "Transformed data."
+      description: "Transformed data."
+    }
+  },
+  'StdLib:SubFlowInvoker': {
+    fqn: 'StdLib:SubFlowInvoker',
+    configSchema: {
+      type: "object",
+      properties: {
+        flowName: { type: "string", description: "Target Flow definition name. Sandboxed if expression." }, // ["FlowNameString", "ExpressionString"] -> string
+        waitForCompletion: { type: "boolean", default: false, description: "Pause and wait for sub-flow completion?" },
+        timeoutMs: { type: "integer", minimum: 1, description: "Max wait time if waitForCompletion=true." }, // PositiveInteger
+        parametersLanguage: { type: "string", enum: ["JMESPath", "JsonPointer"], default: "JMESPath" }
+      },
+      required: ["flowName"]
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        initialData: { description: "Initial trigger data for sub-flow." },
+        contextData: { description: "Context for flowName expression evaluation." }
+      },
+      required: ["initialData"]
+    },
+    outputSchema: { // Represents 'subFlowInstanceId' or 'result' port
+      oneOf: [
+        { type: "string", description: "Unique instance ID of started sub-flow (if not waiting or immediate emission)." },
+        { description: "Final output from sub-flow's success (if waitForCompletion=true & success)." }
+      ]
     }
   },
   'StdLib:Switch': {
     fqn: 'StdLib:Switch',
-    // From stdlib.yml.md for StdLib:Switch
     configSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         cases: {
-          type: 'array',
-          required: true,
+          type: "array",
           description: "List defining conditions and output port names.",
           items: {
-            type: 'object',
+            type: "object",
             properties: {
-              conditionExpression: { type: 'string', description: "Boolean expression (sandboxed)." },
-              language: { type: 'string', enum: ["JMESPath", "JsonPointer"], default: "JMESPath" },
-              outputName: { type: 'string', description: "Target output port name." }
+              conditionExpression: { type: "string", description: "Boolean expression (sandboxed)." },
+              language: { type: "string", enum: ["JMESPath", "JsonPointer"], default: "JMESPath" },
+              outputName: { type: "string", description: "Target output port name." }
             },
             required: ["conditionExpression", "outputName"]
           }
         },
-        defaultOutputName: { type: 'string', default: "defaultOutput", description: "Output port if no cases match." } // OutputPortNameString
+        defaultOutputName: { type: "string", default: "defaultOutput", description: "Output port if no cases match." } // OutputPortNameString
       },
-      required: ['cases']
+      required: ["cases"]
     },
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        data: { type: 'object', required: true, description: "Input data for condition evaluation." }
+        data: { description: "Input data for condition evaluation." }
       },
-      required: ['data']
+      required: ["data"]
+    },
+    outputSchema: { // Conceptual: Data on dynamic output ports is the original input 'data'
+      description: "Input data, available on dynamically named output port that matched."
     }
-    // Output ports are dynamic based on 'outputName' in cases and 'defaultOutputName'.
-    // Data on these ports is the original input 'data'.
   },
-  'StdLib:Fork': {
-    fqn: 'StdLib:Fork',
-    // From stdlib.yml.md for StdLib:Fork (and our refined understanding)
+  'StdLib:FilterData': {
+    fqn: 'StdLib:FilterData',
     configSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        outputNames: {
-          type: 'array',
-          required: true,
-          description: "List of names for output ports.",
-          items: { type: 'string' } // OutputPortNameString
-        }
+        expression: { type: "string", description: "Boolean expression (sandboxed)." }, // BooleanExpressionString
+        language: { type: "string", enum: ["JMESPath", "JsonPointer"], default: "JMESPath", description: "Expression language." },
+        matchOutput: { type: "string", default: "matchOutput", description: "Output port name for true evaluation." }, // OutputPortNameString
+        noMatchOutput: { type: "string", default: "noMatchOutput", description: "Output port name for false evaluation." } // OutputPortNameString
       },
-      required: ['outputNames']
+      required: ["expression"]
     },
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        data: { type: 'object', required: true, description: "Input data to duplicate." }
+        data: { description: "Input data to filter." }
       },
-      required: ['data']
-    }
-    // Output ports are dynamic based on 'outputNames'.
-    // Data on these ports is a copy of the input 'data'.
-  },
-  'StdLib:SubFlowInvoker': {
-    fqn: 'StdLib:SubFlowInvoker',
-    // From stdlib.yml.md for StdLib:SubFlowInvoker
-    configSchema: {
-      type: 'object',
-      properties: {
-        flowName: { type: 'string', required: true, description: "Target Flow definition name (or ExpressionString)." }, // FlowNameString
-        waitForCompletion: { type: 'boolean', default: false, description: "Pause and wait for sub-flow completion?" },
-        timeoutMs: { type: 'number', description: "Max wait time if waitForCompletion=true." }, // PositiveInteger
-        parametersLanguage: { type: 'string', enum: ["JMESPath", "JsonPointer"], default: "JMESPath" } // If flowName is an expression
-      },
-      required: ['flowName']
+      required: ["data"]
     },
-    inputSchema: { // Input to the SubFlowInvoker step itself
-      type: 'object',
-      properties: {
-        initialData: { type: 'object', required: true, description: "Initial trigger data for sub-flow." },
-        contextData: { type: 'object', description: "Context for flowName expression evaluation (if flowName is an expression)." }
-      },
-      required: ['initialData']
-    },
-    // Output schema includes 'subFlowInstanceId' port immediately.
-    // If waitForCompletion=true, it also has 'result' and 'error' ports.
-    outputSchema: { // Represents the 'subFlowInstanceId' output port if not waiting, or 'result' if waiting and successful
-        type: 'object', // Or string for instanceId, or subflow's result type
-        description: "Output from the sub-flow invocation."
+    outputSchema: { // Conceptual: Data on 'matchOutput' or 'noMatchOutput' is the original input 'data'
+      description: "Input data, available on 'matchOutput' or 'noMatchOutput' port."
     }
   },
-  'StdLib:JsonSchemaValidator': {
-    fqn: 'StdLib:JsonSchemaValidator',
-    // From stdlib.yml.md for StdLib:JsonSchemaValidator
-    configSchema: {
-      type: 'object',
-      properties: {
-        schema: { type: 'object', required: true, description: "JSON Schema object for validation." } // JsonSchemaObject
-      },
-      required: ['schema']
-    },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        data: { type: 'object', required: true, description: "Input data to validate." }
-      },
-      required: ['data']
-    },
-    // Output port 'validData' contains original input 'data' if valid.
-    // 'error' port for validation failures.
-    outputSchema: { // Represents the 'validData' output port
-        type: 'object',
-        description: "Original input 'data' if conforms to schema."
-    }
-  },
-  'StdLib:MergeStreams': { // Based on usage in the refined example
+  'StdLib:MergeStreams': { // Not in stdlib.yml.md, defined based on common usage
     fqn: 'StdLib:MergeStreams',
-    // From stdlib.yml.md for StdLib:MergeStreams
     configSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        inputNames: { type: 'array', items: { type: 'string' }, required: true, description: "List of input port names to merge." },
-        mergedOutputName: { type: 'string', default: "mergedOutput", description: "Single output port name." }
+        inputNames: {
+          type: "array",
+          items: { type: "string" }, // InputPortNameString
+          description: "List of input port names to merge."
+        },
+        mergedOutputName: { type: "string", default: "mergedOutput", description: "Single output port name." } // OutputPortNameString
       },
-      required: ['inputNames']
+      required: ["inputNames"]
     },
-    // InputSchema is dynamic: ports named by inputNames.
-    // OutputSchema is dynamic: port named by mergedOutputName, data type is 'any'.
+    inputSchema: { // Conceptual: Dynamic input ports
+      type: "object",
+      description: "Dynamically defined input ports matching inputNames. Each port receives any data.",
+      additionalProperties: {
+        description: "Data from one of the input streams."
+      }
+    },
+    outputSchema: { // Conceptual: One dynamic output port
+      description: "Data packet from one of the inputs, available on the 'mergedOutputName' port."
+    }
   },
   'StdLib:NoOp': {
     fqn: 'StdLib:NoOp',
-    // From stdlib.yml.md for StdLib:NoOp
     configSchema: null,
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        data: { type: 'object', required: true, description: "Any input data." }
+        data: { description: "Any input data." }
       },
-      required: ['data']
+      required: ["data"]
     },
     outputSchema: { // Represents the 'data' output port
-      type: 'object',
-      properties: {
-        data: {type: 'object', description: "Input data, unchanged."}
-      },
-      required: ['data']
+      description: "Input data, unchanged."
     }
   },
-
-  // --- Global Schema Definitions (for $ref) ---
-  "#/definitions/schemas/StandardErrorStructure": {
-    $id: "#/definitions/schemas/StandardErrorStructure",
-    type: "object",
-    properties: {
-      type: { type: "string", description: "Category.ComponentName.SpecificErrorType" },
-      message: { type: "string", description: "Human-readable error message." },
-      code: { type: "string", description: "Optional internal/external code." },
-      details: { type: ["object", "null"], description: "Optional, component-specific non-sensitive details." },
-      timestamp: { type: "string", format: "date-time", description: "ISO 8601 timestamp." }
+  'Integration.ExternalServiceAdapter': {
+    fqn: 'Integration.ExternalServiceAdapter',
+    configSchema: {
+      type: "object",
+      properties: {
+        adapterType: { type: "string", description: "Adapter plugin identifier (e.g., KafkaAdapter, PostgresSqlAdapter)." }, // PluginIdentifierString
+        adapterConfig: { type: "object", description: "Plugin-specific config. Structure per plugin schema. Use Core Secrets." },
+        operation: { type: "string", description: "Logical action defined by plugin (e.g., GetUser, Publish, Query)." } // OperationNameString
+      },
+      required: ["adapterType", "adapterConfig", "operation"]
     },
-    required: ["type", "message", "timestamp"]
+    inputSchema: {
+      type: "object",
+      properties: {
+        requestData: { description: "Data payload for the operation, per plugin definition." }
+      },
+      required: ["requestData"]
+    },
+    outputSchema: { // Represents the 'responseData' output port
+      description: "Parsed/structured data from external service via plugin, per operation."
+    }
   },
-  "#/definitions/schemas/HttpResponse": {
-    $id: "#/definitions/schemas/HttpResponse",
-    type: "object",
-    properties: {
-      statusCode: { type: "integer" },
-      headers: { type: "object", additionalProperties: { type: "string" } },
-      body: {
-        description: "Response body. Object if JSON, otherwise string (Base64 for binary).",
-        oneOf: [
-          { type: "object", additionalProperties: true },
-          { type: "array" },
-          { type: "string" },
-          { type: "null" }
-        ]
-      }
+  'Communication.SendEmail': {
+    fqn: 'Communication.SendEmail',
+    configSchema: {
+      type: "object",
+      properties: {
+        serviceType: { type: "string", description: "Email service plugin ID (e.g., SendGridAdapter)." }, // PluginIdentifierString
+        serviceConfig: { type: "object", description: "Plugin-specific config. Structure per plugin schema. Use Core Secrets." },
+        fromAddress: { type: "string", description: "'From' email address (sandboxed if expression)." }, // ["EmailString", "ExpressionString"]
+        defaultFromName: { type: "string", description: "Default 'From' name." }
+      },
+      required: ["serviceType", "serviceConfig", "fromAddress"]
     },
-    required: ["statusCode", "headers"]
+    inputSchema: {
+      type: "object",
+      properties: {
+        toAddresses: { description: "Recipients (sandboxed if expression).", oneOf: [{type: "string"}, {type: "array", items: {type: "string"}}]}, // ["EmailString", "list<EmailString>", "ExpressionString"]
+        ccAddresses: { description: "CC recipients (sandboxed if expression).", oneOf: [{type: "string"}, {type: "array", items: {type: "string"}}]},
+        bccAddresses: { description: "BCC recipients (sandboxed if expression).", oneOf: [{type: "string"}, {type: "array", items: {type: "string"}}]},
+        subject: { type: "string", description: "Email subject (sandboxed if expression)." }, // ["string", "ExpressionString"]
+        bodyHtml: { type: "string", description: "HTML email body (sandboxed if expression)." }, // ["string", "ExpressionString"]
+        bodyText: { type: "string", description: "Plain text email body (sandboxed if expression)." }, // ["string", "ExpressionString"]
+        templateId: { type: "string", description: "Service template ID (sandboxed if expression)." }, // ["string", "ExpressionString"]
+        templateData: { oneOf: [{type: "object"}, {type: "string"}], description: "Key-value data for template merge (sandboxed if expression)." }, // ["object", "ExpressionString"]
+        attachments: {
+          type: "array",
+          description: "List of attachments.",
+          items: {
+            type: "object",
+            properties: {
+              filename: { type: "string" },
+              contentType: { type: "string" },
+              content: { type: "string", description: "Base64 encoded content or expression yielding it." } // ["bytes", "ExpressionString"] -> string
+            },
+            required: ["filename", "contentType", "content"]
+          }
+        },
+        data: { type: "object", description: "Context for all expression inputs." } // Context for expressions
+      },
+      required: ["toAddresses", "subject"] // bodyHtml or bodyText or templateId also effectively required by logic
+    },
+    outputSchema: { // Represents the 'result' output port
+      type: "object",
+      properties: {
+        messageId: { type: "string", description: "Optional: Provider's message ID." },
+        status: { type: "string", enum: ["queued", "sent"], description: "Status from service API." } // Example, actual values per plugin
+      },
+      required: ["status"]
+    }
+  },
+  'Communication.SendNotification': {
+    fqn: 'Communication.SendNotification',
+    configSchema: {
+      type: "object",
+      properties: {
+        channel: { type: "string", description: "Target channel (sandboxed if expression)." }, // ["enum('Email', 'SMS', 'Push', 'Slack')", "ExpressionString"]
+        serviceType: { type: "string", description: "Specific service plugin ID for channel. Sandboxed if expression." }, // ["PluginIdentifierString", "ExpressionString"]
+        serviceConfig: { oneOf: [{type: "object"}, {type: "string"}], description: "Plugin/channel-specific config. Use Core Secrets. Sandboxed if expression." }, // ["object", "ExpressionString"]
+        templateId: { type: "string", description: "Template ID for service/channel (sandboxed if expression)." } // ["string", "ExpressionString"]
+      },
+      required: ["channel"]
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        recipient: { description: "Recipient ID (email, phone, token, webhook). Structure per channel. Sandboxed if expression." }, // ["any", "ExpressionString"]
+        message: { description: "Message content payload. Structure per channel. Sandboxed if expression." }, // ["string", "object", "ExpressionString"]
+        data: { type: "object", description: "Context for all expression inputs." } // Context for expressions
+      },
+      required: ["recipient", "message"]
+    },
+    outputSchema: { // Represents the 'result' output port
+      type: "object",
+      properties: {
+        deliveryId: { type: "string", description: "Optional: Provider's delivery/message ID." },
+        status: { type: "string", description: "Status from service API (e.g., queued, sent)." } // enum per plugin
+      },
+      required: ["status"]
+    }
+  },
+  'Security.Authorize': {
+    fqn: 'Security.Authorize',
+    configSchema: {
+      type: "object",
+      properties: {
+        policySourceType: { type: "string", description: "How decisions are made (e.g., 'Static', 'Opa', or PluginIdentifierString)." }, // ["enum('Static', 'Opa', 'DatabaseLookup')", "PluginIdentifierString"]
+        policySourceConfig: { type: "object", description: "Config for policySourceType. Structure per type/plugin schema. Use Core Secrets." },
+        inputDataExpression: { type: "string", description: "JMESPath to construct/transform input 'data' for policy eval (sandboxed)." } // ExpressionString
+      },
+      required: ["policySourceType", "policySourceConfig"]
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        data: {
+          type: "object",
+          description: "Context for auth decision (principal, action, resource)."
+          // Expected structure based on stdlib.yml.md example:
+          // properties: {
+          //   principal: { type: "object", properties: { id: {type: "string"}, roles: {type: "array", items: {type: "string"}}, permissions: {type: "array", items: {type: "string"}} } },
+          //   action: { type: "string" },
+          //   resource: { type: "object", properties: { type: {type: "string"}, id: {type: "string"}, attributes: {type: "object"} } }
+          // }
+        }
+      },
+      required: ["data"]
+    },
+    outputSchema: { // Represents the 'authorized' output port
+      description: "Emits original input 'data' if granted."
+    }
   }
 };

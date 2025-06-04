@@ -503,13 +503,25 @@ export class SimulationService {
     // Determine context changes
     const contextChanges: Record<string, any> = {};
     if (step.outputs_map) {
-      step.outputs_map.forEach((outputMapping: any) => {
-        if (outputMapping.target && outputMapping.target.startsWith('context.')) {
-          const contextVar = outputMapping.target.replace('context.', '');
-          const sourceValue = this.dataGenerationService.getNestedValue(outputData, outputMapping.source);
-          contextChanges[contextVar] = sourceValue;
-        }
-      });
+      // Handle both array and object formats for outputs_map
+      if (Array.isArray(step.outputs_map)) {
+        step.outputs_map.forEach((outputMapping: any) => {
+          if (outputMapping.target && outputMapping.target.startsWith('context.')) {
+            const contextVar = outputMapping.target.replace('context.', '');
+            const sourceValue = this.dataGenerationService.getNestedValue(outputData, outputMapping.source);
+            contextChanges[contextVar] = sourceValue;
+          }
+        });
+      } else if (typeof step.outputs_map === 'object') {
+        // Handle object format: { "context.varName": "outputField" }
+        Object.entries(step.outputs_map).forEach(([target, source]: [string, any]) => {
+          if (target.startsWith('context.')) {
+            const contextVar = target.replace('context.', '');
+            const sourceValue = this.dataGenerationService.getNestedValue(outputData, source);
+            contextChanges[contextVar] = sourceValue;
+          }
+        });
+      }
     }
 
     return {
@@ -711,6 +723,15 @@ export class SimulationService {
         throw new Error(`Flow not found: ${flowFqn}`);
       }
       
+      // Debug logging
+      console.log('🔍 Debug: Flow definition found:', {
+        flowFqn,
+        hasSteps: !!flowDef.steps,
+        stepCount: flowDef.steps?.length || 0,
+        stepIds: flowDef.steps?.map((s: any) => s.step_id) || [],
+        requestedStepId: stepId
+      });
+      
       // Generate trigger data
       let triggerData;
       if (flowDef.trigger) {
@@ -729,8 +750,13 @@ export class SimulationService {
       if (flowDef.steps) {
         targetStepIndex = flowDef.steps.findIndex((s: any) => s.step_id === stepId);
         if (targetStepIndex === -1 && stepId !== 'trigger') {
-          throw new Error(`Target step not found: ${stepId}`);
+          console.error(`❌ Target step not found: ${stepId} in flow ${flowFqn}`);
+          console.error('Available steps:', flowDef.steps.map((s: any) => s.step_id));
+          throw new Error(`Target step not found: ${stepId} in flow ${flowFqn}. Available steps: ${flowDef.steps.map((s: any) => s.step_id).join(', ')}`);
         }
+      } else if (stepId !== 'trigger') {
+        console.error(`❌ Flow has no steps and requested step is not 'trigger': ${stepId} in flow ${flowFqn}`);
+        throw new Error(`Flow ${flowFqn} has no steps and requested step '${stepId}' is not 'trigger'`);
       }
       
       // Simulate trigger execution

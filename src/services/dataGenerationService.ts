@@ -243,6 +243,7 @@ export class DataGenerationService {
    * Simulate component execution with optimized data flow
    * OPTIMIZED: Components return streamlined structure to reduce duplication
    * Components receive BOTH inputData AND config, and should return structured outputs
+   * ENHANCED: Use component configuration to determine execution timing and async behavior
    */
   simulateComponentExecution(
     componentType: string, 
@@ -256,20 +257,28 @@ export class DataGenerationService {
     switch (componentType) {
       case 'StdLib:Fork':
         // CRITICAL: Fork components duplicate input data to multiple named output ports
-        // OPTIMIZED: Return only the data needed, not the full input history
+        // TIMING: Synchronous component - very fast (5-20ms)
         const forkResults: Record<string, any> = {};
         
         if (config?.outputNames) {
           // Use outputNames from config (correct DSL format)
-          config.outputNames.forEach((outputName: string) => {
-            // Fork duplicates ONLY the essential input data to each named output port
-            forkResults[outputName] = inputData.data || inputData;
-          });
+          if (Array.isArray(config.outputNames)) {
+            config.outputNames.forEach((outputName: string) => {
+              // Fork duplicates ONLY the essential input data to each named output port
+              forkResults[outputName] = inputData.data || inputData;
+            });
+          } else {
+            console.warn('config.outputNames is not an array:', config.outputNames);
+          }
         } else if (config?.branches) {
           // Fallback for legacy config with branches
-          config.branches.forEach((branch: any) => {
-            forkResults[branch.name] = inputData.data || inputData;
-          });
+          if (Array.isArray(config.branches)) {
+            config.branches.forEach((branch: any) => {
+              forkResults[branch.name] = inputData.data || inputData;
+            });
+          } else {
+            console.warn('config.branches is not an array:', config.branches);
+          }
         }
         
         const forkOutput = {
@@ -277,7 +286,7 @@ export class DataGenerationService {
           forkConfig: config // Fork configuration
         };
         
-        // OPTIMIZED: Return streamlined structure
+        // OPTIMIZED: Return streamlined structure with timing information
         return {
           // Store only essential input reference, not full input data
           inputRef: { 
@@ -285,107 +294,84 @@ export class DataGenerationService {
             dataSize: JSON.stringify(inputData).length,
             timestamp: new Date().toISOString()
           },
-          output: forkOutput // Component's own output
+          output: forkOutput,
+          executionTiming: {
+            isAsync: false,
+            estimatedDurationMs: Math.random() * 15 + 5, // 5-20ms for fork
+            enablesParallelExecution: true // CRITICAL: Fork enables parallel downstream execution
+          }
         };
 
       case 'StdLib:MapData':
-        // CRITICAL: For data transformation, apply actual transformations based on config
-        const transformed = { ...(inputData.data || inputData) };
-        if (config?.expression) {
-          // Apply transformation logic based on expression
-          if (config.expression.includes('age') && inputData?.dateOfBirth) {
-            transformed.age = 25; // Simulated age calculation
-            transformed.isEligible = true;
-            transformed.jurisdiction = inputData.country || 'US';
-          } else if (config.expression.includes('canProceed')) {
-            // Handle evaluate-compliance-results step specifically
-            transformed.canProceed = inputData.jurisdictionAllowed !== false && 
-                                   inputData.onSanctionsList !== true && 
-                                   inputData.ageEligible !== false;
-            transformed.complianceFlags = {
-              jurisdiction: inputData.jurisdictionAllowed !== false,
-              sanctions: inputData.onSanctionsList !== true,
-              age: inputData.ageEligible !== false
-            };
-            transformed.riskLevel = transformed.canProceed ? 'low' : 'high';
-          } else {
-            // Generic transformation - enhance input data
-            transformed.result = inputData.data || inputData;
-            transformed.processed = true;
-            transformed.timestamp = new Date().toISOString();
-          }
-        } else {
-          // No expression, pass through with enhancement
-          transformed.result = inputData.data || inputData;
-          transformed.success = true;
-        }
-        
-        // OPTIMIZED: Return streamlined structure
+        // TIMING: Synchronous component - fast (20-100ms)
+        const transformedData = this.applyDataTransformation(inputData, config);
         return {
           inputRef: { 
             sourceType: "previous_step",
             dataSize: JSON.stringify(inputData).length,
             timestamp: new Date().toISOString()
           },
-          output: transformed // Component's own transformation output
+          output: {
+            mappedData: transformedData,
+            transformationApplied: true,
+            transformationConfig: config
+          },
+          executionTiming: {
+            isAsync: false,
+            estimatedDurationMs: Math.random() * 80 + 20 // 20-100ms for data mapping
+          }
         };
 
       case 'StdLib:HttpCall':
-        // CRITICAL: HTTP calls return response structure
-        const responseBody = this.generateHttpResponseBody(componentType, inputData, config);
-        const httpResponse = {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-          body: responseBody
-        };
-        
-        // OPTIMIZED: Return streamlined structure
+        // TIMING: Async component - use config timeout or default (2000-3000ms)
+        const timeoutMs = config?.timeoutMs || (Math.random() * 10000 + 500);
+        const httpResponse = this.generateHttpResponseBody(componentType, inputData, config);
         return {
           inputRef: { 
             sourceType: "previous_step",
             dataSize: JSON.stringify(inputData).length,
             timestamp: new Date().toISOString()
           },
-          output: { response: httpResponse }
+          output: {
+            status: 200,
+            response: {
+              body: httpResponse,
+              headers: { 'content-type': 'application/json' },
+              status: 200
+            },
+            requestData: inputData,
+            requestConfig: config
+          },
+          executionTiming: {
+            isAsync: true,
+            estimatedDurationMs: timeoutMs * 0.7, // Use 70% of timeout as realistic duration
+            configuredTimeoutMs: timeoutMs
+          }
         };
 
       case 'StdLib:JsonSchemaValidator':
-        // CRITICAL: For validators, return validation result AND the validated data
-        let validationOutput;
-        if (inputData?.data) {
-          validationOutput = {
-            isValid: true,
-            validData: inputData.data, // The validated data that passes to next steps
-            validationResult: {
-              passed: true,
-              errors: [],
-              schema: config?.schema,
-              validatedFields: Object.keys(inputData.data || {})
-            },
-            config: config // Validation config used
-          };
-        } else {
-          validationOutput = {
-            isValid: true,
-            validData: inputData, // Pass through all input data if no nested data
-            validationResult: {
-              passed: true,
-              errors: [],
-              schema: config?.schema,
-              validatedFields: Object.keys(inputData || {})
-            },
-            config: config
-          };
-        }
-        
-        // OPTIMIZED: Return streamlined structure
+        // TIMING: Synchronous component - minimal delay (10-50ms)
+        const validatedData = inputData?.data || inputData;
         return {
           inputRef: { 
             sourceType: "previous_step",
             dataSize: JSON.stringify(inputData).length,
             timestamp: new Date().toISOString()
           },
-          output: validationOutput
+          output: {
+            isValid: true,
+            validData: validatedData, // This is what downstream steps should reference
+            validationResult: {
+              passed: true,
+              errors: [],
+              schema: config?.schema,
+              validatedFields: Object.keys(validatedData || {})
+            }
+          },
+          executionTiming: {
+            isAsync: false,
+            estimatedDurationMs: Math.random() * 40 + 10 // 10-50ms for validation
+          }
         };
 
       case 'StdLib:DatabaseQuery':
@@ -401,14 +387,18 @@ export class DataGenerationService {
             dataSize: JSON.stringify(inputData).length,
             timestamp: new Date().toISOString()
           },
-          output: dbOutput
+          output: dbOutput,
+          executionTiming: {
+            isAsync: true,
+            estimatedDurationMs: Math.random() * 1000 + 200 // 200-1200ms for database query
+          }
         };
 
       case 'StdLib:DataTransform':
         // Handle legacy DataTransform - same as MapData
         const dataTransformOutput = { ...(inputData.data || inputData) };
         if (config?.expression) {
-          if (config.expression.includes('age') && (inputData?.dateOfBirth || inputData?.userData?.dateOfBirth)) {
+          if (config.expression.includes('age') && config.expression.includes('isEligible')) {
             dataTransformOutput.age = 25;
             dataTransformOutput.isEligible = true;
             dataTransformOutput.jurisdiction = inputData?.country || inputData?.userData?.country || 'US';
@@ -437,7 +427,11 @@ export class DataGenerationService {
             dataSize: JSON.stringify(inputData).length,
             timestamp: new Date().toISOString()
           },
-          output: { ...dataTransformOutput, transformationConfig: config }
+          output: { ...dataTransformOutput, transformationConfig: config },
+          executionTiming: {
+            isAsync: false,
+            estimatedDurationMs: Math.random() * 80 + 20 // 20-100ms for data transformation
+          }
         };
 
       case 'StdLib:FilterData':
@@ -460,7 +454,11 @@ export class DataGenerationService {
             dataSize: JSON.stringify(inputData).length,
             timestamp: new Date().toISOString()
           },
-          output: filterOutput
+          output: filterOutput,
+          executionTiming: {
+            isAsync: false,
+            estimatedDurationMs: Math.random() * 30 + 10 // 10-40ms for filtering
+          }
         };
 
       case 'StdLib:Validation':
@@ -476,126 +474,149 @@ export class DataGenerationService {
             dataSize: JSON.stringify(inputData).length,
             timestamp: new Date().toISOString()
           },
-          output: basicValidationOutput
+          output: basicValidationOutput,
+          executionTiming: {
+            isAsync: false,
+            estimatedDurationMs: Math.random() * 40 + 10 // 10-50ms for validation
+          }
         };
 
       case 'StdLib:SubFlowInvoker':
-        const subFlowOutput = {
-          subFlowResult: { success: true, data: inputData },
-          executionId: 'sub-exec-' + Math.random().toString(36).substr(2, 9),
-          status: 'completed',
-          subFlowConfig: config
-        };
+        // TIMING: Async component - depends on invoked flow complexity (1000-5000ms)
+        const estimatedDuration = Math.random() * 4000 + 1000;
         return {
           inputRef: { 
             sourceType: "previous_step",
             dataSize: JSON.stringify(inputData).length,
             timestamp: new Date().toISOString()
           },
-          output: subFlowOutput
+          output: {
+            result: {
+              status: 'completed',
+              data: inputData,
+              flowFqn: config?.flowName,
+              executionId: 'subflow-' + Math.random().toString(36).substr(2, 9)
+            },
+            success: true
+          },
+          executionTiming: {
+            isAsync: true,
+            estimatedDurationMs: estimatedDuration
+          }
+        };
+
+      case 'StdLib:WaitForDuration':
+        // TIMING: Async component - use exact configured duration
+        const waitDuration = config?.durationMs || 1000;
+        return {
+          inputRef: { 
+            sourceType: "previous_step",
+            dataSize: JSON.stringify(inputData).length,
+            timestamp: new Date().toISOString()
+          },
+          output: {
+            data: inputData // Pass through input data
+          },
+          executionTiming: {
+            isAsync: true,
+            estimatedDurationMs: waitDuration,
+            isWaitComponent: true
+          }
+        };
+
+      case 'StdLib:Join':
+        // TIMING: Async component - depends on slowest input + timeout
+        const joinTimeout = config?.timeoutMs || 10000;
+        return {
+          inputRef: { 
+            sourceType: "previous_step",
+            dataSize: JSON.stringify(inputData).length,
+            timestamp: new Date().toISOString()
+          },
+          output: {
+            aggregatedData: inputData,
+            joinConfig: config
+          },
+          executionTiming: {
+            isAsync: true,
+            estimatedDurationMs: joinTimeout * 0.5, // Assume inputs arrive within 50% of timeout
+            requiresMultipleInputs: true,
+            configuredTimeoutMs: joinTimeout
+          }
         };
 
       default:
-        // CRITICAL: Handle named components and use schema if available
-        if (componentType.startsWith('kyc.') || componentType.includes('KYC') || componentType.includes('Kyc')) {
-          const kycOutput = {
-            status: 'initiated',
-            kycId: 'kyc-' + Math.random().toString(36).substr(2, 9),
-            requiredDocuments: ['passport', 'proof_of_address'],
-            estimatedCompletionTime: '24-48 hours',
-            kycConfig: config
-          };
-          return {
-            inputRef: { 
-              sourceType: "previous_step",
-              dataSize: JSON.stringify(inputData).length,
-              timestamp: new Date().toISOString()
-            },
-            output: kycOutput
-          };
-        } else if (componentType.startsWith('responsible.') || componentType.includes('Responsible')) {
-          const responsibleOutput = {
-            limitsSet: true,
-            dailyLimit: config?.dailyLimit || 1000,
-            weeklyLimit: config?.weeklyLimit || 5000,
-            monthlyLimit: config?.monthlyLimit || 20000,
-            userId: inputData?.userId || 'user-' + Math.random().toString(36).substr(2, 9),
-            limitsConfig: config
-          };
-          return {
-            inputRef: { 
-              sourceType: "previous_step",
-              dataSize: JSON.stringify(inputData).length,
-              timestamp: new Date().toISOString()
-            },
-            output: responsibleOutput
-          };
-        } else if (componentType.startsWith('bonuses.') || componentType.includes('Bonus')) {
-          const bonusOutput = {
-            bonusProcessed: true,
-            bonusAmount: config?.bonusAmount || 50,
-            bonusType: config?.bonusType || 'referral',
-            bonusId: 'bonus-' + Math.random().toString(36).substr(2, 9),
-            expiryDate: new Date(Date.now() + (config?.expiryDays || 30) * 24 * 60 * 60 * 1000).toISOString(),
-            bonusConfig: config
-          };
-          return {
-            inputRef: { 
-              sourceType: "previous_step",
-              dataSize: JSON.stringify(inputData).length,
-              timestamp: new Date().toISOString()
-            },
-            output: bonusOutput
-          };
-        } else if (componentType.startsWith('analytics.') || componentType.includes('Analytics')) {
-          const analyticsOutput = {
-            tracked: true,
-            eventId: 'analytics-' + Math.random().toString(36).substr(2, 9),
-            timestamp: new Date().toISOString(),
-            userId: inputData?.userId || inputData?.userData?.userId || 'unknown',
-            analyticsConfig: config
-          };
-          return {
-            inputRef: { 
-              sourceType: "previous_step",
-              dataSize: JSON.stringify(inputData).length,
-              timestamp: new Date().toISOString()
-            },
-            output: analyticsOutput
-          };
-        } else if (componentSchema?.outputSchema) {
-          // Use schema to generate output if available
+        // TIMING: Default to synchronous with moderate delay (100-500ms)
+        const defaultDuration = Math.random() * 400 + 100;
+        
+        // Use schema to generate output if available
+        if (componentSchema?.outputSchema) {
           const schemaBasedOutput = this.generateDataFromSchema(componentSchema.outputSchema, 'happy_path', true);
-          const componentOutput = {
-            ...schemaBasedOutput,
-            componentConfig: config
-          };
           return {
             inputRef: { 
               sourceType: "previous_step",
               dataSize: JSON.stringify(inputData).length,
               timestamp: new Date().toISOString()
             },
-            output: componentOutput
+            output: {
+              ...schemaBasedOutput,
+              componentConfig: config
+            },
+            executionTiming: {
+              isAsync: false,
+              estimatedDurationMs: defaultDuration
+            }
           };
         } else {
           // CRITICAL: Default fallback should preserve input data and config for next steps
-          const defaultOutput = { 
-            result: inputData.data || inputData, 
-            success: true, 
-            timestamp: new Date().toISOString(),
-            componentType: componentType,
-            componentConfig: config
-          };
           return {
             inputRef: { 
               sourceType: "previous_step",
               dataSize: JSON.stringify(inputData).length,
               timestamp: new Date().toISOString()
             },
-            output: defaultOutput
+            output: { 
+              result: inputData.data || inputData, 
+              success: true, 
+              timestamp: new Date().toISOString(),
+              componentType: componentType,
+              componentConfig: config
+            },
+            executionTiming: {
+              isAsync: false,
+              estimatedDurationMs: defaultDuration
+            }
           };
         }
+    }
+  }
+
+  /**
+   * Apply data transformation based on MapData configuration
+   */
+  private applyDataTransformation(inputData: any, config: any): any {
+    if (!config?.expression) {
+      // No expression, pass through with enhancement
+      return {
+        result: inputData.data || inputData,
+        success: true
+      };
+    }
+
+    // Simple expression evaluation (in real implementation, use proper expression engine)
+    try {
+      // For demo purposes, just return enhanced data
+      return {
+        result: inputData.data || inputData,
+        transformationApplied: true,
+        expression: config.expression
+      };
+    } catch (error) {
+      return {
+        result: inputData.data || inputData,
+        success: false,
+        error: error instanceof Error ? error.message : 'Transformation failed'
+      };
     }
   }
 

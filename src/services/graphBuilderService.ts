@@ -180,22 +180,26 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
 
       // Control flow edges from run_after
       if (step.run_after) {
-        step.run_after.forEach((sourceStepId: string) => {
-          const edgeData: FlowEdgeData = {
-            type: 'controlFlow',
-            sourceStepId: sourceStepId,
-            targetStepId: step.step_id,
-            isExecutedPath: traceData ? true : undefined
-          };
+        if (Array.isArray(step.run_after)) {
+          step.run_after.forEach((sourceStepId: string) => {
+            const edgeData: FlowEdgeData = {
+              type: 'controlFlow',
+              sourceStepId: sourceStepId,
+              targetStepId: step.step_id,
+              isExecutedPath: traceData ? true : undefined
+            };
 
-          edges.push({
-            id: `${sourceStepId}-${step.step_id}-control`,
-            source: sourceStepId,
-            target: step.step_id,
-            type: 'flowEdge',
-            data: edgeData
+            edges.push({
+              id: `${sourceStepId}-${step.step_id}-control`,
+              source: sourceStepId,
+              target: step.step_id,
+              type: 'flowEdge',
+              data: edgeData
+            });
           });
-        });
+        } else {
+          console.warn('step.run_after is not an array:', step.run_after);
+        }
       }
 
       // Data flow edges from inputs_map

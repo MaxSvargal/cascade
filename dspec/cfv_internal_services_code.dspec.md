@@ -294,9 +294,11 @@ service ComponentExecutionService {
         implementation: `
             FUNCTION simulateComponentExecution(componentType, inputData, config, componentSchema) {
                 // CRITICAL: Generate realistic outputs that can be consumed by downstream steps
+                // ENHANCED: Use component configuration to determine execution timing and async behavior
                 SWITCH componentType
                     CASE 'StdLib:JsonSchemaValidator'
                         // CRITICAL: Validator must output validData that downstream steps can use
+                        // TIMING: Synchronous component - minimal delay (10-50ms)
                         DECLARE validatedData = inputData?.data || inputData
                         RETURN {
                             isValid: true,
@@ -306,11 +308,16 @@ service ComponentExecutionService {
                                 errors: [],
                                 schema: config?.schema,
                                 validatedFields: Object.keys(validatedData || {})
+                            },
+                            executionTiming: {
+                                isAsync: false,
+                                estimatedDurationMs: Math.random() * 40 + 10 // 10-50ms for validation
                             }
                         }
                     
                     CASE 'StdLib:Fork'
                         // CRITICAL: Fork must create separate outputs for each branch
+                        // TIMING: Synchronous component - very fast (5-20ms)
                         DECLARE forkOutputs = {}
                         IF config?.outputNames IS_DEFINED THEN
                             FOR_EACH outputName IN config.outputNames
@@ -320,14 +327,30 @@ service ComponentExecutionService {
                             // Default fork behavior
                             ASSIGN forkOutputs.default = inputData
                         END_IF
-                        RETURN forkOutputs
+                        RETURN {
+                            branches: forkOutputs,
+                            executionTiming: {
+                                isAsync: false,
+                                estimatedDurationMs: Math.random() * 15 + 5, // 5-20ms for fork
+                                enablesParallelExecution: true // CRITICAL: Fork enables parallel downstream execution
+                            }
+                        }
                     
                     CASE 'StdLib:MapData'
                         // CRITICAL: Apply actual data transformations based on expression
-                        RETURN CALL evaluateMapDataExpression WITH config.expression, inputData
+                        // TIMING: Synchronous component - fast (20-100ms)
+                        RETURN {
+                            mappedData: CALL evaluateMapDataExpression WITH config.expression, inputData,
+                            executionTiming: {
+                                isAsync: false,
+                                estimatedDurationMs: Math.random() * 80 + 20 // 20-100ms for data mapping
+                            }
+                        }
                     
                     CASE 'StdLib:HttpCall'
                         // CRITICAL: HTTP calls must return response structure
+                        // TIMING: Async component - use config timeout or default (500-3000ms)
+                        DECLARE timeoutMs = config?.timeoutMs || (Math.random() * 2500 + 500)
                         RETURN {
                             status: 200,
                             response: {
@@ -336,11 +359,18 @@ service ComponentExecutionService {
                                 status: 200
                             },
                             requestData: inputData,
-                            requestConfig: config
+                            requestConfig: config,
+                            executionTiming: {
+                                isAsync: true,
+                                estimatedDurationMs: timeoutMs * 0.7, // Use 70% of timeout as realistic duration
+                                configuredTimeoutMs: timeoutMs
+                            }
                         }
                     
                     CASE 'StdLib:SubFlowInvoker'
                         // CRITICAL: SubFlow invokers must return result structure
+                        // TIMING: Async component - depends on invoked flow complexity (1000-5000ms)
+                        DECLARE estimatedDuration = Math.random() * 4000 + 1000
                         RETURN {
                             result: {
                                 status: 'completed',
@@ -349,16 +379,53 @@ service ComponentExecutionService {
                                 executionId: 'subflow-' + Math.random().toString(36).substr(2, 9)
                             },
                             success: true,
-                            executionTime: Math.random() * 1000 + 500
+                            executionTiming: {
+                                isAsync: true,
+                                estimatedDurationMs: estimatedDuration
+                            }
+                        }
+                    
+                    CASE 'StdLib:WaitForDuration'
+                        // CRITICAL: Wait components use configured duration
+                        // TIMING: Async component - use exact configured duration
+                        DECLARE waitDuration = config?.durationMs || 1000
+                        RETURN {
+                            data: inputData, // Pass through input data
+                            executionTiming: {
+                                isAsync: true,
+                                estimatedDurationMs: waitDuration,
+                                isWaitComponent: true
+                            }
+                        }
+                    
+                    CASE 'StdLib:Join'
+                        // CRITICAL: Join components wait for multiple inputs
+                        // TIMING: Async component - depends on slowest input + timeout
+                        DECLARE joinTimeout = config?.timeoutMs || 10000
+                        RETURN {
+                            aggregatedData: inputData,
+                            joinConfig: config,
+                            executionTiming: {
+                                isAsync: true,
+                                estimatedDurationMs: joinTimeout * 0.5, // Assume inputs arrive within 50% of timeout
+                                requiresMultipleInputs: true,
+                                configuredTimeoutMs: joinTimeout
+                            }
                         }
                     
                     DEFAULT
                         // Generic component execution
+                        // TIMING: Default to synchronous with moderate delay (100-500ms)
+                        DECLARE defaultDuration = Math.random() * 400 + 100
                         RETURN {
                             result: inputData,
                             success: true,
                             timestamp: new Date().toISOString(),
-                            componentType: componentType
+                            componentType: componentType,
+                            executionTiming: {
+                                isAsync: false,
+                                estimatedDurationMs: defaultDuration
+                            }
                         }
                 END_SWITCH
             }
@@ -453,6 +520,185 @@ service ComponentExecutionService {
                         timestamp: new Date().toISOString()
                     }
                 END_IF
+            }
+        `
+    }
+
+    // ENHANCED: New method for parallel execution handling
+    method executeStepsInParallel {
+        signature: `executeStepsInParallel(parallelSteps: FlowStep[], executionContext: ExecutionContext, componentSchemas: Record<string, ComponentSchema>): Promise<StepExecutionResult[]>`
+        
+        implementation: `
+            FUNCTION executeStepsInParallel(parallelSteps, executionContext, componentSchemas) {
+                // CRITICAL: Execute multiple steps concurrently for fork branches and run_after groups
+                DECLARE parallelPromises = []
+                
+                FOR_EACH step IN parallelSteps
+                    DECLARE stepPromise = ASYNC_FUNCTION() {
+                        // Resolve input data for this step
+                        DECLARE stepInput = CALL resolveStepInput WITH step, executionContext
+                        
+                        // Get component timing information
+                        DECLARE componentResult = CALL simulateComponentExecution WITH 
+                            step.component_ref, 
+                            stepInput.resolvedInput, 
+                            step.config,
+                            componentSchemas[step.component_ref]
+                        
+                        DECLARE executionTiming = componentResult.executionTiming || { isAsync: false, estimatedDurationMs: 100 }
+                        
+                        // Set step to RUNNING status
+                        CALL updateStepStatus WITH step.step_id, 'RUNNING', executionContext
+                        
+                        // Wait for component execution time
+                        AWAIT delay(executionTiming.estimatedDurationMs)
+                        
+                        // Build execution result
+                        DECLARE executionResult = {
+                            stepId: step.step_id,
+                            componentType: step.component_ref,
+                            inputData: stepInput.resolvedInput,
+                            outputData: componentResult,
+                            executionTime: executionTiming.estimatedDurationMs,
+                            timestamp: new Date().toISOString(),
+                            success: true,
+                            inputSources: stepInput.inputSources
+                        }
+                        
+                        // Set step to SUCCESS status
+                        CALL updateStepStatus WITH step.step_id, 'SUCCESS', executionContext
+                        
+                        RETURN executionResult
+                    }
+                    
+                    ADD_TO parallelPromises stepPromise()
+                END_FOR
+                
+                // Wait for all parallel steps to complete
+                DECLARE results = AWAIT Promise.all(parallelPromises)
+                RETURN results
+            }
+        `
+    }
+
+    // ENHANCED: New method for dependency analysis and execution ordering
+    method analyzeDependenciesAndExecute {
+        signature: `analyzeDependenciesAndExecute(steps: FlowStep[], executionContext: ExecutionContext, componentSchemas: Record<string, ComponentSchema>): Promise<void>`
+        
+        implementation: `
+            FUNCTION analyzeDependenciesAndExecute(steps, executionContext, componentSchemas) {
+                // CRITICAL: Analyze step dependencies and execute in proper order with parallelization
+                DECLARE dependencyGraph = CALL buildDependencyGraph WITH steps
+                DECLARE executionQueue = []
+                DECLARE completedSteps = new Set(['trigger']) // Trigger is always completed first
+                
+                WHILE completedSteps.size < steps.length + 1 // +1 for trigger
+                    // Find steps that can execute now (all dependencies completed)
+                    DECLARE readySteps = []
+                    FOR_EACH step IN steps
+                        IF NOT completedSteps.has(step.step_id) THEN
+                            DECLARE dependencies = CALL getStepDependencies WITH step, dependencyGraph
+                            DECLARE allDependenciesMet = true
+                            
+                            FOR_EACH dependency IN dependencies
+                                IF NOT completedSteps.has(dependency) THEN
+                                    ASSIGN allDependenciesMet = false
+                                    BREAK
+                                END_IF
+                            END_FOR
+                            
+                            IF allDependenciesMet THEN
+                                ADD_TO readySteps step
+                            END_IF
+                        END_IF
+                    END_FOR
+                    
+                    IF readySteps.length IS_ZERO THEN
+                        THROW new Error("Circular dependency detected or no steps ready to execute")
+                    END_IF
+                    
+                    // Execute ready steps in parallel
+                    DECLARE stepResults = AWAIT executeStepsInParallel(readySteps, executionContext, componentSchemas)
+                    
+                    // Mark steps as completed
+                    FOR_EACH result IN stepResults
+                        ADD_TO completedSteps result.stepId
+                        ASSIGN executionContext.stepResults.set(result.stepId, result)
+                    END_FOR
+                END_WHILE
+            }
+        `
+    }
+
+    // ENHANCED: New method for proper flow completion handling
+    method completeFlowExecution {
+        signature: `completeFlowExecution(executionContext: ExecutionContext, targetStepId?: string): FlowExecutionTrace`
+        
+        implementation: `
+            FUNCTION completeFlowExecution(executionContext, targetStepId) {
+                // CRITICAL: Properly complete flow execution and update final step status
+                DECLARE allSteps = Array.from(executionContext.stepResults.values())
+                DECLARE flowStatus = 'COMPLETED'
+                
+                // Check if any step failed
+                FOR_EACH stepResult IN allSteps
+                    IF stepResult.success IS_FALSE THEN
+                        ASSIGN flowStatus = 'FAILED'
+                        BREAK
+                    END_IF
+                END_FOR
+                
+                // Find the final step (last executed step or target step)
+                DECLARE finalStep = null
+                IF targetStepId IS_DEFINED THEN
+                    ASSIGN finalStep = executionContext.stepResults.get(targetStepId)
+                ELSE
+                    // Find the step with the latest timestamp
+                    DECLARE latestTimestamp = ''
+                    FOR_EACH stepResult IN allSteps
+                        IF stepResult.timestamp > latestTimestamp THEN
+                            ASSIGN latestTimestamp = stepResult.timestamp
+                            ASSIGN finalStep = stepResult
+                        END_IF
+                    END_FOR
+                END_IF
+                
+                // CRITICAL: Ensure final step status is properly set
+                IF finalStep IS_NOT_NULL THEN
+                    IF flowStatus EQUALS 'COMPLETED' AND finalStep.success THEN
+                        // Final step should show SUCCESS status
+                        ASSIGN finalStep.status = 'SUCCESS'
+                    ELSE_IF flowStatus EQUALS 'FAILED' THEN
+                        // Final step should show FAILURE status if flow failed
+                        ASSIGN finalStep.status = 'FAILURE'
+                    END_IF
+                    
+                    // Update the step in execution context
+                    ASSIGN executionContext.stepResults.set(finalStep.stepId, finalStep)
+                END_IF
+                
+                // Build final execution trace
+                DECLARE executionTrace = {
+                    traceId: executionContext.executionId,
+                    flowFqn: executionContext.flowFqn,
+                    status: flowStatus,
+                    startTime: executionContext.startTime,
+                    endTime: new Date().toISOString(),
+                    durationMs: Date.now() - new Date(executionContext.startTime).getTime(),
+                    triggerData: executionContext.triggerInput,
+                    steps: allSteps.map(stepResult => ({
+                        stepId: stepResult.stepId,
+                        componentFqn: stepResult.componentType,
+                        status: stepResult.success ? 'SUCCESS' : 'FAILURE',
+                        startTime: stepResult.timestamp,
+                        endTime: stepResult.timestamp,
+                        durationMs: stepResult.executionTime,
+                        inputData: stepResult.inputData,
+                        outputData: stepResult.outputData
+                    }))
+                }
+                
+                RETURN executionTrace
             }
         `
     }
