@@ -835,3 +835,87 @@ design cfv_designs.LegacyTabMigrationService {
     }
     source: "Migration support for consolidated inspector tab architecture"
 }
+
+design cfv_designs.SubFlowInvokerNavigation {
+    id: "CFV_DES_NAV_001"
+    title: "SubFlowInvoker Double-Click Navigation Design"
+    description: "Design for implementing seamless navigation between flows via SubFlowInvoker nodes."
+    
+    overview: "SubFlowInvoker nodes should provide intuitive navigation to their target flows through double-click interaction, with proper visual indicators and error handling."
+    
+    components: {
+        node_visual_design: {
+            description: "SubFlowInvoker nodes display the target flow FQN with navigation indicators",
+            visual_elements: [
+                "🔗 icon to indicate linkage",
+                "⤴ arrow icon to indicate navigation capability", 
+                "Hover effects with color changes",
+                "Tooltip showing navigation instruction",
+                "Cursor pointer to indicate clickability"
+            ],
+            styling: {
+                background_color: "#FAF5FF (light purple)",
+                border_color: "#E9D5FF (purple border)",
+                hover_background: "#F3E8FF (darker purple on hover)",
+                hover_border: "#C4B5FD (darker purple border on hover)",
+                text_color: "#8B5CF6 (purple text)",
+                font_family: "ui-monospace, monospace"
+            }
+        },
+        
+        data_population: {
+            description: "Correct population of invokedFlowFqn from DSL configuration",
+            source_field: "step.config.flowName (NOT step.config.flow_fqn)",
+            resolution_logic: [
+                "If flowName contains '.', treat as full FQN",
+                "If flowName is simple name, prepend current module FQN",
+                "If flowName is missing/empty, set to 'unknown' and log warning"
+            ],
+            examples: {
+                full_fqn: "config.flowName = 'com.casino.kyc.InitiateKYCFlow' → invokedFlowFqn = 'com.casino.kyc.InitiateKYCFlow'",
+                simple_name: "config.flowName = 'InitiateKYCFlow' in module 'com.casino.core' → invokedFlowFqn = 'com.casino.core.InitiateKYCFlow'",
+                missing: "config.flowName = undefined → invokedFlowFqn = 'unknown'"
+            }
+        },
+        
+        navigation_behavior: {
+            description: "Double-click navigation with module loading support",
+            interaction_flow: [
+                "User double-clicks SubFlowInvoker node",
+                "Check if enableDoubleClickNavigation is true",
+                "Extract invokedFlowFqn from node data",
+                "Check if target module is already loaded",
+                "If loaded: Navigate immediately to target flow",
+                "If not loaded: Use requestModule to load target module",
+                "On successful load: Navigate to target flow",
+                "On load failure: Show error message"
+            ],
+            error_handling: [
+                "Unknown flow FQN: Show warning message",
+                "Module load failure: Display error with retry option",
+                "Missing requestModule callback: Log warning"
+            ]
+        }
+    },
+    
+    integration_points: {
+        graph_builder_service: "Populates invokedFlowFqn during node generation",
+        cascade_flow_visualizer: "Handles double-click events and navigation",
+        module_registry: "Checks if target modules are loaded",
+        navigation_atoms: "Updates current flow state"
+    },
+    
+    user_experience: {
+        visual_feedback: [
+            "Hover effects indicate interactivity",
+            "Loading states during module loading",
+            "Success feedback on navigation",
+            "Clear error messages on failure"
+        ],
+        accessibility: [
+            "Keyboard navigation support",
+            "Screen reader friendly tooltips",
+            "High contrast visual indicators"
+        ]
+    }
+}

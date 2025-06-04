@@ -106,10 +106,39 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
       };
 
       // Check if this is a SubFlowInvoker
-      if (componentInfo?.baseType === 'StdLib:SubFlowInvoker' || step.component_ref.includes('SubFlowInvoker')) {
+      if (componentInfo?.baseType === 'StdLib:SubFlowInvoker' || (step.component_ref && step.component_ref.includes('SubFlowInvoker'))) {
+        // For SubFlowInvoker, we need to get the flowName from the right place:
+        // 1. If it's a named component, get flowName from the component definition's config
+        // 2. If it's a direct StdLib:SubFlowInvoker reference, get flowName from step's config
+        let flowName: string | undefined;
+        
+        if (componentInfo?.isNamedComponent && componentInfo.componentDefinition?.config?.flowName) {
+          // Named component - get flowName from component definition
+          flowName = componentInfo.componentDefinition.config.flowName;
+        } else if (step.config?.flowName) {
+          // Direct reference - get flowName from step config
+          flowName = step.config.flowName;
+        }
+        
+        let invokedFlowFqn = 'unknown';
+        
+        if (flowName && typeof flowName === 'string' && flowName.trim() !== '') {
+          // Resolve flowName to full FQN
+          if (flowName.includes('.')) {
+            // Already a full FQN
+            invokedFlowFqn = flowName;
+          } else {
+            // Simple name, resolve using current module namespace
+            const currentModuleFqn = params.flowFqn.split('.').slice(0, -1).join('.');
+            invokedFlowFqn = `${currentModuleFqn}.${flowName}`;
+          }
+        } else {
+          console.warn(`SubFlowInvoker step ${step.step_id} has missing or empty flowName. Component ref: ${step.component_ref}, isNamedComponent: ${componentInfo?.isNamedComponent}, componentDefinition:`, componentInfo?.componentDefinition);
+        }
+        
         const subFlowNodeData: SubFlowInvokerNodeData = {
           ...stepNodeData,
-          invokedFlowFqn: step.config?.flow_fqn || 'unknown'
+          invokedFlowFqn: invokedFlowFqn
         };
         
         nodes.push({
@@ -326,32 +355,55 @@ export async function generateSystemOverviewGraphData(
         if (flow.steps) {
           flow.steps.forEach((step: any) => {
             const componentInfo = moduleRegistry.resolveComponentTypeInfo(step.component_ref, module.fqn);
-            if (componentInfo?.baseType === 'StdLib:SubFlowInvoker' && step.config?.flow_fqn) {
-              const edgeData: SystemEdgeData = {
-                type: 'invocationEdge'
-              };
+            if (componentInfo?.baseType === 'StdLib:SubFlowInvoker') {
+              // For SubFlowInvoker, we need to get the flowName from the right place:
+              // 1. If it's a named component, get flowName from the component definition's config
+              // 2. If it's a direct StdLib:SubFlowInvoker reference, get flowName from step's config
+              let flowName: string | undefined;
               
-              edges.push({
-                id: `${flowFqn}-${step.config.flow_fqn}`,
-                source: flowFqn,
-                target: step.config.flow_fqn,
-                type: 'systemEdge',
-                data: edgeData,
-                style: {
-                  stroke: '#2196F3',
-                  strokeWidth: 2,
-                  strokeDasharray: '5,5'
-                },
-                markerEnd: {
-                  type: MarkerType.ArrowClosed,
-                  color: '#2196F3'
-                },
-                label: step.step_id,
-                labelStyle: {
-                  fontSize: '10px',
-                  fill: '#666'
+              if (componentInfo?.isNamedComponent && componentInfo.componentDefinition?.config?.flowName) {
+                // Named component - get flowName from component definition
+                flowName = componentInfo.componentDefinition.config.flowName;
+              } else if (step.config?.flowName) {
+                // Direct reference - get flowName from step config
+                flowName = step.config.flowName;
+              }
+              
+              if (flowName) {
+                // Resolve flowName to full FQN for edge target
+                let targetFlowFqn = flowName;
+                
+                if (!flowName.includes('.')) {
+                  // Simple name, resolve using current module namespace
+                  targetFlowFqn = `${module.fqn}.${flowName}`;
                 }
-              });
+                
+                const edgeData: SystemEdgeData = {
+                  type: 'invocationEdge'
+                };
+                
+                edges.push({
+                  id: `${flowFqn}-${targetFlowFqn}`,
+                  source: flowFqn,
+                  target: targetFlowFqn,
+                  type: 'systemEdge',
+                  data: edgeData,
+                  style: {
+                    stroke: '#2196F3',
+                    strokeWidth: 2,
+                    strokeDasharray: '5,5'
+                  },
+                  markerEnd: {
+                    type: MarkerType.ArrowClosed,
+                    color: '#2196F3'
+                  },
+                  label: step.step_id,
+                  labelStyle: {
+                    fontSize: '10px',
+                    fill: '#666'
+                  }
+                });
+              }
             }
           });
         }

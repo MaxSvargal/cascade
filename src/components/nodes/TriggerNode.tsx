@@ -1,11 +1,13 @@
 // Enhanced Trigger Node Component
-// Updated for left-to-right layout and improved styling
+// Updated for white backgrounds, transparent borders, and compact status indicators
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { TriggerEntryPointNodeData } from '@/models/cfv_models_generated';
 
 const TriggerNode: React.FC<NodeProps<TriggerEntryPointNodeData>> = ({ data, selected }) => {
+  const [isStatusHovered, setIsStatusHovered] = useState(false);
+
   const getStatusColor = () => {
     switch (data.executionStatus) {
       case 'SUCCESS': return '#10B981'; // Softer green
@@ -26,27 +28,35 @@ const TriggerNode: React.FC<NodeProps<TriggerEntryPointNodeData>> = ({ data, sel
     }
   };
 
-  const getStatusBadgeStyle = () => {
+  // Compact status indicator with hover animation
+  const getCompactStatusStyle = () => {
     const color = getStatusColor();
     return {
+      position: 'absolute' as const,
+      top: '4px',
+      left: '4px',
       fontSize: '8px',
       color: color,
-      backgroundColor: `${color}15`, // Very light background
-      border: `1px solid ${color}30`, // Subtle border
-      padding: '2px 6px',
-      borderRadius: '8px',
+      backgroundColor: `${color}10`, // Very light background
+      border: `1px solid ${color}20`, // Very subtle border
+      padding: '2px 4px',
+      borderRadius: '6px',
       display: 'flex',
       alignItems: 'center',
-      gap: '3px',
+      gap: '2px',
       fontWeight: '500',
-      letterSpacing: '0.5px',
-      textTransform: 'uppercase' as const
+      transition: 'all 0.2s ease',
+      cursor: 'default',
+      zIndex: 10,
+      maxWidth: isStatusHovered ? '120px' : '40px',
+      overflow: 'hidden',
+      whiteSpace: 'nowrap' as const
     };
   };
 
   const getNodeStyle = () => {
     const baseStyle = {
-      padding: '14px 18px',
+      padding: data.executionStatus ? '24px 28px 14px 28px' : '14px 18px', // Debug mode padding vs design mode
       borderRadius: '8px',
       minWidth: '160px',
       maxWidth: '260px',
@@ -59,39 +69,39 @@ const TriggerNode: React.FC<NodeProps<TriggerEntryPointNodeData>> = ({ data, sel
     };
 
     if (!data.executionStatus) {
-      // Clean design mode - light green background for pending
+      // Clean design mode - white background with transparent border
       return {
         ...baseStyle,
-        backgroundColor: '#F7FEF7', // Very light green
-        border: '1px solid #D1FAE5', // Subtle green border
+        backgroundColor: '#FFFFFF', // Pure white background
+        border: '1px solid transparent', // Transparent border for pending nodes
         boxShadow: selected 
           ? '0 6px 20px rgba(5, 150, 105, 0.4)' 
           : '0 4px 12px rgba(5, 150, 105, 0.15)'
       };
     } else {
-      // Debug mode - colored backgrounds and borders based on execution status
+      // Debug mode - very light pastel backgrounds with subtle borders
       let backgroundColor = '';
       let borderColor = '';
       switch (data.executionStatus) {
         case 'SUCCESS':
-          backgroundColor = '#F0FDF4'; // Light green background
-          borderColor = '#10B981'; // Subtle emerald border
+          backgroundColor = '#FAFFFE'; // Very light green background
+          borderColor = '#E6FFFA'; // Very subtle green border
           break;
         case 'FAILURE':
-          backgroundColor = '#FEF2F2'; // Light red background
-          borderColor = '#EF4444'; // Subtle red border
+          backgroundColor = '#FFFAFA'; // Very light red background
+          borderColor = '#FFE6E6'; // Very subtle red border
           break;
         case 'RUNNING':
-          backgroundColor = '#FFFBEB'; // Light amber background
-          borderColor = '#F59E0B'; // Subtle amber border
+          backgroundColor = '#FFFEF9'; // Very light amber background
+          borderColor = '#FFF4E6'; // Very subtle amber border
           break;
         case 'SKIPPED':
-          backgroundColor = '#F8FAFC'; // Light gray background
-          borderColor = '#94A3B8'; // Subtle gray border
+          backgroundColor = '#FAFAFA'; // Very light gray background
+          borderColor = '#F0F0F0'; // Very subtle gray border
           break;
         default:
-          backgroundColor = '#F0FDF4'; // Light green background
-          borderColor = '#10B981'; // Subtle emerald border
+          backgroundColor = '#FFFFFF'; // White background
+          borderColor = 'transparent'; // Transparent border
       }
       
       return {
@@ -107,6 +117,27 @@ const TriggerNode: React.FC<NodeProps<TriggerEntryPointNodeData>> = ({ data, sel
 
   return (
     <div style={getNodeStyle()}>
+      {/* Compact status indicator with hover animation */}
+      {data.executionStatus && (
+        <div 
+          style={getCompactStatusStyle()}
+          onMouseEnter={() => setIsStatusHovered(true)}
+          onMouseLeave={() => setIsStatusHovered(false)}
+        >
+          <span>{getStatusIcon()}</span>
+          {data.executionDurationMs && (
+            <span style={{ fontSize: '7px', opacity: 0.8 }}>
+              {data.executionDurationMs}ms
+            </span>
+          )}
+          {isStatusHovered && (
+            <span style={{ marginLeft: '4px', fontSize: '7px' }}>
+              {data.executionStatus.toLowerCase()}
+            </span>
+          )}
+        </div>
+      )}
+
       <div style={{ 
         fontWeight: '600', 
         marginBottom: '8px', 
@@ -133,32 +164,6 @@ const TriggerNode: React.FC<NodeProps<TriggerEntryPointNodeData>> = ({ data, sel
       }}>
         ⚡ {data.triggerType}
       </div>
-
-      {data.executionStatus && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: '8px'
-        }}>
-          <div style={getStatusBadgeStyle()}>
-            <span>{getStatusIcon()}</span>
-            <span>{data.executionStatus.toLowerCase()}</span>
-          </div>
-        </div>
-      )}
-
-      {data.executionDurationMs && (
-        <div style={{ 
-          fontSize: '9px', 
-          color: '#9CA3AF',
-          textAlign: 'center',
-          marginBottom: '4px',
-          fontFamily: 'ui-monospace, monospace'
-        }}>
-          {data.executionDurationMs}ms
-        </div>
-      )}
 
       {data.contextVarUsages && data.contextVarUsages.length > 0 && (
         <div style={{ 
@@ -189,7 +194,7 @@ const TriggerNode: React.FC<NodeProps<TriggerEntryPointNodeData>> = ({ data, sel
         </div>
       )}
       
-      {/* Right handle for outputs (to first steps) */}
+      {/* Right handle for outputs (to next steps) */}
       <Handle type="source" position={Position.Right} />
     </div>
   );

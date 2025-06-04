@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { atom } from 'jotai';
 import ReactFlow, { 
   ReactFlowProvider, 
   Controls, 
@@ -38,9 +37,6 @@ import {
   currentTabAvailabilityAtom
 } from '@/state/inspectorAtoms';
 import { 
-  traceListSummariesAtom 
-} from '@/state/traceListAtoms';
-import { 
   generateFlowDetailGraphData, 
   generateSystemOverviewGraphData,
   GraphData 
@@ -48,9 +44,6 @@ import {
 import { createModuleRegistryInterface } from '@/services/moduleRegistryService';
 import { DebugTestActionsService } from '@/services/debugTestActionsService';
 import { createInspectorActions } from '@/services/inspectorActionsService';
-import { TraceListService } from '@/services/traceListService';
-import { NavigationService } from '@/services/navigationService';
-import { consolidatedInspectorTabsService } from '@/services/consolidatedInspectorTabsService';
 
 import 'reactflow/dist/style.css';
 
@@ -329,22 +322,22 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
   }, [moduleRegistry, dslModuleRepresentations, selectedElement, currentFlowFqn, props.onSaveModule, props.onModuleLoadError]);
 
   // Trace list service
-  const traceListService = useMemo(() => {
-    return new TraceListService({
-      fetchTraceList: props.fetchTraceList,
-      onTraceSelect: (traceId: string) => {
-        // This would typically trigger the host app to load trace data
-        console.log('Trace selected:', traceId);
-      }
-    });
-  }, [props.fetchTraceList]);
+  // const traceListService = useMemo(() => {
+  //   return new TraceListService({
+  //     fetchTraceList: props.fetchTraceList,
+  //     onTraceSelect: (traceId: string) => {
+  //       // This would typically trigger the host app to load trace data
+  //       console.log('Trace selected:', traceId);
+  //     }
+  //   });
+  // }, [props.fetchTraceList]);
 
-  // Navigation service
-  const navigationService = useMemo(() => {
-    return new NavigationService({
-      onViewChange: props.onViewChange
-    });
-  }, [props.onViewChange]);
+  // // Navigation service
+  // const navigationService = useMemo(() => {
+  //   return new NavigationService({
+  //     onViewChange: props.onViewChange
+  //   });
+  // }, [props.onViewChange]);
 
   // Generate graph data when dependencies change
   useEffect(() => {
@@ -600,7 +593,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
           </div>
           
           {/* Modules List */}
-          <div style={{ marginBottom: '24px' }}>
+          <div style={{ marginBottom: '24px', padding: '4px' }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#333' }}>Modules</h3>
             {Object.values(dslModuleRepresentations).map(module => {
               const isExpanded = expandedModules.has(module.fqn);
@@ -672,7 +665,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
           </div>
 
           {/* Flows List */}
-          <div>
+          <div style={{ padding: '4px' }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#333' }}>Flows</h3>
             {Object.values(dslModuleRepresentations).map(module => 
               module.definitions?.flows.map((flow: any) => {
@@ -787,6 +780,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
           backgroundColor: uiOptions.colorTheme.sidebarBackgroundColor,
           borderLeft: '1px solid #e0e0e0',
           overflow: 'auto',
+          padding: "8px",
           position: 'relative'
         }}>
           {/* Right Resize Handle */}

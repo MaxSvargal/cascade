@@ -1,11 +1,13 @@
 // Enhanced SubFlowInvoker Node Component
-// Updated for left-to-right layout and improved styling
+// Updated for white backgrounds, transparent borders, and compact status indicators
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { SubFlowInvokerNodeData } from '@/models/cfv_models_generated';
 
 const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data, selected }) => {
+  const [isStatusHovered, setIsStatusHovered] = useState(false);
+
   const getStatusColor = () => {
     switch (data.executionStatus) {
       case 'SUCCESS': return '#10B981'; // Softer green
@@ -26,28 +28,36 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
     }
   };
 
-  const getStatusBadgeStyle = () => {
+  // Compact status indicator with hover animation
+  const getCompactStatusStyle = () => {
     const color = getStatusColor();
     return {
+      position: 'absolute' as const,
+      top: '4px',
+      left: '4px',
       fontSize: '8px',
       color: color,
-      backgroundColor: `${color}15`, // Very light background
-      border: `1px solid ${color}30`, // Subtle border
-      padding: '2px 6px',
-      borderRadius: '8px',
+      backgroundColor: `${color}10`, // Very light background
+      border: `1px solid ${color}20`, // Very subtle border
+      padding: '2px 4px',
+      borderRadius: '6px',
       display: 'flex',
       alignItems: 'center',
-      gap: '3px',
+      gap: '2px',
       fontWeight: '500',
-      letterSpacing: '0.5px',
-      textTransform: 'uppercase' as const
+      transition: 'all 0.2s ease',
+      cursor: 'default',
+      zIndex: 10,
+      maxWidth: isStatusHovered ? '120px' : '40px',
+      overflow: 'hidden',
+      whiteSpace: 'nowrap' as const
     };
   };
 
   // Enhanced styling for clean design mode vs execution mode
   const getNodeStyle = () => {
     const baseStyle = {
-      padding: '14px 18px',
+      padding: data.executionStatus ? '24px 28px 14px 28px' : '14px 18px', // Debug mode padding vs design mode
       borderRadius: '8px',
       minWidth: '200px',
       maxWidth: '320px',
@@ -61,39 +71,39 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
     };
 
     if (!data.executionStatus) {
-      // Clean design mode - light purple background for pending
+      // Clean design mode - white background with transparent border
       return {
         ...baseStyle,
-        backgroundColor: '#FDFCFF', // Very light purple
-        border: '1px solid #E9D5FF', // Subtle purple border
+        backgroundColor: '#FFFFFF', // Pure white background
+        border: '1px solid transparent', // Transparent border for pending nodes
         boxShadow: selected 
           ? '0 6px 20px rgba(139, 92, 246, 0.4)' 
           : '0 4px 12px rgba(139, 92, 246, 0.15)'
       };
     } else {
-      // Debug mode - colored backgrounds and borders based on execution status
+      // Debug mode - very light pastel backgrounds with subtle borders
       let backgroundColor = '';
       let borderColor = '';
       switch (data.executionStatus) {
         case 'SUCCESS':
-          backgroundColor = '#FAF5FF'; // Light purple background
-          borderColor = '#8B5CF6'; // Subtle purple border
+          backgroundColor = '#fff'; // Very light green background
+          borderColor = '#E6FFFA'; // Very subtle green border
           break;
         case 'FAILURE':
-          backgroundColor = '#FEF2F2'; // Light red background
-          borderColor = '#EF4444'; // Subtle red border
+          backgroundColor = '#FFFAFA'; // Very light red background
+          borderColor = '#FFE6E6'; // Very subtle red border
           break;
         case 'RUNNING':
-          backgroundColor = '#FFFBEB'; // Light amber background
-          borderColor = '#F59E0B'; // Subtle amber border
+          backgroundColor = '#FFFEF9'; // Very light amber background
+          borderColor = '#FFF4E6'; // Very subtle amber border
           break;
         case 'SKIPPED':
-          backgroundColor = '#F8FAFC'; // Light gray background
-          borderColor = '#94A3B8'; // Subtle gray border
+          backgroundColor = '#FAFAFA'; // Very light gray background
+          borderColor = '#F0F0F0'; // Very subtle gray border
           break;
         default:
-          backgroundColor = '#FAF5FF'; // Light purple background
-          borderColor = '#8B5CF6'; // Subtle purple border
+          backgroundColor = '#FFFFFF'; // White background
+          borderColor = 'transparent'; // Transparent border
       }
       
       return {
@@ -108,28 +118,34 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
   };
 
   return (
-    <div 
-      style={getNodeStyle()}
-      title="Double-click to navigate to invoked flow"
-    >
+    <div style={getNodeStyle()}>
       {/* Left handle for inputs (from previous steps) */}
       <Handle type="target" position={Position.Left} />
       
-      {/* Navigation indicator */}
-      <div style={{
-        position: 'absolute',
-        top: '6px',
-        right: '8px',
-        fontSize: '10px',
-        color: '#8B5CF6',
-        fontWeight: '600'
-      }}>
-        ↗
-      </div>
+      {/* Compact status indicator with hover animation */}
+      {data.executionStatus && (
+        <div 
+          style={getCompactStatusStyle()}
+          onMouseEnter={() => setIsStatusHovered(true)}
+          onMouseLeave={() => setIsStatusHovered(false)}
+        >
+          <span>{getStatusIcon()}</span>
+          {data.executionDurationMs ? (
+            <span style={{ fontSize: '7px' }}>
+              {data.executionDurationMs}ms
+            </span>
+          ) : ''}
+          {isStatusHovered && (
+            <span style={{ marginLeft: '4px', fontSize: '7px' }}>
+              {data.executionStatus.toLowerCase()}
+            </span>
+          )}
+        </div>
+      )}
       
       <div style={{ 
         fontWeight: '600', 
-        marginBottom: '8px', 
+        marginBottom: '8px',
         color: '#1F2937',
         fontSize: '13px',
         textAlign: 'center',
@@ -139,20 +155,44 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
         {data.label}
       </div>
       
-      <div style={{ 
-        fontSize: '10px', 
-        color: '#8B5CF6',
-        marginBottom: '8px',
-        textAlign: 'center',
-        fontWeight: '500',
-        backgroundColor: '#F3F0FF',
-        padding: '3px 8px',
-        borderRadius: '6px',
-        border: '1px solid #E9E5FF',
-        wordWrap: 'break-word'
-      }}>
-        → {data.invokedFlowFqn}
+      {data.invokedFlowFqn && (
+        <div style={{ 
+          fontSize: '10px', 
+          color: '#8B5CF6',
+          marginBottom: '8px',
+          textAlign: 'center',
+          wordWrap: 'break-word',
+          fontFamily: 'ui-monospace, monospace',
+          backgroundColor: '#FAF5FF',
+          padding: '3px 8px',
+          borderRadius: '6px',
+          border: '1px solid #E9D5FF',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+          position: 'relative'
+        }}
+        title={`Double-click to navigate to ${data.invokedFlowFqn}`}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = '#F3E8FF';
+          e.currentTarget.style.borderColor = '#C4B5FD';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = '#FAF5FF';
+          e.currentTarget.style.borderColor = '#E9D5FF';
+        }}
+      >
+        🔗 {data.invokedFlowFqn}
+        {data.invokedFlowFqn !== 'unknown' && (
+          <span style={{ 
+            marginLeft: '4px', 
+            fontSize: '8px',
+            opacity: 0.7
+          }}>
+            ⤴
+          </span>
+        )}
       </div>
+      )}
       
       {data.resolvedComponentFqn && (
         <div style={{ 
@@ -168,32 +208,6 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
           border: '1px solid #F3F4F6'
         }}>
           {data.resolvedComponentFqn}
-        </div>
-      )}
-      
-      {data.executionStatus && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: '8px'
-        }}>
-          <div style={getStatusBadgeStyle()}>
-            <span>{getStatusIcon()}</span>
-            <span>{data.executionStatus.toLowerCase()}</span>
-          </div>
-        </div>
-      )}
-
-      {data.executionDurationMs && (
-        <div style={{ 
-          fontSize: '9px', 
-          color: '#9CA3AF',
-          textAlign: 'center',
-          marginBottom: '4px',
-          fontFamily: 'ui-monospace, monospace'
-        }}>
-          {data.executionDurationMs}ms
         </div>
       )}
 

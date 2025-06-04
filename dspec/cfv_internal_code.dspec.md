@@ -1369,3 +1369,155 @@ code cfv_internal_code.FlowSimulationService_SimulateComponentExecution {
         // 5. Realistic data generation for all component types
     `
 }
+
+code cfv_internal_code.GraphBuilderService_GenerateFlowDetailGraphData {
+    title: "Generate Flow Detail Graph Data with Trace Integration"
+    part_of_design: cfv_designs.GraphBuilderService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/graphBuilderService.ts",
+        entry_point_name: "generateFlowDetailGraphData",
+        entry_point_type: "function"
+    }
+    signature: "(params: cfv_models.GenerateFlowDetailParams) => Promise<cfv_models.GraphData>"
+    
+    detailed_behavior: `
+        // Human Review Focus: Node type detection, trace data correlation, edge generation logic.
+        // AI Agent Target: Generate React Flow nodes and edges from DSL flow definition.
+
+        DECLARE flowDefinition = CALL moduleRegistry.getFlowDefinition WITH params.flowFqn
+        IF flowDefinition IS_NULL THEN
+            RETURN_VALUE { nodes: [], edges: [] }
+        END_IF
+        
+        DECLARE nodes = []
+        DECLARE edges = []
+        
+        // 1. Generate trigger node
+        IF flowDefinition.trigger IS_DEFINED THEN
+            DECLARE triggerNodeData = {
+                label: flowDefinition.trigger.type,
+                triggerType: flowDefinition.trigger.type,
+                dslObject: flowDefinition.trigger,
+                resolvedComponentFqn: flowDefinition.trigger.type,
+                componentSchema: CALL params.componentSchemas.get WITH flowDefinition.trigger.type,
+                contextVarUsages: CALL params.parseContextVarsFn WITH JSON.stringify(flowDefinition.trigger)
+            }
+            
+            // Add trace data if available
+            IF params.traceData IS_DEFINED THEN
+                ASSIGN triggerNodeData.executionStatus = "SUCCESS" // Triggers are always successful if trace exists
+                ASSIGN triggerNodeData.executionInputData = params.traceData.triggerData
+            END_IF
+            
+            ADD {
+                id: "trigger",
+                type: "triggerNode",
+                position: { x: 0, y: 0 },
+                data: triggerNodeData
+            } TO nodes
+        END_IF
+        
+        // 2. Generate step nodes with proper SubFlowInvoker handling
+        IF flowDefinition.steps IS_DEFINED THEN
+            FOR EACH step IN flowDefinition.steps WITH index
+                DECLARE componentInfo = CALL moduleRegistry.resolveComponentTypeInfo WITH step.component_ref, params.flowFqn
+                DECLARE stepTrace = NULL
+                IF params.traceData IS_DEFINED THEN
+                    ASSIGN stepTrace = FIND params.traceData.steps WHERE stepTrace.stepId EQUALS step.step_id
+                END_IF
+                
+                DECLARE stepNodeData = {
+                    label: step.step_id,
+                    stepId: step.step_id,
+                    dslObject: step,
+                    resolvedComponentFqn: componentInfo?.baseType,
+                    componentSchema: CALL params.componentSchemas.get WITH componentInfo?.baseType,
+                    contextVarUsages: CALL params.parseContextVarsFn WITH JSON.stringify(step)
+                }
+                
+                // Add trace data if available
+                IF stepTrace IS_DEFINED THEN
+                    ASSIGN stepNodeData.executionStatus = stepTrace.status
+                    ASSIGN stepNodeData.executionDurationMs = stepTrace.durationMs
+                    ASSIGN stepNodeData.executionInputData = stepTrace.inputData
+                    ASSIGN stepNodeData.executionOutputData = stepTrace.outputData
+                END_IF
+                
+                // Check if this is a SubFlowInvoker and populate invokedFlowFqn correctly
+                IF componentInfo?.baseType EQUALS "StdLib:SubFlowInvoker" OR step.component_ref CONTAINS "SubFlowInvoker" THEN
+                    DECLARE flowName = step.config?.flowName
+                    DECLARE invokedFlowFqn = "unknown"
+                    
+                    IF flowName IS_DEFINED AND flowName IS_NOT_EMPTY THEN
+                        // Resolve flowName to full FQN
+                        IF flowName CONTAINS "." THEN
+                            // Already a full FQN
+                            ASSIGN invokedFlowFqn = flowName
+                        ELSE
+                            // Simple name, resolve using current module namespace
+                            DECLARE currentModuleFqn = EXTRACT_MODULE_FQN_FROM params.flowFqn
+                            ASSIGN invokedFlowFqn = currentModuleFqn + "." + flowName
+                        END_IF
+                    ELSE
+                        LOG_WARNING "SubFlowInvoker step " + step.step_id + " has missing or empty flowName in config"
+                    END_IF
+                    
+                    DECLARE subFlowNodeData = {
+                        ...stepNodeData,
+                        invokedFlowFqn: invokedFlowFqn
+                    }
+                    
+                    ADD {
+                        id: step.step_id,
+                        type: "subFlowInvokerNode",
+                        position: { x: 0, y: (index + 1) * 100 },
+                        data: subFlowNodeData
+                    } TO nodes
+                ELSE
+                    ADD {
+                        id: step.step_id,
+                        type: "stepNode",
+                        position: { x: 0, y: (index + 1) * 100 },
+                        data: stepNodeData
+                    } TO nodes
+                END_IF
+            END_FOR
+        END_IF
+        
+        // 3. Generate edges based on inputs_map and run_after
+        // ... (edge generation logic remains the same)
+        
+        // 4. Apply automatic layout if requested
+        IF params.useAutoLayout AND nodes.length > 0 THEN
+            TRY
+                DECLARE layouted = CALL layoutNodes WITH nodes, edges, layoutPresets.flowDetail.options
+                
+                // Apply trace enhancements if trace data is available
+                IF params.traceData IS_DEFINED THEN
+                    DECLARE enhancedNodes = CALL enhanceNodesWithTrace WITH layouted.nodes, params.traceData
+                    DECLARE enhancedEdges = CALL enhanceEdgesWithTrace WITH layouted.edges, params.traceData
+                    RETURN_VALUE { nodes: enhancedNodes, edges: enhancedEdges }
+                END_IF
+                
+                RETURN_VALUE layouted
+            CATCH error
+                LOG_WARNING "Auto-layout failed, using manual positions: " + error
+            END_TRY
+        END_IF
+        
+        // Apply trace enhancements even without layout if trace data is available
+        IF params.traceData IS_DEFINED THEN
+            DECLARE enhancedNodes = CALL enhanceNodesWithTrace WITH nodes, params.traceData
+            DECLARE enhancedEdges = CALL enhanceEdgesWithTrace WITH edges, params.traceData
+            RETURN_VALUE { nodes: enhancedNodes, edges: enhancedEdges }
+        END_IF
+        
+        RETURN_VALUE { nodes, edges }
+    `
+    dependencies: [
+        "cfv_models.GenerateFlowDetailParams",
+        "cfv_models.GraphData",
+        "cfv_models.IModuleRegistry"
+    ]
+}

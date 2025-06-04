@@ -77,116 +77,116 @@ const sampleComponentSchemas: Record<string, ComponentSchema> = {
 };
 
 // Sample trace data for demonstration - Casino Platform Flow
-const sampleTraceData: FlowExecutionTrace = {
-  traceId: 'trace-casino-123',
-  flowFqn: 'com.casino.core.UserOnboardingFlow',
-  instanceId: 'instance-casino-456',
-  status: 'COMPLETED',
-  startTime: '2024-01-15T10:00:00Z',
-  endTime: '2024-01-15T10:00:15Z',
-  durationMs: 15000,
-  triggerData: {
-    method: 'POST',
-    path: '/api/users/onboard',
-    body: { 
-      email: 'user@example.com',
-      firstName: 'John',
-      lastName: 'Doe',
-      dateOfBirth: '1990-01-01',
-      country: 'US'
-    }
-  },
-  initialContext: {},
-  finalContext: { userId: 'user-123', kycStatus: 'verified' },
-  steps: [
-    {
-      stepId: 'validate-registration-data',
-      componentFqn: 'StdLib:JsonSchemaValidator',
-      status: 'SUCCESS',
-      startTime: '2024-01-15T10:00:00Z',
-      endTime: '2024-01-15T10:00:02Z',
-      durationMs: 2000,
-      inputData: { 
-        email: 'user@example.com',
-        firstName: 'John',
-        lastName: 'Doe'
-      },
-      outputData: { validData: { email: 'user@example.com', firstName: 'John', lastName: 'Doe' } }
-    },
-    {
-      stepId: 'geo-compliance-check',
-      componentFqn: 'StdLib:Fork',
-      status: 'SUCCESS',
-      startTime: '2024-01-15T10:00:02Z',
-      endTime: '2024-01-15T10:00:05Z',
-      durationMs: 3000,
-      inputData: { userData: { country: 'US' } },
-      outputData: { 
-        'jurisdiction-check': { allowed: true },
-        'sanctions-check': { flagged: false },
-        'age-verification': { isEligible: true, age: 34 }
-      }
-    },
-    {
-      stepId: 'evaluate-compliance-results',
-      componentFqn: 'StdLib:MapData',
-      status: 'SUCCESS',
-      startTime: '2024-01-15T10:00:05Z',
-      endTime: '2024-01-15T10:00:06Z',
-      durationMs: 1000,
-      inputData: { jurisdictionAllowed: true, onSanctionsList: false, ageEligible: true },
-      outputData: { 
-        canProceed: true,
-        complianceFlags: { jurisdiction: true, sanctions: true, age: true },
-        riskLevel: 'low'
-      }
-    },
-    {
-      stepId: 'initiate-kyc-process',
-      componentFqn: 'StdLib:SubFlowInvoker',
-      status: 'SUCCESS',
-      startTime: '2024-01-15T10:00:06Z',
-      endTime: '2024-01-15T10:00:10Z',
-      durationMs: 4000,
-      inputData: { userData: { email: 'user@example.com' }, complianceData: { riskLevel: 'low' } },
-      outputData: { status: 'verified', sessionId: 'kyc-session-123' }
-    },
-    {
-      stepId: 'create-user-account',
-      componentFqn: 'StdLib:HttpCall',
-      status: 'SUCCESS',
-      startTime: '2024-01-15T10:00:10Z',
-      endTime: '2024-01-15T10:00:12Z',
-      durationMs: 2000,
-      inputData: { userData: { email: 'user@example.com' }, kycStatus: 'verified' },
-      outputData: { userId: 'user-123', accountCreated: true }
-    },
-    {
-      stepId: 'setup-responsible-gambling',
-      componentFqn: 'StdLib:SubFlowInvoker',
-      status: 'SUCCESS',
-      startTime: '2024-01-15T10:00:12Z',
-      endTime: '2024-01-15T10:00:14Z',
-      durationMs: 2000,
-      inputData: { userId: 'user-123', userTier: 'standard' },
-      outputData: { limitsConfigured: true, dailyLimit: 1000 }
-    },
-    {
-      stepId: 'send-welcome-communication',
-      componentFqn: 'StdLib:Fork',
-      status: 'SUCCESS',
-      startTime: '2024-01-15T10:00:14Z',
-      endTime: '2024-01-15T10:00:15Z',
-      durationMs: 1000,
-      inputData: { userData: { userId: 'user-123', email: 'user@example.com' } },
-      outputData: { 
-        'welcome-email': { sent: true, messageId: 'email-123' },
-        'welcome-sms': { sent: true, messageId: 'sms-123' },
-        'analytics-event': { tracked: true, eventId: 'event-123' }
-      }
-    }
-  ]
-};
+// const sampleTraceData: FlowExecutionTrace = {
+//   traceId: 'trace-casino-123',
+//   flowFqn: 'com.casino.core.UserOnboardingFlow',
+//   instanceId: 'instance-casino-456',
+//   status: 'COMPLETED',
+//   startTime: '2024-01-15T10:00:00Z',
+//   endTime: '2024-01-15T10:00:15Z',
+//   durationMs: 15000,
+//   triggerData: {
+//     method: 'POST',
+//     path: '/api/users/onboard',
+//     body: { 
+//       email: 'user@example.com',
+//       firstName: 'John',
+//       lastName: 'Doe',
+//       dateOfBirth: '1990-01-01',
+//       country: 'US'
+//     }
+//   },
+//   initialContext: {},
+//   finalContext: { userId: 'user-123', kycStatus: 'verified' },
+//   steps: [
+//     {
+//       stepId: 'validate-registration-data',
+//       componentFqn: 'StdLib:JsonSchemaValidator',
+//       status: 'SUCCESS',
+//       startTime: '2024-01-15T10:00:00Z',
+//       endTime: '2024-01-15T10:00:02Z',
+//       durationMs: 2000,
+//       inputData: { 
+//         email: 'user@example.com',
+//         firstName: 'John',
+//         lastName: 'Doe'
+//       },
+//       outputData: { validData: { email: 'user@example.com', firstName: 'John', lastName: 'Doe' } }
+//     },
+//     {
+//       stepId: 'geo-compliance-check',
+//       componentFqn: 'StdLib:Fork',
+//       status: 'SUCCESS',
+//       startTime: '2024-01-15T10:00:02Z',
+//       endTime: '2024-01-15T10:00:05Z',
+//       durationMs: 3000,
+//       inputData: { userData: { country: 'US' } },
+//       outputData: { 
+//         'jurisdiction-check': { allowed: true },
+//         'sanctions-check': { flagged: false },
+//         'age-verification': { isEligible: true, age: 34 }
+//       }
+//     },
+//     {
+//       stepId: 'evaluate-compliance-results',
+//       componentFqn: 'StdLib:MapData',
+//       status: 'SUCCESS',
+//       startTime: '2024-01-15T10:00:05Z',
+//       endTime: '2024-01-15T10:00:06Z',
+//       durationMs: 1000,
+//       inputData: { jurisdictionAllowed: true, onSanctionsList: false, ageEligible: true },
+//       outputData: { 
+//         canProceed: true,
+//         complianceFlags: { jurisdiction: true, sanctions: true, age: true },
+//         riskLevel: 'low'
+//       }
+//     },
+//     {
+//       stepId: 'initiate-kyc-process',
+//       componentFqn: 'StdLib:SubFlowInvoker',
+//       status: 'SUCCESS',
+//       startTime: '2024-01-15T10:00:06Z',
+//       endTime: '2024-01-15T10:00:10Z',
+//       durationMs: 4000,
+//       inputData: { userData: { email: 'user@example.com' }, complianceData: { riskLevel: 'low' } },
+//       outputData: { status: 'verified', sessionId: 'kyc-session-123' }
+//     },
+//     {
+//       stepId: 'create-user-account',
+//       componentFqn: 'StdLib:HttpCall',
+//       status: 'SUCCESS',
+//       startTime: '2024-01-15T10:00:10Z',
+//       endTime: '2024-01-15T10:00:12Z',
+//       durationMs: 2000,
+//       inputData: { userData: { email: 'user@example.com' }, kycStatus: 'verified' },
+//       outputData: { userId: 'user-123', accountCreated: true }
+//     },
+//     {
+//       stepId: 'setup-responsible-gambling',
+//       componentFqn: 'StdLib:SubFlowInvoker',
+//       status: 'SUCCESS',
+//       startTime: '2024-01-15T10:00:12Z',
+//       endTime: '2024-01-15T10:00:14Z',
+//       durationMs: 2000,
+//       inputData: { userId: 'user-123', userTier: 'standard' },
+//       outputData: { limitsConfigured: true, dailyLimit: 1000 }
+//     },
+//     {
+//       stepId: 'send-welcome-communication',
+//       componentFqn: 'StdLib:Fork',
+//       status: 'SUCCESS',
+//       startTime: '2024-01-15T10:00:14Z',
+//       endTime: '2024-01-15T10:00:15Z',
+//       durationMs: 1000,
+//       inputData: { userData: { userId: 'user-123', email: 'user@example.com' } },
+//       outputData: { 
+//         'welcome-email': { sent: true, messageId: 'email-123' },
+//         'welcome-sms': { sent: true, messageId: 'sms-123' },
+//         'analytics-event': { tracked: true, eventId: 'event-123' }
+//       }
+//     }
+//   ]
+// };
 
 // Custom node types - moved outside component to prevent recreation
 const nodeTypes = {
@@ -1806,17 +1806,17 @@ export default function HomePage() {
     console.log('Running test case:', testCase);
     
     // Generate test templates for the flow
-    const templates = generateTestCaseTemplates(testCase.flowFqn, {
-      getFlowDefinition: () => null,
-      getAllLoadedModules: () => [],
-      getLoadedModule: () => null,
-      resolveComponentTypeInfo: () => null,
-      getComponentSchema: () => null,
-      getNamedComponentDefinition: () => null,
-      getContextDefinition: () => null,
-      getFlowDefinitionDsl: () => null,
-      getNamedComponentDefinitionDsl: () => null
-    });
+    // const templates = generateTestCaseTemplates(testCase.flowFqn, {
+    //   getFlowDefinition: () => null,
+    //   getAllLoadedModules: () => [],
+    //   getLoadedModule: () => null,
+    //   resolveComponentTypeInfo: () => null,
+    //   getComponentSchema: () => null,
+    //   getNamedComponentDefinition: () => null,
+    //   getContextDefinition: () => null,
+    //   getFlowDefinitionDsl: () => null,
+    //   getNamedComponentDefinitionDsl: () => null
+    // });
     
     // Mock test result
     return {

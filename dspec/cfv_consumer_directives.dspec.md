@@ -204,16 +204,32 @@ directive cfv_consumer_directives.SubFlowInvokerNavigation {
     default_language: "TypeScriptReact"
 
     implementation_pattern: {
-        event_handling: "Implement onNodeDoubleClick handler in the main CascadeFlowVisualizer component that checks if the double-clicked node is of type 'subFlowInvoker'.",
+        event_handling: "Implement onNodeDoubleClick handler in the main CascadeFlowVisualizer component that checks if the double-clicked node is of type 'subFlowInvokerNode'.",
         navigation_logic: "Extract the `invokedFlowFqn` from the node's data and attempt to load the target flow module. If the module is not loaded, use the `requestModule` callback to load it.",
         fallback_behavior: "If the target flow cannot be loaded, provide user feedback (e.g., toast notification) indicating the flow is not available.",
-        visual_indication: "SubFlowInvoker nodes should have visual indicators (e.g., navigation arrow, cursor pointer, tooltip) to indicate they are navigable."
+        visual_indication: "SubFlowInvoker nodes should have visual indicators (e.g., navigation arrow, cursor pointer, tooltip) to indicate they are navigable.",
+        flow_fqn_resolution: "The `invokedFlowFqn` should be populated from the correct source during graph generation: for named components, use the component definition's `config.flowName`; for direct references, use the step's `config.flowName`. If `config.flowName` contains a simple flow name (e.g., 'MyFlow'), it should be resolved to a full FQN by combining with the current module's namespace (e.g., 'com.casino.core.MyFlow').",
+        named_component_handling: "CRITICAL: For named SubFlowInvoker components (e.g., 'invokeEvaluateUserTierFlow'), the flowName must be extracted from the component definition's config, not the step's config. The step references the named component by name, but the actual flowName is stored in the named component definition."
     }
 
     integration_requirements: {
         node_data_access: "Access `data.invokedFlowFqn` from SubFlowInvokerNodeData to determine the target flow.",
         module_loading: "Use the existing `requestModule` prop callback to load the target flow module if not already loaded.",
-        view_switching: "Update the current view to display the target flow after successful loading."
+        view_switching: "Update the current view to display the target flow after successful loading.",
+        config_field_mapping: "The GraphBuilderService should populate `invokedFlowFqn` from the correct source: for named components (e.g., 'invokeEvaluateUserTierFlow'), extract `flowName` from the component definition's config; for direct StdLib:SubFlowInvoker references, extract `flowName` from the step's config. The `flowName` field is the correct field name according to the StdLib:SubFlowInvoker component schema.",
+        component_resolution: "Use moduleRegistry.resolveComponentTypeInfo() to determine if a step references a named component or direct component type. Check componentInfo.isNamedComponent and componentInfo.componentDefinition to access the correct config source."
+    }
+
+    error_handling: {
+        missing_flow_name: "If `step.config.flowName` is undefined or empty, set `invokedFlowFqn` to 'unknown' and log a warning.",
+        invalid_flow_fqn: "If the resolved flow FQN is invalid or the target flow doesn't exist, provide clear user feedback.",
+        module_load_failure: "If `requestModule` fails to load the target module, display an error message and optionally retry."
+    }
+
+    user_experience: {
+        loading_states: "Show loading indicators while modules are being loaded.",
+        navigation_feedback: "Provide visual feedback when navigation is successful (e.g., highlight the newly loaded flow).",
+        accessibility: "Ensure double-click navigation is accessible via keyboard (e.g., Enter key on focused node)."
     }
 }
 

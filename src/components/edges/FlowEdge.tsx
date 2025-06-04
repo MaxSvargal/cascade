@@ -33,13 +33,13 @@ const FlowEdge: React.FC<EdgeProps<FlowEdgeData>> = ({
     if (data?.type === 'dataFlow') {
       return {
         ...baseStyle,
-        stroke: data.isExecutedPath ? '#4CAF50' : '#81C784',
+        stroke: data.isExecutedPath ? '#333' : '#bbb',
         strokeDasharray: 'none'
       };
     } else {
       return {
         ...baseStyle,
-        stroke: data?.isExecutedPath ? '#4CAF50' : '#666',
+        stroke: data?.isExecutedPath ? 'green' : '#666',
       };
     }
   };
