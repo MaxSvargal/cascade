@@ -8,9 +8,7 @@ import {
   ResolvedStepInput,
   FlowSimulationResult,
   ExecutionOptions,
-  FlowExecutionStatusEnum,
-  StepExecutionTrace,
-  ExecutionStatusEnum
+  FlowExecutionStatusEnum
 } from '../models/cfv_models_generated';
 import { DataGenerationService } from './dataGenerationService';
 
@@ -114,7 +112,7 @@ export class SimulationService {
   }
 
   /**
-   * Simulate complete flow execution with detailed execution context
+   * Simulate complete flow execution - simplified for client-side use
    */
   async simulateFlowExecutionDetailed(
     flowFqn: string,
@@ -122,7 +120,7 @@ export class SimulationService {
     targetStepId?: string,
     executionOptions?: FlowExecutionOptions
   ): Promise<InternalFlowSimulationResult> {
-    console.log(`🚀 Starting detailed flow simulation for ${flowFqn}`, { triggerInput, targetStepId });
+    console.log(`🚀 Starting simplified flow simulation for ${flowFqn}`, { triggerInput, targetStepId });
 
     // Get flow definition from module registry
     const flowDef = this.moduleRegistry.getFlowDefinition(flowFqn);
@@ -130,92 +128,77 @@ export class SimulationService {
       throw new Error(`Flow not found: ${flowFqn}`);
     }
 
-    // Initialize execution context
-    const executionContext: ExecutionContext = {
-      flowFqn,
-      executionId: 'sim-' + Math.random().toString(36).substr(2, 9),
-      startTime: new Date().toISOString(),
-      triggerInput,
-      stepResults: new Map(),
-      contextVariables: new Map(),
-      executionLog: [],
-      errors: []
-    };
+    const executionId = 'sim-' + Math.random().toString(36).substr(2, 9);
+    const startTime = new Date().toISOString();
+    const stepResults = new Map<string, StepExecutionResult>();
+    const errors: any[] = [];
 
-    // Load context variables from module (using any cast since method may not exist)
-    const moduleContext = (this.moduleRegistry as any).getModuleContext?.(flowDef.moduleFqn) || { contextVariables: [] };
-    for (const contextVar of moduleContext.contextVariables || []) {
-      executionContext.contextVariables.set(contextVar.name, contextVar.value);
-    }
+    // Execute trigger
+    const triggerResult = this.executeTrigger(flowDef.trigger, triggerInput, null as any);
+    stepResults.set('trigger', triggerResult);
 
-    // Execute trigger - CRITICAL: trigger must produce proper output data
-    const triggerResult = this.executeTrigger(flowDef.trigger, triggerInput, executionContext);
-    executionContext.stepResults.set('trigger', triggerResult);
-
-    console.log(`✅ Trigger executed:`, triggerResult);
-
-    // Execute steps in order until target step (or all steps)
+    // Execute steps until target step (or all steps)
     const stepsToExecute = targetStepId ? 
       this.getStepsUpToTarget(flowDef.steps || [], targetStepId) :
       (flowDef.steps || []);
 
-    console.log(`📋 Steps to execute:`, stepsToExecute.map((s: any) => s.step_id));
-
     for (const step of stepsToExecute) {
       try {
-        // CRITICAL: Resolve input data from previous step outputs
-        const stepInput = this.resolveStepInputDetailed(step, executionContext);
-        const stepResult = this.executeStepDetailed(step, stepInput, executionContext);
-        executionContext.stepResults.set(step.step_id, stepResult);
+        // Simple step execution using existing simulateStepExecution method
+        const stepResult = this.simulateStepExecution(
+          step, 
+          Object.fromEntries(stepResults), 
+          {}, 
+          flowFqn
+        );
 
-        console.log(`✅ Step ${step.step_id} executed:`, stepResult);
-
-        // Log execution with proper data lineage
-        executionContext.executionLog.push({
+        // Convert to StepExecutionResult format
+        const executionResult: StepExecutionResult = {
           stepId: step.step_id,
+          componentType: stepResult.componentFqn,
+          inputData: stepResult.inputData,
+          outputData: stepResult.outputData,
+          executionTime: 100,
           timestamp: new Date().toISOString(),
-          input: stepInput,
-          output: stepResult,
-          duration: stepResult.executionTime || 0,
-          dataLineage: stepInput.inputSources
-        });
+          success: stepResult.simulationSuccess
+        };
 
-        // Break if this is the target step
+        stepResults.set(step.step_id, executionResult);
+
         if (step.step_id === targetStepId) {
           break;
         }
       } catch (error: any) {
         console.error(`❌ Step ${step.step_id} failed:`, error);
-        executionContext.errors.push({
+        errors.push({
           stepId: step.step_id,
           error: error.message,
           timestamp: new Date().toISOString()
         });
 
-        // Stop execution on error unless configured to continue
         if (!executionOptions?.continueOnError) {
           break;
         }
       }
     }
 
-    // Build final result with proper data propagation
+    // Build simplified result
     const finalResult: InternalFlowSimulationResult = {
-      executionId: executionContext.executionId,
+      executionId,
       flowFqn,
-      success: executionContext.errors.length === 0,
-      startTime: executionContext.startTime,
+      success: errors.length === 0,
+      startTime,
       endTime: new Date().toISOString(),
       triggerInput,
-      finalOutput: this.getFinalOutput(executionContext),
-      stepResults: Object.fromEntries(executionContext.stepResults),
-      executionLog: executionContext.executionLog,
-      errors: executionContext.errors,
-      contextVariables: Object.fromEntries(executionContext.contextVariables),
-      resolvedStepInputs: this.buildResolvedInputsMap(executionContext)
+      finalOutput: stepResults.size > 1 ? Array.from(stepResults.values())[stepResults.size - 1].outputData : triggerInput,
+      stepResults: Object.fromEntries(stepResults),
+      executionLog: [],
+      errors,
+      contextVariables: {},
+      resolvedStepInputs: {}
     };
 
-    console.log(`🏁 Flow simulation completed:`, finalResult);
+    console.log(`🏁 Simplified flow simulation completed:`, finalResult);
     return finalResult;
   }
 
@@ -260,161 +243,9 @@ export class SimulationService {
     };
   }
 
-  private resolveStepInputDetailed(step: any, executionContext: ExecutionContext): InternalResolvedStepInput {
-    const resolvedInput: Record<string, any> = {};
-    const inputSources: InputSource[] = [];
-
-    // Process inputs_map to resolve data from previous steps
-    if (step.inputs_map) {
-      for (const [inputKey, sourceExpression] of Object.entries(step.inputs_map)) {
-        const source = this.resolveInputSource(sourceExpression as string, executionContext);
-        resolvedInput[inputKey] = source.resolvedValue;
-        inputSources.push({
-          inputKey,
-          sourceExpression: sourceExpression as string,
-          resolvedValue: source.resolvedValue,
-          sourceInfo: source
-        });
-      }
-    }
-
-    // If no explicit inputs_map, try to use output from previous step or trigger
-    if (Object.keys(resolvedInput).length === 0) {
-      const previousStepResults = Array.from(executionContext.stepResults.values());
-      if (previousStepResults.length > 0) {
-        const lastResult = previousStepResults[previousStepResults.length - 1];
-        resolvedInput.data = lastResult.outputData;
-        inputSources.push({
-          inputKey: 'data',
-          sourceExpression: `steps.${lastResult.stepId}.outputs`,
-          resolvedValue: lastResult.outputData,
-          sourceInfo: {
-            type: lastResult.stepId === 'trigger' ? 'trigger' : 'step',
-            stepId: lastResult.stepId,
-            path: 'outputs'
-          }
-        });
-      }
-    }
-
-    return {
-      stepId: step.step_id,
-      resolvedInput,
-      inputSources,
-      componentType: step.component_ref,
-      config: step.config
-    };
-  }
-
-  private resolveInputSource(expression: string, executionContext: ExecutionContext): any {
-    const source: any = {
-      type: 'literal',
-      value: expression
-    };
-
-    if (expression.startsWith('trigger.')) {
-      const triggerResult = executionContext.stepResults.get('trigger');
-      if (triggerResult) {
-        const path = expression.substring(8); // Remove 'trigger.'
-        // CRITICAL: Handle optimized structure - trigger outputs are direct
-        const triggerOutput = triggerResult.outputData;
-        source.type = 'trigger';
-        source.stepId = 'trigger';
-        source.path = path;
-        source.resolvedValue = this.getNestedValue(triggerOutput, path);
-      } else {
-        source.error = 'Trigger result not found';
-        source.resolvedValue = null;
-      }
-    } else if (expression.startsWith('steps.')) {
-      // Parse steps.stepId.path format
-      const match = expression.match(/^steps\.([^.]+)\.(.+)$/);
-      if (match) {
-        const stepId = match[1];
-        const path = match[2];
-        const stepResult = executionContext.stepResults.get(stepId);
-        
-        if (stepResult) {
-          // CRITICAL: Handle optimized structure - access output directly
-          let stepOutput;
-          
-          if (stepResult.outputData.output) {
-            // New optimized structure: { inputRef, output }
-            stepOutput = stepResult.outputData.output;
-          } else {
-            // Fallback for direct output data (trigger, etc.)
-            stepOutput = stepResult.outputData;
-          }
-          
-          // SPECIAL HANDLING for Fork outputs: steps.fork-step.outputs.branch-name
-          if (path.startsWith('outputs.') && stepOutput.branches) {
-            const branchName = path.substring(8); // Remove 'outputs.'
-            source.type = 'step';
-            source.stepId = stepId;
-            source.path = path;
-            source.resolvedValue = stepOutput.branches[branchName];
-          } else if (path.startsWith('outputs.')) {
-            // Handle regular outputs.field access
-            const actualPath = path.replace('outputs.', '');
-            source.type = 'step';
-            source.stepId = stepId;
-            source.path = path;
-            source.resolvedValue = this.getNestedValue(stepOutput, actualPath);
-          } else {
-            // Direct field access or complex path
-            source.type = 'step';
-            source.stepId = stepId;
-            source.path = path;
-            source.resolvedValue = this.getNestedValue(stepOutput, path);
-          }
-        } else {
-          source.error = `Step result not found: ${stepId}`;
-          source.resolvedValue = null;
-        }
-      } else {
-        source.error = `Invalid steps expression: ${expression}`;
-        source.resolvedValue = null;
-      }
-    } else if (expression.startsWith('context.')) {
-      const contextKey = expression.substring(8); // Remove 'context.'
-      source.type = 'context';
-      source.key = contextKey;
-      source.resolvedValue = executionContext.contextVariables.get(contextKey);
-    } else {
-      // Literal value
-      source.type = 'literal';
-      source.resolvedValue = expression;
-    }
-
-    return source;
-  }
-
-  private executeStepDetailed(step: any, stepInput: InternalResolvedStepInput, executionContext: ExecutionContext): StepExecutionResult {
-    const startTime = Date.now();
-    
-    // CRITICAL: Component now returns optimized { inputRef, output } structure
-    const componentResult = this.dataGenerationService.simulateComponentExecution(
-      step.component_ref,
-      stepInput.resolvedInput,
-      step.config,
-      this.componentSchemas[step.component_ref]
-    );
-
-    // Extract the actual output data from the optimized component result
-    const outputData = componentResult.output || componentResult; // Fallback for backward compatibility
-
-    const executionTime = Date.now() - startTime;
-
-    return {
-      stepId: step.step_id,
-      componentType: step.component_ref,
-      inputData: stepInput.resolvedInput,
-      outputData: componentResult, // CRITICAL: Store the complete optimized structure
-      executionTime,
-      timestamp: new Date().toISOString(),
-      success: true,
-      inputSources: stepInput.inputSources
-    };
+  private getStepsUpToTarget(steps: any[], targetStepId: string): any[] {
+    const targetIndex = steps.findIndex(step => step.step_id === targetStepId);
+    return targetIndex >= 0 ? steps.slice(0, targetIndex + 1) : steps;
   }
 
   private getNestedValue(obj: any, path: string): any {
@@ -431,22 +262,6 @@ export class SimulationService {
     }
     
     return current;
-  }
-
-  private getStepsUpToTarget(steps: any[], targetStepId: string): any[] {
-    const targetIndex = steps.findIndex(step => step.step_id === targetStepId);
-    return targetIndex >= 0 ? steps.slice(0, targetIndex + 1) : steps;
-  }
-
-  private getFinalOutput(executionContext: ExecutionContext): any {
-    const stepResults = Array.from(executionContext.stepResults.values());
-    return stepResults.length > 0 ? stepResults[stepResults.length - 1].outputData : null;
-  }
-
-  private buildResolvedInputsMap(executionContext: ExecutionContext): Record<string, InternalResolvedStepInput> {
-    // This would be populated during step execution
-    // For now, return empty map as it's built during execution
-    return {};
   }
 
   /**

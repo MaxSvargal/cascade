@@ -793,28 +793,46 @@ design cfv_designs.DebugTestTabService {
 }
 
 design cfv_designs.FlowSimulationService {
-    title: "Flow Simulation Service"
-    description: "Provides realistic flow execution simulation with proper data propagation and component execution."
+    title: "Flow Simulation Service (Simplified Client-Side)"
+    description: "Provides simplified flow simulation for Debug & Test tab functionality, with complex execution now handled server-side."
     part_of: cfv_designs.DebugTestTabService
     responsibilities: [
-        "Execute complete flow simulation from trigger through all steps",
-        "Resolve input data for each step based on inputs_map and data lineage",
-        "Execute components with realistic output generation based on schemas",
-        "Handle context variables and data transformations",
-        "Provide execution timeline and performance metrics",
-        "Support partial flow execution from selected steps"
+        "Execute simplified flow simulation for step-level testing and input resolution",
+        "Resolve input data for individual steps based on inputs_map",
+        "Generate mock component outputs for debugging and testing",
+        "Support partial flow simulation for Debug & Test tab forms",
+        "Provide data lineage resolution for debugging workflows"
     ]
     dependencies: [
         cfv_designs.ModuleRegistryService,
-        cfv_designs.ComponentSchemaService,
-        cfv_designs.ComponentExecutionService
+        cfv_designs.DataGenerationService
     ]
     exposes_interface: {
         simulateFlowExecution: "(flowFqn: string, triggerInput: any, targetStepId?: string) => Promise<FlowSimulationResult>",
-        resolveStepInput: "(step: FlowStep, executionContext: ExecutionContext) => ResolvedStepInput",
-        executeStep: "(step: FlowStep, stepInput: ResolvedStepInput, executionContext: ExecutionContext) => any"
+        resolveStepInputData: "(stepId: string, flowFqn: string) => Promise<ResolvedStepInput>",
+        simulateStepExecution: "(step: FlowStep, previousStepResults: Record<string, any>, contextState: Record<string, any>, flowFqn: string) => StepSimulationResult"
     }
-    source: "New flow simulation service for realistic execution testing"
+    architectural_changes: {
+        removed_complexity: [
+            "Progressive execution with real-time UI updates (moved to server-side streaming)",
+            "Complex dependency graph building and parallel execution",
+            "Manual execution trace construction and state management",
+            "Complex execution context management with detailed logging"
+        ],
+        simplified_focus: [
+            "Step-level simulation for Debug & Test tab input forms",
+            "Basic data generation and mock output creation",
+            "Simple input resolution for debugging workflows",
+            "Lightweight simulation for development tools"
+        ],
+        server_delegation: [
+            "Real flow execution now handled by StreamingExecutionAPIService",
+            "Complex dependency resolution moved to server-side execution engine",
+            "Real-time execution updates via ClientExecutionStreamHandler",
+            "Production-grade execution with proper error handling and logging"
+        ]
+    }
+    source: "Simplified client-side simulation service after server-side execution migration"
 }
 
 design cfv_designs.SchemaBasedFormGenerationService {
