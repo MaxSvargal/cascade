@@ -1971,3 +1971,365 @@ specification cfv_internal_code.LayoutServiceWidthCompensation {
         backward_compatibility: "Maintain compatibility with existing layout options and presets"
     }
 }
+
+// --- Enhanced Server Execution Engine Logic (New) ---
+
+code cfv_internal_code.ServerExecutionEngine_EnhancedDependencyResolution {
+    title: "Enhanced Server Execution Engine with Advanced Dependency Resolution"
+    part_of_design: cfv_designs.StreamingExecutionAPIService
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/serverExecutionEngine.ts",
+        entry_point_name: "ServerExecutionEngine",
+        entry_point_type: "class"
+    }
+    signature: "class ServerExecutionEngine"
+    
+    detailed_behavior: `
+        // Human Review Focus: Advanced dependency analysis, robust expression parsing, layered execution strategy.
+        // AI Agent Target: Generate comprehensive server-side execution engine with sophisticated dependency handling.
+
+        CLASS ServerExecutionEngine {
+            // Enhanced dependency analysis with comprehensive cycle detection
+            FUNCTION analyzeDependencies(steps: any[]): DependencyAnalysis {
+                DECLARE graph = new Map<string, Set<string>>()
+                
+                // Build dependency graph with enhanced expression parsing
+                FOR_EACH step IN steps {
+                    DECLARE dependencies = CALL extractStepDependencies WITH step
+                    ASSIGN graph.set(step.step_id, dependencies)
+                }
+                
+                // Detect cycles using DFS with recursion stack
+                DECLARE cycles = CALL detectCycles WITH graph
+                
+                // Identify independent steps (no dependencies or only trigger/context deps)
+                DECLARE independentSteps = FILTER steps WHERE
+                    DECLARE deps = graph.get(step.step_id) || new Set()
+                    RETURN deps.size === 0 OR 
+                           Array.from(deps).every(dep => dep === 'trigger' OR dep.startsWith('context.'))
+                END_FILTER
+                
+                // Create execution order layers for parallel processing
+                DECLARE executionOrder = CALL createExecutionOrder WITH steps, graph
+                
+                RETURN_VALUE {
+                    graph: graph,
+                    cycles: cycles,
+                    independentSteps: independentSteps.map(s => s.step_id),
+                    executionOrder: executionOrder
+                }
+            }
+            
+            // Enhanced step dependency extraction with robust expression parsing
+            FUNCTION extractStepDependencies(step: any): Set<string> {
+                DECLARE dependencies = new Set<string>()
+                
+                // Add explicit run_after dependencies
+                IF step.run_after IS_DEFINED {
+                    IF Array.isArray(step.run_after) {
+                        FOR_EACH dep IN step.run_after {
+                            ADD dep TO dependencies
+                        }
+                    } ELSE {
+                        ADD step.run_after TO dependencies
+                    }
+                }
+                
+                // Extract dependencies from inputs_map with enhanced parsing
+                IF step.inputs_map IS_DEFINED {
+                    FOR_EACH inputField, sourceExpression IN step.inputs_map {
+                        IF typeof sourceExpression IS 'string' {
+                            DECLARE stepRefs = CALL extractStepReferencesFromExpression WITH sourceExpression
+                            FOR_EACH stepRef IN stepRefs {
+                                ADD stepRef TO dependencies
+                            }
+                        }
+                    }
+                }
+                
+                // Extract dependencies from condition expressions
+                IF step.condition IS_DEFINED AND typeof step.condition IS 'string' {
+                    DECLARE stepRefs = CALL extractStepReferencesFromExpression WITH step.condition
+                    FOR_EACH stepRef IN stepRefs {
+                        ADD stepRef TO dependencies
+                    }
+                }
+                
+                RETURN_VALUE dependencies
+            }
+            
+            // Robust expression parsing to extract step references
+            FUNCTION extractStepReferencesFromExpression(expression: string): Set<string> {
+                DECLARE stepReferences = new Set<string>()
+                
+                // Primary pattern: steps.stepName.outputs.path
+                DECLARE primaryMatches = expression.match(/steps\.([a-zA-Z0-9_-]+)\.outputs\./g)
+                IF primaryMatches {
+                    FOR_EACH match IN primaryMatches {
+                        DECLARE stepName = match.match(/steps\.([a-zA-Z0-9_-]+)\.outputs\./)[1]
+                        ADD stepName TO stepReferences
+                    }
+                }
+                
+                // Legacy pattern: steps.stepName.path (without explicit outputs)
+                DECLARE legacyMatches = expression.match(/steps\.([a-zA-Z0-9_-]+)\.(?!outputs\.)/g)
+                IF legacyMatches {
+                    FOR_EACH match IN legacyMatches {
+                        DECLARE stepName = match.match(/steps\.([a-zA-Z0-9_-]+)\./)[1]
+                        ADD stepName TO stepReferences
+                    }
+                }
+                
+                // Direct step references: stepName.outputs.path
+                DECLARE directMatches = expression.match(/(?<!steps\.)([a-zA-Z0-9_-]+)\.outputs\./g)
+                IF directMatches {
+                    FOR_EACH match IN directMatches {
+                        DECLARE stepName = match.match(/([a-zA-Z0-9_-]+)\.outputs\./)[1]
+                        // Exclude 'trigger' and 'context' as they are not step dependencies
+                        IF stepName !== 'trigger' AND stepName !== 'context' {
+                            ADD stepName TO stepReferences
+                        }
+                    }
+                }
+                
+                RETURN_VALUE stepReferences
+            }
+            
+            // Advanced cycle detection using DFS with recursion stack
+            FUNCTION detectCycles(graph: Map<string, Set<string>>): string[][] {
+                DECLARE visited = new Set<string>()
+                DECLARE recursionStack = new Set<string>()
+                DECLARE currentPath = []
+                DECLARE cycles = []
+                
+                FUNCTION dfs(node: string): boolean {
+                    IF recursionStack.has(node) {
+                        // Found cycle - extract cycle path
+                        DECLARE cycleStart = currentPath.indexOf(node)
+                        DECLARE cyclePath = currentPath.slice(cycleStart).concat([node])
+                        ADD cyclePath TO cycles
+                        RETURN true
+                    }
+                    
+                    IF visited.has(node) {
+                        RETURN false
+                    }
+                    
+                    ADD node TO visited
+                    ADD node TO recursionStack
+                    ADD node TO currentPath
+                    
+                    DECLARE dependencies = graph.get(node) || new Set()
+                    FOR_EACH dep IN Array.from(dependencies) {
+                        IF graph.has(dep) AND dfs(dep) {
+                            RETURN true
+                        }
+                    }
+                    
+                    REMOVE node FROM recursionStack
+                    REMOVE node FROM currentPath
+                    RETURN false
+                }
+                
+                FOR_EACH node IN Array.from(graph.keys()) {
+                    IF NOT visited.has(node) {
+                        CALL dfs WITH node
+                    }
+                }
+                
+                RETURN_VALUE cycles
+            }
+            
+            // Enhanced execution strategy with layered approach and fallback mechanisms
+            FUNCTION executeStepsWithEnhancedDependencyResolution(
+                steps: any[],
+                context: ExecutionContext,
+                streamCallback: StreamingCallback,
+                dependencyAnalysis: DependencyAnalysis
+            ): Promise<void> {
+                DECLARE completedSteps = new Set<string>(['trigger'])
+                DECLARE failedSteps = new Set<string>()
+                DECLARE warningCount = 0
+                DECLARE maxWarnings = 5
+                
+                LOG "🚀 Starting enhanced execution with dependency analysis"
+                LOG "📊 Dependency graph:", dependencyAnalysis.graph
+                LOG "🔄 Execution order layers:", dependencyAnalysis.executionOrder
+                LOG "⚠️ Detected cycles:", dependencyAnalysis.cycles
+                
+                // Send warning events for detected cycles
+                IF dependencyAnalysis.cycles.length > 0 {
+                    FOR_EACH cycle IN dependencyAnalysis.cycles {
+                        CALL sendEvent WITH streamCallback, context, 'execution.warning', {
+                            type: 'circular_dependency',
+                            message: "Circular dependency detected: " + cycle.join(' → '),
+                            cyclePath: cycle,
+                            severity: 'warning'
+                        }
+                        INCREMENT warningCount
+                    }
+                }
+                
+                // Execute steps layer by layer for optimal parallelization
+                FOR_EACH layer IN dependencyAnalysis.executionOrder {
+                    DECLARE readySteps = FILTER layer WHERE
+                        DECLARE stepDeps = dependencyAnalysis.graph.get(stepId) || new Set()
+                        RETURN Array.from(stepDeps).every(dep => 
+                            completedSteps.has(dep) OR 
+                            dep === 'trigger' OR 
+                            dep.startsWith('context.')
+                        )
+                    END_FILTER
+                    
+                    IF readySteps.length > 0 {
+                        LOG "🔄 Executing layer with " + readySteps.length + " parallel steps:", readySteps
+                        
+                        // Execute steps in parallel within the layer
+                        DECLARE stepPromises = MAP readySteps TO stepPromise WHERE
+                            RETURN_VALUE CALL executeStepWithErrorHandling WITH stepId, context, streamCallback
+                        END_MAP
+                        
+                        DECLARE results = AWAIT Promise.allSettled(stepPromises)
+                        
+                        // Process results and update completed/failed sets
+                        FOR_EACH result, index IN results {
+                            DECLARE stepId = readySteps[index]
+                            IF result.status === 'fulfilled' {
+                                ADD stepId TO completedSteps
+                                LOG "✅ Step completed successfully:", stepId
+                            } ELSE {
+                                ADD stepId TO failedSteps
+                                LOG "❌ Step failed:", stepId, result.reason
+                            }
+                        }
+                    } ELSE {
+                        LOG "⚠️ No ready steps in current layer, checking for deadlock"
+                        
+                        // Deadlock resolution: execute independent steps as fallback
+                        DECLARE independentSteps = FILTER dependencyAnalysis.independentSteps WHERE
+                            NOT completedSteps.has(stepId) AND NOT failedSteps.has(stepId)
+                        END_FILTER
+                        
+                        IF independentSteps.length > 0 {
+                            LOG "🔄 Executing independent steps as fallback:", independentSteps
+                            DECLARE firstIndependent = independentSteps[0]
+                            TRY {
+                                AWAIT CALL executeStepWithErrorHandling WITH firstIndependent, context, streamCallback
+                                ADD firstIndependent TO completedSteps
+                            } CATCH error {
+                                ADD firstIndependent TO failedSteps
+                                LOG "❌ Independent step failed:", firstIndependent, error
+                            }
+                        } ELSE {
+                            // Final fallback: execute first remaining step to break deadlock
+                            DECLARE remainingSteps = FILTER steps WHERE
+                                NOT completedSteps.has(step.step_id) AND NOT failedSteps.has(step.step_id)
+                            END_FILTER
+                            
+                            IF remainingSteps.length > 0 AND warningCount < maxWarnings {
+                                DECLARE firstRemaining = remainingSteps[0]
+                                LOG "🔄 Executing first remaining step to break deadlock:", firstRemaining.step_id
+                                
+                                TRY {
+                                    AWAIT CALL executeStepWithErrorHandling WITH firstRemaining.step_id, context, streamCallback
+                                    ADD firstRemaining.step_id TO completedSteps
+                                } CATCH error {
+                                    ADD firstRemaining.step_id TO failedSteps
+                                    LOG "❌ Deadlock-breaking step failed:", firstRemaining.step_id, error
+                                }
+                                
+                                INCREMENT warningCount
+                            } ELSE {
+                                LOG "🏁 Execution terminating: no more executable steps or max warnings reached"
+                                BREAK
+                            }
+                        }
+                    }
+                }
+                
+                // Generate comprehensive execution summary
+                DECLARE totalSteps = steps.length
+                DECLARE executedSteps = completedSteps.size - 1 // Exclude trigger
+                DECLARE unexecutedSteps = FILTER steps WHERE
+                    NOT completedSteps.has(step.step_id) AND NOT failedSteps.has(step.step_id)
+                END_FILTER
+                
+                LOG "🏁 Execution completed: " + executedSteps + "/" + totalSteps + " steps executed"
+                IF unexecutedSteps.length > 0 {
+                    LOG "⚠️ " + unexecutedSteps.length + " steps were not executed:", unexecutedSteps.map(s => s.step_id)
+                }
+                
+                // Update final execution context
+                ASSIGN context.completedSteps = completedSteps.size - 1
+                ASSIGN context.failedSteps = failedSteps.size
+                ASSIGN context.status = failedSteps.size > 0 ? 'failed' : 'completed'
+            }
+            
+            // Enhanced input mapping resolution with complex expression support
+            FUNCTION resolveInputMapping(mapping: string, context: ExecutionContext): any {
+                IF typeof mapping !== 'string' {
+                    RETURN_VALUE mapping
+                }
+                
+                TRY {
+                    // Handle complex expressions with multiple step references
+                    IF mapping.includes('steps.') {
+                        DECLARE resolvedExpression = mapping
+                        
+                        // Replace step output references with actual values
+                        DECLARE stepOutputPattern = /steps\.([a-zA-Z0-9_-]+)\.outputs\.([a-zA-Z0-9_.]+)/g
+                        ASSIGN resolvedExpression = resolvedExpression.replace(stepOutputPattern, (match, stepName, outputPath) => {
+                            DECLARE stepResult = context.stepResults.get(stepName)
+                            IF stepResult AND stepResult.outputData {
+                                DECLARE value = CALL getNestedValue WITH stepResult.outputData, outputPath
+                                RETURN_VALUE JSON.stringify(value)
+                            } ELSE {
+                                LOG "Warning: Step " + stepName + " not found or has no output data"
+                                RETURN_VALUE 'null'
+                            }
+                        })
+                        
+                        // Replace trigger references
+                        DECLARE triggerPattern = /trigger\.([a-zA-Z0-9_.]+)/g
+                        ASSIGN resolvedExpression = resolvedExpression.replace(triggerPattern, (match, triggerPath) => {
+                            DECLARE value = CALL getNestedValue WITH context.triggerInput, triggerPath
+                            RETURN_VALUE JSON.stringify(value)
+                        })
+                        
+                        // Replace context variable references
+                        DECLARE contextPattern = /context\.([a-zA-Z0-9_.]+)/g
+                        ASSIGN resolvedExpression = resolvedExpression.replace(contextPattern, (match, contextVar) => {
+                            DECLARE value = context.contextVariables.get(contextVar)
+                            RETURN_VALUE JSON.stringify(value)
+                        })
+                        
+                        // Attempt to parse as JSON if it looks like a complex expression
+                        IF resolvedExpression.trim().startsWith('{') OR resolvedExpression.trim().startsWith('[') {
+                            TRY {
+                                RETURN_VALUE JSON.parse(resolvedExpression)
+                            } CATCH parseError {
+                                LOG "Warning: Failed to parse resolved expression as JSON:", resolvedExpression
+                                RETURN_VALUE resolvedExpression
+                            }
+                        } ELSE {
+                            RETURN_VALUE resolvedExpression
+                        }
+                    } ELSE {
+                        // Simple value or constant
+                        RETURN_VALUE mapping
+                    }
+                } CATCH error {
+                    LOG "Error resolving input mapping:", mapping, error
+                    RETURN_VALUE mapping // Return original mapping on error
+                }
+            }
+        }
+    `
+    dependencies: [
+        "cfv_models.StreamingExecutionRequest",
+        "cfv_models.StreamingExecutionEvent",
+        "cfv_models.ExecutionContext",
+        "cfv_models.DependencyAnalysis"
+    ]
+}

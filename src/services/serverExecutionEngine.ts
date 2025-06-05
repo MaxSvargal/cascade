@@ -40,6 +40,30 @@ export interface StreamingCallback {
   (event: StreamingExecutionEvent): void;
 }
 
+export interface DependencyAnalysis {
+  graph: Map<string, Set<string>>;
+  cycles: string[][];
+  independentSteps: string[];
+  executionOrder: string[][];
+}
+
+export interface StepExecutionResult {
+  stepId: string;
+  componentFqn: string;
+  status: 'SUCCESS' | 'FAILURE';
+  startTime: string;
+  endTime: string;
+  durationMs: number;
+  inputData: any;
+  outputData?: any;
+  errorData?: any;
+  executionOrder: number;
+}
+
+/**
+ * Enhanced Server Execution Engine with robust dependency resolution
+ * and comprehensive expression parsing capabilities
+ */
 export class ServerExecutionEngine {
   private activeExecutions: Map<string, ExecutionContext> = new Map();
   private componentSchemas: Record<string, ComponentSchema>;
@@ -49,14 +73,13 @@ export class ServerExecutionEngine {
   }
 
   /**
-   * Execute a flow with streaming updates
+   * Execute a flow with streaming updates and enhanced dependency resolution
    */
   async executeFlow(
     request: StreamingExecutionRequest,
     streamCallback: StreamingCallback
   ): Promise<ExecutionContext> {
     const executionId = request.executionId || this.generateExecutionId();
-    // Use the full FQN from the request if available, otherwise fall back to flow definition name
     const flowFqn = (request as any).flowFqn || request.flowDefinition.name || 'unknown-flow';
     
     // Initialize execution context
@@ -79,6 +102,8 @@ export class ServerExecutionEngine {
     this.activeExecutions.set(executionId, context);
 
     try {
+      console.log(`🚀 Starting flow execution: ${flowFqn} (${executionId})`);
+      
       // Send execution started event
       this.sendEvent(streamCallback, context, 'execution.started', {
         executionId,
@@ -91,7 +116,7 @@ export class ServerExecutionEngine {
       // Execute trigger
       await this.executeTrigger(context, streamCallback);
 
-      // Execute steps
+      // Analyze dependencies and create execution plan
       const steps = request.flowDefinition.steps || [];
       const targetStepIndex = request.targetStepId ? 
         steps.findIndex((s: any) => s.step_id === request.targetStepId) : 
@@ -101,22 +126,29 @@ export class ServerExecutionEngine {
         throw new Error(`Target step not found: ${request.targetStepId}`);
       }
 
-      // Build dependency graph for parallel execution
-      const dependencyGraph = this.buildDependencyGraph(steps);
+      const stepsToExecute = steps.slice(0, targetStepIndex + 1);
+      const dependencyAnalysis = this.analyzeDependencies(stepsToExecute);
       
-      // Execute steps with dependency resolution
-      await this.executeStepsWithDependencies(
-        steps.slice(0, targetStepIndex + 1),
+      console.log(`📊 Dependency Analysis Complete:`, {
+        totalSteps: stepsToExecute.length,
+        independentSteps: dependencyAnalysis.independentSteps.length,
+        executionLayers: dependencyAnalysis.executionOrder.length,
+        detectedCycles: dependencyAnalysis.cycles.length
+      });
+
+      // Execute steps using enhanced dependency-aware execution
+      await this.executeStepsWithEnhancedDependencyResolution(
+        stepsToExecute,
         context,
         streamCallback,
-        dependencyGraph
+        dependencyAnalysis
       );
 
       // Mark execution as completed
       context.status = 'completed';
       this.sendEvent(streamCallback, context, 'execution.completed', {
         executionId,
-        flowFqn, // Use the full FQN from context
+        flowFqn,
         status: 'COMPLETED' as FlowExecutionStatusEnum,
         totalDuration: Date.now() - new Date(context.startTime).getTime(),
         stepCount: context.totalSteps,
@@ -128,9 +160,11 @@ export class ServerExecutionEngine {
 
     } catch (error: any) {
       context.status = 'failed';
+      console.error(`❌ Flow execution failed: ${error.message}`);
+      
       this.sendEvent(streamCallback, context, 'execution.failed', {
         executionId,
-        flowFqn, // Use the full FQN from context
+        flowFqn,
         error: {
           errorType: 'ExecutionError',
           message: error.message,
@@ -143,13 +177,255 @@ export class ServerExecutionEngine {
       
       throw error;
     } finally {
-      // Keep execution context for a while for status queries
+      // Keep execution context for status queries
       setTimeout(() => {
         this.activeExecutions.delete(executionId);
       }, 300000); // 5 minutes
     }
 
     return context;
+  }
+
+  /**
+   * Enhanced dependency analysis with cycle detection and execution planning
+   */
+  private analyzeDependencies(steps: any[]): DependencyAnalysis {
+    const graph = new Map<string, Set<string>>();
+    const stepMap = new Map<string, any>();
+    
+    // Build step map for quick lookup
+    steps.forEach(step => stepMap.set(step.step_id, step));
+    
+    // Build dependency graph with enhanced parsing
+    steps.forEach(step => {
+      const dependencies = this.extractStepDependencies(step);
+      graph.set(step.step_id, dependencies);
+    });
+    
+    // Detect cycles using DFS
+    const cycles = this.detectCycles(graph);
+    
+    // Find independent steps (no dependencies or only depend on trigger/context)
+    const independentSteps = steps
+      .filter(step => {
+        const deps = graph.get(step.step_id) || new Set();
+        return deps.size === 0 || Array.from(deps).every(dep => dep === 'trigger' || dep === 'context');
+      })
+      .map(step => step.step_id);
+    
+    // Create execution order layers
+    const executionOrder = this.createExecutionOrder(steps, graph);
+    
+    console.log(`📊 Dependency Graph:`, Array.from(graph.entries()).map(([step, deps]) => ({
+      step,
+      dependencies: Array.from(deps)
+    })));
+    
+    if (cycles.length > 0) {
+      console.warn(`⚠️ Detected ${cycles.length} dependency cycles:`, cycles);
+    }
+    
+    return {
+      graph,
+      cycles,
+      independentSteps,
+      executionOrder
+    };
+  }
+
+  /**
+   * Extract step dependencies with robust expression parsing
+   */
+  private extractStepDependencies(step: any): Set<string> {
+    const dependencies = new Set<string>();
+    
+    // Add explicit run_after dependencies
+    if (step.run_after) {
+      const runAfterDeps = Array.isArray(step.run_after) ? step.run_after : [step.run_after];
+      runAfterDeps.forEach((dep: string) => {
+        if (dep && typeof dep === 'string') {
+          dependencies.add(dep);
+        }
+      });
+    }
+    
+    // Extract dependencies from input mappings using enhanced parsing
+    if (step.inputs_map) {
+      Object.values(step.inputs_map).forEach((mapping: any) => {
+        if (typeof mapping === 'string') {
+          const stepDeps = this.extractStepReferencesFromExpression(mapping);
+          stepDeps.forEach(dep => dependencies.add(dep));
+        }
+      });
+    }
+    
+    // Extract dependencies from condition expressions
+    if (step.condition && typeof step.condition === 'string') {
+      const conditionDeps = this.extractStepReferencesFromExpression(step.condition);
+      conditionDeps.forEach(dep => dependencies.add(dep));
+    }
+    
+    return dependencies;
+  }
+
+  /**
+   * Extract step references from complex expressions using comprehensive regex patterns
+   */
+  private extractStepReferencesFromExpression(expression: string): Set<string> {
+    const stepRefs = new Set<string>();
+    
+    // Pattern 1: steps.stepName.outputs.path
+    const stepsPattern = /steps\.([a-zA-Z0-9_-]+)(?:\.outputs)?(?:\.[a-zA-Z0-9_.]+)?/g;
+    let match;
+    while ((match = stepsPattern.exec(expression)) !== null) {
+      const stepName = match[1];
+      if (stepName && stepName !== 'trigger' && stepName !== 'context') {
+        stepRefs.add(stepName);
+      }
+    }
+    
+    // Pattern 2: Direct step references without "steps." prefix (legacy support)
+    const directPattern = /\b([a-zA-Z][a-zA-Z0-9_-]*)\.(outputs|result|data)\b/g;
+    while ((match = directPattern.exec(expression)) !== null) {
+      const stepName = match[1];
+      if (stepName && stepName !== 'trigger' && stepName !== 'context' && stepName !== 'steps') {
+        stepRefs.add(stepName);
+      }
+    }
+    
+    return stepRefs;
+  }
+
+  /**
+   * Detect cycles in dependency graph using DFS
+   */
+  private detectCycles(graph: Map<string, Set<string>>): string[][] {
+    const cycles: string[][] = [];
+    const visited = new Set<string>();
+    const recursionStack = new Set<string>();
+    const currentPath: string[] = [];
+    
+    const dfs = (node: string): boolean => {
+      if (recursionStack.has(node)) {
+        // Found a cycle - extract the cycle path
+        const cycleStart = currentPath.indexOf(node);
+        if (cycleStart >= 0) {
+          cycles.push([...currentPath.slice(cycleStart), node]);
+        }
+        return true;
+      }
+      
+      if (visited.has(node)) return false;
+      
+      visited.add(node);
+      recursionStack.add(node);
+      currentPath.push(node);
+      
+      const dependencies = graph.get(node) || new Set();
+      for (const dep of Array.from(dependencies)) {
+        if (graph.has(dep) && dfs(dep)) {
+          return true;
+        }
+      }
+      
+      recursionStack.delete(node);
+      currentPath.pop();
+      return false;
+    };
+    
+    for (const node of Array.from(graph.keys())) {
+      if (!visited.has(node)) {
+        dfs(node);
+      }
+    }
+    
+    return cycles;
+  }
+
+  /**
+   * Create execution order layers for parallel execution
+   */
+  private createExecutionOrder(steps: any[], graph: Map<string, Set<string>>): string[][] {
+    const executionOrder: string[][] = [];
+    const completed = new Set<string>(['trigger']); // Trigger is always completed first
+    const remaining = new Set(steps.map(s => s.step_id));
+    
+    while (remaining.size > 0) {
+      // Find steps that can be executed in this layer
+      const readySteps = Array.from(remaining).filter(stepId => {
+        const dependencies = graph.get(stepId) || new Set();
+        return Array.from(dependencies).every(dep => completed.has(dep));
+      });
+      
+      if (readySteps.length === 0) {
+        // No more steps can be executed - break cycles by selecting independent steps
+        const independentSteps = Array.from(remaining).filter(stepId => {
+          const dependencies = graph.get(stepId) || new Set();
+          const unmetDeps = Array.from(dependencies).filter(dep => !completed.has(dep));
+          return unmetDeps.length <= 1; // Allow steps with minimal unmet dependencies
+        });
+        
+        if (independentSteps.length > 0) {
+          readySteps.push(...independentSteps.slice(0, 3)); // Limit to 3 to avoid overwhelming
+        } else {
+          // Last resort: pick the first remaining step
+          readySteps.push(Array.from(remaining)[0]);
+        }
+      }
+      
+      if (readySteps.length > 0) {
+        executionOrder.push(readySteps);
+        readySteps.forEach(stepId => {
+          completed.add(stepId);
+          remaining.delete(stepId);
+        });
+      } else {
+        break; // Safety break to avoid infinite loops
+      }
+    }
+    
+    return executionOrder;
+  }
+
+  /**
+   * Execute steps with enhanced dependency resolution and parallel processing
+   */
+  private async executeStepsWithEnhancedDependencyResolution(
+    steps: any[],
+    context: ExecutionContext,
+    streamCallback: StreamingCallback,
+    dependencyAnalysis: DependencyAnalysis
+  ): Promise<void> {
+    let executionOrder = 1; // Start after trigger
+    
+    console.log(`🚀 Starting enhanced step execution with ${dependencyAnalysis.executionOrder.length} execution layers`);
+    
+    // Execute steps layer by layer
+    for (let layerIndex = 0; layerIndex < dependencyAnalysis.executionOrder.length; layerIndex++) {
+      const layer = dependencyAnalysis.executionOrder[layerIndex];
+      const layerSteps = layer.map(stepId => steps.find(s => s.step_id === stepId)).filter(Boolean);
+      
+      console.log(`⚡ Executing layer ${layerIndex + 1}: ${layer.length} steps in parallel:`, layer);
+      
+      if (layerSteps.length > 0) {
+        try {
+          await this.executeStepsInParallel(layerSteps, context, streamCallback, executionOrder);
+          executionOrder += layerSteps.length;
+        } catch (error) {
+          console.error(`❌ Failed to execute layer ${layerIndex + 1}:`, error);
+          // Continue with next layer even if this one partially fails
+        }
+      }
+    }
+    
+    const totalSteps = steps.length;
+    const executedSteps = context.completedSteps - 1; // -1 for trigger
+    console.log(`🏁 Enhanced execution completed: ${executedSteps}/${totalSteps} steps executed successfully`);
+    
+    if (executedSteps < totalSteps) {
+      const unexecutedSteps = steps.filter(s => !context.stepResults.has(s.step_id));
+      console.warn(`⚠️ ${unexecutedSteps.length} steps were not executed:`, unexecutedSteps.map(s => s.step_id));
+    }
   }
 
   /**
@@ -293,145 +569,6 @@ export class ServerExecutionEngine {
   }
 
   /**
-   * Execute steps with dependency resolution and parallel execution
-   */
-  private async executeStepsWithDependencies(
-    steps: any[],
-    context: ExecutionContext,
-    streamCallback: StreamingCallback,
-    dependencyGraph: Map<string, Set<string>>
-  ): Promise<void> {
-    const completedSteps = new Set<string>(['trigger']); // Trigger is always completed first
-    let executionOrder = 1; // Start after trigger
-    let warningsSent = 0; // Track warnings to prevent infinite loops
-    const maxWarnings = 5; // Increased from 3 to 5
-
-    console.log(`🚀 Starting step execution: ${steps.length} total steps`);
-    console.log(`📊 Dependency graph:`, Array.from(dependencyGraph.entries()).map(([step, deps]) => ({ step, dependencies: Array.from(deps) })));
-
-    while (completedSteps.size - 1 < steps.length && warningsSent < maxWarnings) {
-      // Find steps that are ready to execute (all dependencies completed)
-      const readySteps = this.findReadySteps(steps, completedSteps, dependencyGraph);
-      
-      console.log(`🔍 Iteration ${executionOrder}: ${readySteps.length} steps ready to execute:`, readySteps.map(s => s.step_id));
-      console.log(`✅ Completed steps so far:`, Array.from(completedSteps));
-      
-      if (readySteps.length === 0) {
-        // No more steps can be executed - check for circular dependencies
-        const remainingSteps = steps.filter(s => !completedSteps.has(s.step_id));
-        if (remainingSteps.length > 0) {
-          // Send warning event instead of throwing error
-          console.warn(`⚠️ Circular dependency detected or unresolvable dependencies for steps: ${remainingSteps.map(s => s.step_id).join(', ')}`);
-          
-          // Log detailed dependency analysis
-          remainingSteps.forEach(step => {
-            const dependencies = dependencyGraph.get(step.step_id) || new Set();
-            const unmetDependencies = Array.from(dependencies).filter(dep => !completedSteps.has(dep));
-            console.warn(`  - ${step.step_id}: waiting for [${unmetDependencies.join(', ')}]`);
-          });
-          
-          // Send a warning event to the client
-          this.sendEvent(streamCallback, context, 'execution.warning', {
-            warningType: 'CircularDependency',
-            message: `Circular dependency detected or unresolvable dependencies for steps: ${remainingSteps.map(s => s.step_id).join(', ')}`,
-            affectedSteps: remainingSteps.map(s => s.step_id),
-            timestamp: new Date().toISOString()
-          });
-          
-          warningsSent++;
-          
-          // ENHANCED FALLBACK STRATEGY: Try multiple approaches
-          
-          // 1. Try to execute steps without dependencies as a fallback
-          const independentSteps = remainingSteps.filter(step => {
-            const dependencies = dependencyGraph.get(step.step_id) || new Set();
-            // Remove already completed dependencies
-            const unmetDependencies = Array.from(dependencies).filter(dep => !completedSteps.has(dep));
-            return unmetDependencies.length === 0;
-          });
-          
-          console.log(`🔍 Found ${independentSteps.length} independent steps:`, independentSteps.map(s => s.step_id));
-          
-          if (independentSteps.length > 0) {
-            console.log(`🔄 Executing ${independentSteps.length} independent steps as fallback:`, independentSteps.map(s => s.step_id));
-            await this.executeStepsInParallel(independentSteps, context, streamCallback, executionOrder);
-            independentSteps.forEach(step => completedSteps.add(step.step_id));
-            executionOrder += independentSteps.length;
-            continue;
-          }
-          
-          // 2. Try to execute steps with only missing dependencies (ignore unmet dependencies)
-          const stepsWithMinimalDeps = remainingSteps.filter(step => {
-            const dependencies = dependencyGraph.get(step.step_id) || new Set();
-            const unmetDependencies = Array.from(dependencies).filter(dep => !completedSteps.has(dep));
-            return unmetDependencies.length <= 2; // Allow steps with up to 2 unmet dependencies
-          }).slice(0, 3); // Limit to 3 steps to avoid overwhelming
-          
-          if (stepsWithMinimalDeps.length > 0) {
-            console.log(`🔄 Executing ${stepsWithMinimalDeps.length} steps with minimal dependencies:`, stepsWithMinimalDeps.map(s => s.step_id));
-            await this.executeStepsInParallel(stepsWithMinimalDeps, context, streamCallback, executionOrder);
-            stepsWithMinimalDeps.forEach(step => completedSteps.add(step.step_id));
-            executionOrder += stepsWithMinimalDeps.length;
-            continue;
-          }
-          
-          // 3. If no independent steps found, try to execute first remaining step to break deadlock
-          if (remainingSteps.length > 0) {
-            console.log(`🔄 Executing first remaining step to break deadlock: ${remainingSteps[0].step_id}`);
-            await this.executeStepsInParallel([remainingSteps[0]], context, streamCallback, executionOrder);
-            completedSteps.add(remainingSteps[0].step_id);
-            executionOrder++;
-            continue;
-          }
-        }
-        break;
-      }
-
-      // Execute ready steps in parallel
-      console.log(`⚡ Executing ${readySteps.length} steps in parallel...`);
-      await this.executeStepsInParallel(readySteps, context, streamCallback, executionOrder);
-
-      // Mark steps as completed
-      readySteps.forEach(step => completedSteps.add(step.step_id));
-      executionOrder += readySteps.length;
-      
-      console.log(`✅ Completed batch. Total completed: ${completedSteps.size - 1}/${steps.length}`);
-    }
-    
-    // FINAL FALLBACK: If we still have unexecuted steps and haven't hit warning limit, execute them all
-    const finalRemainingSteps = steps.filter(s => !completedSteps.has(s.step_id));
-    if (finalRemainingSteps.length > 0 && warningsSent < maxWarnings) {
-      console.log(`🚨 Final fallback: executing ${finalRemainingSteps.length} remaining steps:`, finalRemainingSteps.map(s => s.step_id));
-      
-      // Execute remaining steps in small batches to avoid overwhelming
-      const batchSize = 3;
-      for (let i = 0; i < finalRemainingSteps.length; i += batchSize) {
-        const batch = finalRemainingSteps.slice(i, i + batchSize);
-        console.log(`🔄 Executing final batch ${Math.floor(i/batchSize) + 1}:`, batch.map(s => s.step_id));
-        
-        try {
-          await this.executeStepsInParallel(batch, context, streamCallback, executionOrder);
-          batch.forEach(step => completedSteps.add(step.step_id));
-          executionOrder += batch.length;
-        } catch (error) {
-          console.error(`❌ Failed to execute final batch:`, error);
-          // Continue with next batch even if this one fails
-        }
-      }
-    }
-    
-    // Log final execution summary
-    const totalSteps = steps.length;
-    const executedSteps = completedSteps.size - 1; // -1 for trigger
-    console.log(`🏁 Execution completed: ${executedSteps}/${totalSteps} steps executed`);
-    
-    if (executedSteps < totalSteps) {
-      const unexecutedSteps = steps.filter(s => !completedSteps.has(s.step_id));
-      console.warn(`⚠️ ${unexecutedSteps.length} steps were not executed:`, unexecutedSteps.map(s => s.step_id));
-    }
-  }
-
-  /**
    * Execute multiple steps in parallel
    */
   private async executeStepsInParallel(
@@ -520,70 +657,6 @@ export class ServerExecutionEngine {
   }
 
   /**
-   * Build dependency graph from steps
-   */
-  private buildDependencyGraph(steps: any[]): Map<string, Set<string>> {
-    const graph = new Map<string, Set<string>>();
-    
-    steps.forEach(step => {
-      const dependencies = new Set<string>();
-      
-      // Add run_after dependencies
-      if (step.run_after) {
-        if (Array.isArray(step.run_after)) {
-          step.run_after.forEach((dep: string) => dependencies.add(dep));
-        } else {
-          dependencies.add(step.run_after);
-        }
-      }
-      
-      // Add input mapping dependencies - FIXED PARSING
-      if (step.inputs_map) {
-        Object.values(step.inputs_map).forEach((mapping: any) => {
-          if (typeof mapping === 'string') {
-            // Extract step references using regex to match "steps.stepName" pattern
-            const stepReferences = mapping.match(/steps\.([a-zA-Z0-9_-]+)/g);
-            if (stepReferences) {
-              stepReferences.forEach((ref: string) => {
-                // Extract just the step name after "steps."
-                const stepName = ref.replace('steps.', '');
-                if (stepName !== 'trigger' && stepName !== 'context' && stepName.length > 0) {
-                  dependencies.add(stepName);
-                }
-              });
-            }
-          }
-        });
-      }
-      
-      graph.set(step.step_id, dependencies);
-    });
-    
-    console.log(`📊 Built dependency graph:`, Array.from(graph.entries()).map(([step, deps]) => ({ 
-      step, 
-      dependencies: Array.from(deps) 
-    })));
-    
-    return graph;
-  }
-
-  /**
-   * Find steps that are ready to execute
-   */
-  private findReadySteps(
-    steps: any[],
-    completedSteps: Set<string>,
-    dependencyGraph: Map<string, Set<string>>
-  ): any[] {
-    return steps.filter(step => {
-      if (completedSteps.has(step.step_id)) return false;
-      
-      const dependencies = dependencyGraph.get(step.step_id) || new Set();
-      return Array.from(dependencies).every(dep => completedSteps.has(dep));
-    });
-  }
-
-  /**
    * Resolve step input from previous step results
    */
   private resolveStepInput(step: any, context: ExecutionContext): any {
@@ -606,78 +679,85 @@ export class ServerExecutionEngine {
   }
 
   /**
-   * Resolve input mapping expression
+   * Resolve input mapping expression with enhanced support for complex expressions
    */
   private resolveInputMapping(mapping: string, context: ExecutionContext): any {
     if (typeof mapping !== 'string') return mapping;
     
-    // Handle complex expressions with step references
-    if (mapping.includes('steps.')) {
-      try {
-        // Replace step references with actual values
+    try {
+      // Handle complex expressions with step references
+      if (mapping.includes('steps.')) {
         let resolvedExpression = mapping;
         
-        // Find all step references in the expression
-        const stepReferences = mapping.match(/steps\.([a-zA-Z0-9_-]+)\.outputs\.([a-zA-Z0-9_.]+)/g);
-        if (stepReferences) {
-          stepReferences.forEach((ref: string) => {
-            const match = ref.match(/steps\.([a-zA-Z0-9_-]+)\.outputs\.(.+)/);
-            if (match) {
-              const [, stepName, outputPath] = match;
-              const stepResult = context.stepResults.get(stepName);
-              if (stepResult) {
-                const value = this.getNestedValue(stepResult.outputData, outputPath);
-                // Replace the reference with the actual value
-                resolvedExpression = resolvedExpression.replace(ref, JSON.stringify(value));
-              }
-            }
-          });
-        }
+        // Replace step output references with actual values
+        const stepOutputPattern = /steps\.([a-zA-Z0-9_-]+)\.outputs\.([a-zA-Z0-9_.]+)/g;
+        resolvedExpression = resolvedExpression.replace(stepOutputPattern, (match, stepName, outputPath) => {
+          const stepResult = context.stepResults.get(stepName);
+          if (stepResult && stepResult.outputData) {
+            const value = this.getNestedValue(stepResult.outputData, outputPath);
+            return JSON.stringify(value);
+          }
+          console.warn(`Step result not found for: ${stepName}`);
+          return 'null';
+        });
         
-        // Handle trigger references
-        resolvedExpression = resolvedExpression.replace(/trigger\.([a-zA-Z0-9_.]+)/g, (match, path) => {
+        // Replace trigger references
+        const triggerPattern = /trigger\.([a-zA-Z0-9_.]+)/g;
+        resolvedExpression = resolvedExpression.replace(triggerPattern, (match, path) => {
           const triggerResult = context.stepResults.get('trigger');
-          if (triggerResult) {
+          if (triggerResult && triggerResult.outputData) {
             const value = this.getNestedValue(triggerResult.outputData, path);
             return JSON.stringify(value);
           }
-          return match;
+          return 'null';
         });
         
-        // If the expression looks like a JSON object or array, try to parse it
-        if ((resolvedExpression.trim().startsWith('{') && resolvedExpression.trim().endsWith('}')) ||
-            (resolvedExpression.trim().startsWith('[') && resolvedExpression.trim().endsWith(']'))) {
+        // Replace context variable references
+        const contextPattern = /context\.([a-zA-Z0-9_.]+)/g;
+        resolvedExpression = resolvedExpression.replace(contextPattern, (match, varName) => {
+          const value = context.contextVariables.get(varName);
+          return JSON.stringify(value);
+        });
+        
+        // Try to parse as JSON if it looks like an object or array
+        const trimmed = resolvedExpression.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
           try {
             return JSON.parse(resolvedExpression);
-          } catch (e) {
-            console.warn(`Failed to parse resolved expression as JSON: ${resolvedExpression}`);
+          } catch (parseError) {
+            console.warn(`Failed to parse resolved expression as JSON: ${resolvedExpression}`, parseError);
             return resolvedExpression;
           }
         }
         
-        return resolvedExpression;
-      } catch (error) {
-        console.warn(`Failed to resolve complex expression: ${mapping}`, error);
-        return mapping;
+        // Try to evaluate simple expressions
+        if (resolvedExpression !== mapping) {
+          return resolvedExpression;
+        }
       }
-    }
-    
-    // Handle simple dot notation references (legacy support)
-    if (mapping.includes('.')) {
-      const [sourceStep, ...pathParts] = mapping.split('.');
-      const path = pathParts.join('.');
       
-      if (sourceStep === 'trigger') {
-        return this.getNestedValue(context.stepResults.get('trigger')?.outputData, path);
-      } else if (sourceStep === 'context') {
-        return context.contextVariables.get(path);
-      } else {
-        const stepResult = context.stepResults.get(sourceStep);
-        return stepResult ? this.getNestedValue(stepResult.outputData, path) : undefined;
+      // Handle simple dot notation references (legacy support)
+      if (mapping.includes('.') && !mapping.includes('steps.')) {
+        const [sourceStep, ...pathParts] = mapping.split('.');
+        const path = pathParts.join('.');
+        
+        if (sourceStep === 'trigger') {
+          const triggerResult = context.stepResults.get('trigger');
+          return triggerResult ? this.getNestedValue(triggerResult.outputData, path) : undefined;
+        } else if (sourceStep === 'context') {
+          return context.contextVariables.get(path);
+        } else {
+          const stepResult = context.stepResults.get(sourceStep);
+          return stepResult ? this.getNestedValue(stepResult.outputData, path) : undefined;
+        }
       }
+      
+      return mapping;
+    } catch (error) {
+      console.warn(`Failed to resolve input mapping: ${mapping}`, error);
+      return mapping;
     }
-    
-    return mapping;
   }
 
   /**

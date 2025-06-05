@@ -1029,145 +1029,353 @@ design cfv_designs.AutoZoomToFitService {
 }
 
 design cfv_designs.StreamingExecutionAPIService {
-    title: "Streaming Execution API Service"
-    description: "Server-side flow execution service with real-time streaming updates for debug and test execution."
+    title: "Enhanced Streaming Execution API Service with Advanced Dependency Resolution"
+    description: "Server-side flow execution service with real-time streaming updates, sophisticated dependency analysis, and robust expression parsing for debug and test execution."
     part_of: cfv_designs.CoreArchitecture
     responsibilities: [
         "Execute Cascade DSL flows on the server with realistic component simulation",
         "Stream execution status updates in real-time via Server-Sent Events (SSE)",
-        "Handle progressive step execution with natural timing and parallel processing",
-        "Provide execution context and data lineage for debugging",
+        "Handle progressive step execution with enhanced dependency resolution and parallel processing",
+        "Provide comprehensive dependency analysis with cycle detection and execution planning",
+        "Support complex expression parsing for input mappings and conditions",
+        "Manage execution context and data lineage for debugging",
         "Support test case execution with assertion validation",
-        "Manage execution state and provide execution history",
-        "Handle execution cancellation and timeout scenarios"
+        "Handle execution cancellation and timeout scenarios with graceful degradation"
     ]
+    
+    enhanced_dependency_resolution: {
+        description: "Advanced dependency analysis and resolution system",
+        dependency_extraction: {
+            robust_expression_parsing: "Uses comprehensive regex patterns to extract step references from complex expressions",
+            pattern_support: [
+                "steps.stepName.outputs.path (primary pattern)",
+                "stepName.outputs.path (legacy support)", 
+                "trigger.path and context.varName references"
+            ],
+            false_positive_elimination: "Eliminates false dependencies like extracting 'steps' as a dependency",
+            condition_parsing: "Extracts dependencies from condition expressions in addition to input mappings"
+        },
+        cycle_detection: {
+            algorithm: "Depth-First Search (DFS) with recursion stack tracking",
+            cycle_identification: "Identifies actual circular dependencies vs. false positives",
+            cycle_reporting: "Provides detailed cycle paths for debugging",
+            graceful_handling: "Continues execution with cycle-breaking strategies"
+        },
+        execution_planning: {
+            layered_execution: "Creates execution order layers for optimal parallel processing",
+            independent_step_identification: "Identifies steps with no dependencies or only trigger/context dependencies",
+            deadlock_resolution: "Multiple fallback strategies for breaking execution deadlocks",
+            parallel_optimization: "Maximizes parallel execution opportunities within dependency constraints"
+        }
+    }
+    
+    enhanced_expression_resolution: {
+        description: "Comprehensive expression parsing and resolution system",
+        complex_expression_support: {
+            json_like_expressions: "Handles complex JSON-like expressions with multiple step references",
+            multi_reference_parsing: "Resolves multiple step references within single expressions",
+            nested_object_support: "Supports nested object and array expressions",
+            safe_json_parsing: "Attempts JSON parsing with graceful fallback for malformed expressions"
+        },
+        reference_resolution: {
+            step_output_resolution: "Resolves steps.stepName.outputs.path to actual execution data",
+            trigger_reference_resolution: "Handles trigger.path references to trigger output data",
+            context_variable_resolution: "Resolves context.varName references to context state",
+            value_substitution: "Replaces references with JSON-stringified actual values"
+        },
+        error_handling: {
+            missing_step_handling: "Graceful handling of references to non-existent steps",
+            malformed_expression_fallback: "Returns original expression if parsing fails",
+            comprehensive_logging: "Detailed logging for expression resolution debugging"
+        }
+    }
+    
+    layered_execution_strategy: {
+        description: "Enhanced execution strategy with dependency-aware layering",
+        execution_phases: [
+            "Pre-execution dependency analysis and cycle detection",
+            "Execution order layer creation for parallel processing",
+            "Layer-by-layer execution with error isolation",
+            "Fallback strategies for deadlock resolution",
+            "Comprehensive execution reporting and logging"
+        ],
+        parallel_processing: {
+            layer_based_execution: "Execute steps in parallel within each dependency layer",
+            error_isolation: "Failed steps don't block independent execution paths",
+            resource_optimization: "Optimal resource utilization through parallel execution",
+            timing_coordination: "Natural timing simulation with parallel step coordination"
+        },
+        fallback_strategies: {
+            independent_step_execution: "Execute steps with minimal dependencies as fallback",
+            deadlock_breaking: "Execute first remaining step to break circular deadlocks",
+            partial_execution_support: "Continue execution even with some failed dependencies",
+            comprehensive_reporting: "Detailed reporting of executed vs. unexecuted steps"
+        }
+    }
     
     api_endpoints: {
         execute_flow: {
             method: "POST",
             path: "/api/execution/flow",
-            description: "Execute a flow with streaming status updates",
+            description: "Execute a flow with streaming status updates and enhanced dependency resolution",
             request_body: {
                 flowDefinition: "Complete DSL flow definition object",
                 triggerInput: "Input data for the flow trigger",
                 executionOptions: "ExecutionOptions with timeout, mocks, etc.",
-                targetStepId: "Optional step ID to execute up to (for partial execution)"
+                targetStepId: "Optional step ID to execute up to (for partial execution)",
+                flowFqn: "Full qualified name of the flow for proper context"
             },
             response: "Server-Sent Events stream with execution updates",
             stream_events: [
-                "execution.started: Initial execution context",
-                "step.started: Step execution began with input data",
-                "step.completed: Step execution finished with output data",
-                "step.failed: Step execution failed with error details",
-                "execution.completed: Flow execution finished with final results",
-                "execution.failed: Flow execution failed with error details"
+                "execution.started: Initial execution context with dependency analysis",
+                "step.started: Step execution began with resolved input data",
+                "step.completed: Step execution finished with output data and timing",
+                "step.failed: Step execution failed with detailed error information",
+                "execution.warning: Non-fatal warnings (e.g., circular dependency warnings)",
+                "execution.completed: Flow execution finished with comprehensive results",
+                "execution.failed: Flow execution failed with detailed error analysis"
             ]
         },
         
         execute_step: {
             method: "POST", 
             path: "/api/execution/step",
-            description: "Execute a single step with resolved input data",
+            description: "Execute a single step with enhanced input resolution",
             request_body: {
                 stepDefinition: "Step configuration and component reference",
                 inputData: "Resolved input data for the step",
                 componentConfig: "Component configuration object",
                 executionOptions: "ExecutionOptions for the step execution"
             },
-            response: "StepExecutionTrace with timing and output data"
+            response: "StepExecutionTrace with timing, input resolution details, and output data"
         },
         
         cancel_execution: {
             method: "DELETE",
             path: "/api/execution/{executionId}",
-            description: "Cancel a running execution",
-            response: "Cancellation confirmation"
+            description: "Cancel a running execution with graceful cleanup",
+            response: "Cancellation confirmation with execution summary"
         },
         
         get_execution_status: {
             method: "GET",
             path: "/api/execution/{executionId}/status",
-            description: "Get current status of an execution",
-            response: "ExecutionStatus with current step and progress"
+            description: "Get current status of an execution with dependency analysis",
+            response: "ExecutionStatus with current step, progress, and dependency information"
         }
     }
     
     streaming_protocol: {
         transport: "Server-Sent Events (SSE)",
         content_type: "text/event-stream",
-        event_format: "JSON with event type and data payload",
+        event_format: "JSON with event type and comprehensive data payload",
         heartbeat_interval: "30 seconds to maintain connection",
-        reconnection_support: "Client can reconnect with last event ID",
-        error_handling: "Error events with detailed error information"
+        reconnection_support: "Client can reconnect with last event ID for seamless recovery",
+        error_handling: "Detailed error events with dependency analysis and resolution suggestions"
     }
     
     execution_engine: {
         component_simulation: "Realistic component execution with schema-based output generation",
-        timing_simulation: "Natural timing based on component types (sync/async)",
-        parallel_execution: "Support for fork components and parallel step execution",
-        data_propagation: "Proper data flow through inputs_map and context variables",
-        error_simulation: "Configurable error scenarios for testing",
-        resource_management: "Execution timeout and memory limits"
+        timing_simulation: "Natural timing based on component types with enhanced parallel coordination",
+        parallel_execution: "Advanced support for fork components and dependency-based parallel execution",
+        data_propagation: "Sophisticated data flow through complex input mappings and context variables",
+        error_simulation: "Configurable error scenarios with dependency impact analysis",
+        resource_management: "Execution timeout, memory limits, and graceful degradation"
     }
     
     state_management: {
-        execution_context: "Maintain execution state across streaming updates",
-        step_results: "Store intermediate step results for data lineage",
-        context_variables: "Track context variable changes throughout execution",
-        execution_history: "Persist execution traces for debugging and analysis"
+        execution_context: "Comprehensive execution state with dependency tracking across streaming updates",
+        step_results: "Detailed intermediate step results for complex data lineage analysis",
+        context_variables: "Dynamic context variable tracking throughout execution lifecycle",
+        execution_history: "Persistent execution traces with dependency analysis for debugging",
+        dependency_metadata: "Detailed dependency graph and resolution metadata for analysis"
     }
     
     dependencies: [
         "Next.js API Routes for HTTP endpoints",
         "Server-Sent Events for real-time streaming",
-        "In-memory execution state management",
-        "Component schema validation and simulation"
+        "Enhanced in-memory execution state management",
+        "Component schema validation and advanced simulation",
+        "Comprehensive dependency analysis algorithms",
+        "Robust expression parsing and resolution engines"
     ]
     
-    source: "New server-side execution service with streaming capabilities"
+    source: "Enhanced server-side execution service with advanced dependency resolution and streaming capabilities"
 }
 
 design cfv_designs.ClientExecutionStreamHandler {
-    title: "Client Execution Stream Handler"
-    description: "Client-side service to handle streaming execution updates and update visualizer state."
+    title: "Enhanced Client Execution Stream Handler with Advanced State Management"
+    description: "Client-side service to handle streaming execution updates with sophisticated state synchronization and comprehensive error handling."
     part_of: cfv_designs.DebugTestTabService
     responsibilities: [
-        "Establish SSE connection to execution API",
-        "Parse streaming execution events and update node states",
-        "Handle connection errors and automatic reconnection",
-        "Provide execution progress feedback to UI components",
-        "Manage execution cancellation from client side",
-        "Cache execution results for replay and analysis"
+        "Establish robust SSE connection to execution API with automatic reconnection",
+        "Parse streaming execution events and update node states with proper object reference management",
+        "Handle connection errors and implement intelligent reconnection strategies",
+        "Provide comprehensive execution progress feedback to UI components",
+        "Manage execution cancellation from client side with cleanup",
+        "Cache execution results for replay, analysis, and debugging",
+        "Pre-populate flow steps with PENDING status for immediate visual feedback",
+        "Ensure React re-rendering through proper object reference management"
     ]
     
-    event_handlers: {
-        execution_started: "Initialize execution state and set all nodes to PENDING",
-        step_started: "Update specific node to RUNNING status with input data",
-        step_completed: "Update node to SUCCESS status with output data and timing",
-        step_failed: "Update node to FAILURE status with error details",
-        execution_completed: "Update final execution state and show completion",
-        execution_failed: "Handle execution failure and show error state"
+    enhanced_event_handling: {
+        description: "Comprehensive event handling with advanced state management",
+        execution_started: {
+            functionality: "Initialize execution state and pre-populate all steps with PENDING status",
+            state_management: "Create new execution trace with all flow steps pre-populated",
+            visual_feedback: "Immediate visual indication of execution start with all nodes in PENDING state",
+            step_preparation: "Extract step definitions from flow and create placeholder step traces"
+        },
+        step_started: {
+            functionality: "Update specific node to RUNNING status with resolved input data",
+            state_updates: "Update existing step trace with RUNNING status and input data",
+            timing_tracking: "Record step start time and estimated duration",
+            progress_indication: "Update execution progress indicators"
+        },
+        step_completed: {
+            functionality: "Update node to SUCCESS status with output data and comprehensive timing",
+            state_updates: "Update step trace with SUCCESS status, output data, and actual duration",
+            data_preservation: "Preserve both input and output data for debugging",
+            execution_order: "Track execution order for analysis and replay"
+        },
+        step_failed: {
+            functionality: "Update node to FAILURE status with detailed error information",
+            error_handling: "Capture comprehensive error details including stack traces",
+            failure_analysis: "Provide failure context and potential resolution suggestions",
+            execution_continuation: "Allow execution to continue with other independent steps"
+        },
+        execution_completed: {
+            functionality: "Update final execution state and show comprehensive completion status",
+            final_state: "Set overall execution status and final results",
+            summary_generation: "Generate execution summary with timing and success metrics",
+            result_caching: "Cache complete execution results for later analysis"
+        },
+        execution_failed: {
+            functionality: "Handle execution failure with detailed error analysis",
+            failure_context: "Provide comprehensive failure context and dependency analysis",
+            partial_results: "Preserve partial execution results for debugging",
+            recovery_suggestions: "Suggest potential fixes based on failure analysis"
+        }
     }
     
-    connection_management: {
-        auto_reconnect: "Automatic reconnection with exponential backoff",
-        event_replay: "Request missed events after reconnection",
-        heartbeat_monitoring: "Detect connection issues and reconnect",
-        graceful_degradation: "Fallback to polling if SSE not supported"
+    advanced_connection_management: {
+        description: "Robust connection management with intelligent recovery strategies",
+        auto_reconnect: {
+            strategy: "Exponential backoff with intelligent retry logic",
+            backoff_algorithm: "Start with 1s, double each retry, max 30s intervals",
+            max_retries: "Unlimited retries with circuit breaker for permanent failures",
+            connection_health: "Monitor connection health with heartbeat detection"
+        },
+        event_replay: {
+            functionality: "Request missed events after reconnection using last event ID",
+            state_recovery: "Recover execution state from last known good state",
+            gap_detection: "Detect and handle event sequence gaps",
+            consistency_validation: "Validate state consistency after reconnection"
+        },
+        heartbeat_monitoring: {
+            functionality: "Detect connection issues through heartbeat monitoring",
+            timeout_detection: "Detect connection timeouts and initiate reconnection",
+            health_indicators: "Provide connection health indicators to UI",
+            graceful_degradation: "Graceful degradation when connection is unstable"
+        },
+        fallback_mechanisms: {
+            polling_fallback: "Fallback to polling if SSE not supported or repeatedly fails",
+            offline_mode: "Handle offline scenarios with cached data",
+            error_boundaries: "Implement error boundaries to prevent cascade failures"
+        }
     }
     
-    state_synchronization: {
-        node_state_updates: "Update React Flow nodes with execution status",
-        execution_context: "Maintain current execution context for UI",
-        progress_tracking: "Track execution progress for progress bars",
-        result_caching: "Cache execution results for later analysis"
+    enhanced_state_synchronization: {
+        description: "Advanced state synchronization with React re-rendering optimization",
+        object_reference_management: {
+            new_object_creation: "Create new object references for all state updates to trigger React re-renders",
+            immutable_updates: "Use immutable update patterns to ensure React detects changes",
+            reference_tracking: "Track object references to prevent stale state issues",
+            memory_optimization: "Optimize memory usage while maintaining reference integrity"
+        },
+        node_state_updates: {
+            functionality: "Update React Flow nodes with execution status using new object references",
+            status_propagation: "Propagate execution status changes to visualizer components",
+            timing_updates: "Update node timing information with execution progress",
+            data_overlay: "Overlay execution data on nodes for debugging visualization"
+        },
+        execution_context_management: {
+            functionality: "Maintain comprehensive current execution context for UI components",
+            context_tracking: "Track execution context changes throughout flow execution",
+            state_consistency: "Ensure state consistency across all UI components",
+            context_isolation: "Isolate execution contexts for concurrent executions"
+        },
+        progress_tracking: {
+            functionality: "Track detailed execution progress for progress bars and indicators",
+            step_progress: "Track individual step progress and timing",
+            overall_progress: "Calculate overall execution progress percentage",
+            milestone_tracking: "Track execution milestones and key events"
+        },
+        result_caching: {
+            functionality: "Cache execution results for later analysis and replay",
+            cache_strategy: "Intelligent caching with size limits and expiration",
+            result_indexing: "Index cached results for quick retrieval and analysis",
+            cache_persistence: "Persist important execution results across sessions"
+        }
+    }
+    
+    comprehensive_error_handling: {
+        description: "Robust error handling with detailed diagnostics and recovery",
+        connection_errors: {
+            network_failures: "Handle network failures with automatic retry and user notification",
+            server_errors: "Handle server errors with detailed error reporting",
+            timeout_handling: "Handle connection timeouts with graceful recovery",
+            authentication_errors: "Handle authentication failures with re-authentication prompts"
+        },
+        parsing_errors: {
+            malformed_events: "Handle malformed SSE events with error logging and recovery",
+            data_validation: "Validate incoming event data before state updates",
+            schema_mismatches: "Handle schema mismatches with graceful degradation",
+            encoding_issues: "Handle character encoding issues in event streams"
+        },
+        state_errors: {
+            inconsistent_state: "Detect and handle inconsistent state scenarios",
+            missing_data: "Handle missing execution data with appropriate defaults",
+            stale_state: "Detect and recover from stale state conditions",
+            concurrent_updates: "Handle concurrent state updates safely"
+        },
+        recovery_mechanisms: {
+            automatic_recovery: "Implement automatic recovery for transient errors",
+            manual_recovery: "Provide manual recovery options for persistent errors",
+            state_reset: "Allow complete state reset when recovery is not possible",
+            diagnostic_reporting: "Generate diagnostic reports for complex error scenarios"
+        }
+    }
+    
+    performance_optimizations: {
+        description: "Performance optimizations for smooth user experience",
+        efficient_updates: {
+            batched_updates: "Batch multiple state updates to reduce re-renders",
+            selective_updates: "Update only changed parts of the state tree",
+            debounced_updates: "Debounce rapid updates to prevent UI thrashing",
+            lazy_evaluation: "Use lazy evaluation for expensive state calculations"
+        },
+        memory_management: {
+            garbage_collection: "Implement proper cleanup to prevent memory leaks",
+            resource_pooling: "Pool resources for better memory utilization",
+            cache_limits: "Implement cache size limits to prevent memory bloat",
+            weak_references: "Use weak references where appropriate to allow garbage collection"
+        },
+        ui_responsiveness: {
+            non_blocking_updates: "Ensure state updates don't block UI thread",
+            progressive_rendering: "Use progressive rendering for large execution traces",
+            virtual_scrolling: "Implement virtual scrolling for large result sets",
+            background_processing: "Process large datasets in background workers"
+        }
     }
     
     dependencies: [
         cfv_designs.DebugTestActionsService,
         "EventSource API for SSE connections",
-        "React state management for UI updates"
+        "React state management for UI updates",
+        "Comprehensive error handling libraries",
+        "Performance monitoring and optimization tools"
     ]
     
-    source: "New client-side streaming execution handler"
+    source: "Enhanced client-side streaming execution handler with advanced state management and error handling"
 }
