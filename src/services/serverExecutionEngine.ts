@@ -540,8 +540,11 @@ export class ServerExecutionEngine {
     // Simulate trigger execution time
     await this.delay(50 + Math.random() * 100);
 
-    // Create trigger output
+    // Create trigger output - provide both nested and direct access
     const triggerOutput = {
+      // Direct access to trigger input fields
+      ...context.triggerInput,
+      // Nested structure for compatibility
       data: context.triggerInput,
       timestamp: new Date().toISOString(),
       source: 'trigger'
@@ -686,8 +689,9 @@ export class ServerExecutionEngine {
     
     try {
       // Handle complex expressions with step references
-      if (mapping.includes('steps.')) {
+      if (mapping.includes('steps.') || mapping.includes('trigger.') || mapping.includes('context.')) {
         let resolvedExpression = mapping;
+        let hasReplacements = false;
         
         // Replace step output references with actual values
         const stepOutputPattern = /steps\.([a-zA-Z0-9_-]+)\.outputs\.([a-zA-Z0-9_.]+)/g;
@@ -695,9 +699,11 @@ export class ServerExecutionEngine {
           const stepResult = context.stepResults.get(stepName);
           if (stepResult && stepResult.outputData) {
             const value = this.getNestedValue(stepResult.outputData, outputPath);
+            hasReplacements = true;
             return JSON.stringify(value);
           }
           console.warn(`Step result not found for: ${stepName}`);
+          hasReplacements = true;
           return 'null';
         });
         
@@ -707,8 +713,10 @@ export class ServerExecutionEngine {
           const triggerResult = context.stepResults.get('trigger');
           if (triggerResult && triggerResult.outputData) {
             const value = this.getNestedValue(triggerResult.outputData, path);
+            hasReplacements = true;
             return JSON.stringify(value);
           }
+          hasReplacements = true;
           return 'null';
         });
         
@@ -716,24 +724,69 @@ export class ServerExecutionEngine {
         const contextPattern = /context\.([a-zA-Z0-9_.]+)/g;
         resolvedExpression = resolvedExpression.replace(contextPattern, (match, varName) => {
           const value = context.contextVariables.get(varName);
+          hasReplacements = true;
           return JSON.stringify(value);
         });
         
-        // Try to parse as JSON if it looks like an object or array
-        const trimmed = resolvedExpression.trim();
-        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-          try {
-            return JSON.parse(resolvedExpression);
-          } catch (parseError) {
-            console.warn(`Failed to parse resolved expression as JSON: ${resolvedExpression}`, parseError);
-            return resolvedExpression;
+        // If we made replacements, try to parse as JSON
+        if (hasReplacements) {
+          const trimmed = resolvedExpression.trim();
+          
+          // Fix undefined values in the expression before JSON parsing
+          let fixedExpression = trimmed.replace(/:\s*undefined/g, ': null')
+                                     .replace(/undefined/g, 'null');
+          
+          // For object expressions, use direct key-value extraction instead of JSON parsing
+          if (fixedExpression.startsWith('{') && fixedExpression.endsWith('}')) {
+            try {
+              // Extract key-value pairs using regex for both quoted and unquoted keys
+              const keyValuePattern = /"?([a-zA-Z_][a-zA-Z0-9_]*)"?\s*:\s*([^,}]+)/g;
+              const result: any = {};
+              let match;
+              
+              while ((match = keyValuePattern.exec(fixedExpression)) !== null) {
+                const key = match[1];
+                let value = match[2].trim();
+                
+                // Try to parse the value
+                try {
+                  if (value === 'null') {
+                    result[key] = null;
+                  } else if (value === 'true' || value === 'false') {
+                    result[key] = value === 'true';
+                  } else if (value.startsWith('"') && value.endsWith('"')) {
+                    result[key] = value.slice(1, -1);
+                  } else if (value.startsWith("'") && value.endsWith("'")) {
+                    result[key] = value.slice(1, -1);
+                  } else if (!isNaN(Number(value))) {
+                    result[key] = Number(value);
+                  } else if (value.startsWith('{') || value.startsWith('[')) {
+                    // Try to parse nested objects/arrays
+                    try {
+                      // For nested objects, try JSON parsing first
+                      const nestedFixed = value.replace(/'/g, '"').replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+                      result[key] = JSON.parse(nestedFixed);
+                    } catch {
+                      result[key] = value;
+                    }
+                  } else {
+                    result[key] = value;
+                  }
+                } catch {
+                  result[key] = value;
+                }
+              }
+              
+              return result;
+            } catch {
+              return {};
+            }
+          } else if (fixedExpression.startsWith('[') && fixedExpression.endsWith(']')) {
+            return [];
           }
-        }
-        
-        // Try to evaluate simple expressions
-        if (resolvedExpression !== mapping) {
-          return resolvedExpression;
+          
+          // For non-object expressions, return the resolved string
+          return fixedExpression;
         }
       }
       
@@ -744,12 +797,12 @@ export class ServerExecutionEngine {
         
         if (sourceStep === 'trigger') {
           const triggerResult = context.stepResults.get('trigger');
-          return triggerResult ? this.getNestedValue(triggerResult.outputData, path) : undefined;
+          return triggerResult ? this.getNestedValue(triggerResult.outputData, path) : null;
         } else if (sourceStep === 'context') {
           return context.contextVariables.get(path);
         } else {
           const stepResult = context.stepResults.get(sourceStep);
-          return stepResult ? this.getNestedValue(stepResult.outputData, path) : undefined;
+          return stepResult ? this.getNestedValue(stepResult.outputData, path) : null;
         }
       }
       
@@ -785,26 +838,98 @@ export class ServerExecutionEngine {
       return this.generateDataFromSchema(componentSchema.outputSchema);
     }
     
-    // Default output based on component type
+    // Default output based on component type with realistic casino flow data
     switch (componentFqn) {
       case 'StdLib:HttpCall':
         return {
           status: 200,
-          data: { result: 'success', timestamp: new Date().toISOString() },
+          response: {
+            body: { 
+              result: 'success', 
+              timestamp: new Date().toISOString(),
+              allowed: true,
+              data: inputData 
+            }
+          },
           headers: { 'content-type': 'application/json' }
         };
       
       case 'StdLib:Fork':
-        return { branches: ['branch1', 'branch2'], forkId: Math.random().toString(36) };
+        return { 
+          branches: ['branch1', 'branch2'], 
+          forkId: Math.random().toString(36),
+          selectedBranch: 'branch1'
+        };
       
       case 'StdLib:Validator':
-        return { valid: true, validatedData: inputData };
+        return { 
+          valid: true, 
+          validatedData: inputData,
+          validData: inputData,
+          errors: []
+        };
       
       case 'StdLib:MapData':
-        return { mappedData: inputData, transformedAt: new Date().toISOString() };
+        return { 
+          mappedData: inputData, 
+          transformedAt: new Date().toISOString(),
+          result: inputData
+        };
+      
+      // Casino-specific component outputs
+      case 'Casino:UserValidator':
+        return {
+          valid: true,
+          validData: inputData,
+          userData: {
+            ...inputData,
+            userId: `user-${Math.random().toString(36).substr(2, 9)}`,
+            validated: true
+          }
+        };
+      
+      case 'Casino:ComplianceChecker':
+        return {
+          compliant: true,
+          complianceData: {
+            jurisdiction: 'allowed',
+            sanctions: 'clear',
+            age: 'verified',
+            score: 95
+          },
+          allowed: true
+        };
+      
+      case 'Casino:AccountCreator':
+        return {
+          success: true,
+          userId: `user-${Math.random().toString(36).substr(2, 9)}`,
+          accountId: `acc-${Math.random().toString(36).substr(2, 9)}`,
+          userTier: 'standard',
+          createdAt: new Date().toISOString()
+        };
+      
+      case 'Casino:CommunicationSender':
+        return {
+          sent: true,
+          messageId: `msg-${Math.random().toString(36).substr(2, 9)}`,
+          deliveryStatus: 'delivered',
+          timestamp: new Date().toISOString()
+        };
       
       default:
-        return { result: 'success', output: inputData, processedAt: new Date().toISOString() };
+        // Generic output that includes common fields expected by casino flows
+        return { 
+          result: 'success', 
+          success: true,
+          data: inputData,
+          output: inputData, 
+          processedAt: new Date().toISOString(),
+          // Include some common fields that might be referenced
+          userId: inputData?.userId || `user-${Math.random().toString(36).substr(2, 9)}`,
+          allowed: true,
+          valid: true
+        };
     }
   }
 

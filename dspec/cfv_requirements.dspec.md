@@ -899,3 +899,76 @@ requirement cfv_requirements.FR12_EnhancedStreamingExecution {
     
     source: "Enhanced streaming execution implementation with advanced dependency resolution"
 }
+
+requirement cfv_requirements.FR23_ClientCodeCleanupAndSimplification {
+    id: "CFV_REQ_FR23"
+    title: "Client Code Cleanup and Architecture Simplification"
+    description: "Simplify client-side architecture by removing redundant execution simulation code after implementing server-side streaming execution, while maintaining essential debugging and testing capabilities."
+    priority: "Medium"
+    category: "Technical Debt"
+    
+    cleanup_objectives: [
+        "Remove redundant progressive execution logic from client-side services",
+        "Simplify simulation services to focus on debugging and testing support",
+        "Eliminate duplicate execution state management and trace construction",
+        "Consolidate execution responsibilities to server-side streaming architecture",
+        "Maintain essential client-side simulation for Debug & Test tab functionality",
+        "Update design specifications to reflect simplified architecture"
+    ]
+    
+    detailed_cleanup_tasks: [
+        "Remove runProgressiveFlowExecution method and related helper functions from DebugTestActionsService",
+        "Simplify SimulationService by removing complex execution context management",
+        "Remove manual execution trace construction in favor of streaming updates",
+        "Eliminate unused execution-related interfaces and types",
+        "Clean up service dependencies and simplify initialization logic",
+        "Update design specifications to reflect new simplified architecture"
+    ]
+    
+    acceptance_criteria: [
+        "Client-side services reduced by at least 25% in lines of code",
+        "No duplicate execution logic between client and server implementations",
+        "Debug & Test tab functionality remains fully operational",
+        "Step-level simulation and input resolution continue to work correctly",
+        "All execution state updates handled exclusively through streaming API",
+        "Design specifications accurately reflect simplified client architecture",
+        "No breaking changes to public APIs or consumer interfaces"
+    ]
+    
+    preserved_functionality: [
+        "Step-level simulation for Debug & Test tab input forms",
+        "Input data resolution based on component schemas and flow structure",
+        "Mock data generation for testing scenarios",
+        "Data lineage resolution for debugging workflows",
+        "Component output simulation for development tools",
+        "Schema-based form generation and validation"
+    ]
+    
+    removed_functionality: [
+        "Client-side progressive flow execution with real-time UI updates",
+        "Complex dependency graph building and parallel execution coordination",
+        "Manual execution trace construction and state management",
+        "Detailed execution context management with comprehensive logging",
+        "Client-side timing simulation and component execution orchestration",
+        "Redundant execution result conversion and formatting"
+    ]
+    
+    architectural_benefits: [
+        "Cleaner separation of concerns between client and server responsibilities",
+        "Reduced client-side complexity and maintenance burden",
+        "Improved performance through elimination of redundant processing",
+        "Better scalability with server-side execution handling",
+        "Enhanced reliability through centralized execution logic",
+        "Simplified testing and debugging of execution functionality"
+    ]
+    
+    migration_strategy: [
+        "Phase 1: Remove redundant progressive execution methods and helpers",
+        "Phase 2: Simplify simulation services while preserving essential functionality",
+        "Phase 3: Clean up unused interfaces, types, and dependencies",
+        "Phase 4: Update design specifications and documentation",
+        "Phase 5: Validate all functionality works correctly with simplified architecture"
+    ]
+    
+    source: "Client code cleanup after server-side streaming execution implementation"
+}

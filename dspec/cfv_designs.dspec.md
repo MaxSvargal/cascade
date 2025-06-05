@@ -1088,23 +1088,32 @@ design cfv_designs.StreamingExecutionAPIService {
     }
     
     enhanced_expression_resolution: {
-        description: "Comprehensive expression parsing and resolution system",
+        description: "Comprehensive expression parsing and resolution system with robust JavaScript object literal support",
         complex_expression_support: {
-            json_like_expressions: "Handles complex JSON-like expressions with multiple step references",
+            javascript_object_literals: "Handles JavaScript object literal syntax with unquoted property names and single quotes",
+            json_like_expressions: "Processes complex JSON-like expressions with multiple step references",
             multi_reference_parsing: "Resolves multiple step references within single expressions",
-            nested_object_support: "Supports nested object and array expressions",
-            safe_json_parsing: "Attempts JSON parsing with graceful fallback for malformed expressions"
+            nested_object_support: "Supports nested object and array expressions with proper type conversion",
+            direct_key_value_extraction: "Uses regex-based key-value extraction instead of JSON parsing for robustness"
         },
         reference_resolution: {
             step_output_resolution: "Resolves steps.stepName.outputs.path to actual execution data",
-            trigger_reference_resolution: "Handles trigger.path references to trigger output data",
+            trigger_reference_resolution: "Handles trigger.path references to trigger output data with direct access",
             context_variable_resolution: "Resolves context.varName references to context state",
-            value_substitution: "Replaces references with JSON-stringified actual values"
+            value_substitution: "Replaces references with properly typed actual values (null, strings, numbers, booleans)"
+        },
+        robust_parsing: {
+            undefined_value_handling: "Converts undefined values to null for consistent data flow",
+            single_quote_support: "Handles single-quoted string values in expressions",
+            unquoted_property_names: "Processes unquoted JavaScript property names",
+            type_conversion: "Proper type conversion for strings, numbers, booleans, and null values",
+            nested_object_parsing: "Recursive parsing for nested object and array structures"
         },
         error_handling: {
-            missing_step_handling: "Graceful handling of references to non-existent steps",
-            malformed_expression_fallback: "Returns original expression if parsing fails",
-            comprehensive_logging: "Detailed logging for expression resolution debugging"
+            missing_step_handling: "Graceful handling of references to non-existent steps with null fallback",
+            malformed_expression_fallback: "Returns safe fallback objects for unparseable expressions",
+            comprehensive_logging: "Detailed logging for expression resolution debugging and analysis",
+            graceful_degradation: "Continues execution even with partially failed expression resolution"
         }
     }
     

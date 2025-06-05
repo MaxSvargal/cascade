@@ -2333,3 +2333,456 @@ code cfv_internal_code.ServerExecutionEngine_EnhancedDependencyResolution {
         "cfv_models.DependencyAnalysis"
     ]
 }
+
+code cfv_internal_code.ServerExecutionEngine_EnhancedExpressionResolution {
+    title: "Enhanced Expression Resolution with JavaScript Object Literal Support"
+    part_of_design: cfv_designs.StreamingExecutionAPIService
+    language: "TypeScript"
+    implementation_location: { 
+        filepath: "services/serverExecutionEngine.ts", 
+        entry_point_name: "resolveInputMapping",
+        entry_point_type: "private_method"
+    }
+    signature: "(mapping: string, context: ExecutionContext) => any"
+    
+    detailed_behavior: `
+        // Human Review Focus: Robust expression parsing, JavaScript object literal handling, type safety
+        // AI Agent Target: Generate comprehensive expression resolution logic
+        
+        // 1. Input validation and early returns
+        IF mapping IS_NOT_STRING THEN
+            RETURN_VALUE mapping
+        END_IF
+        
+        // 2. Check for complex expressions with step references
+        IF mapping CONTAINS 'steps.' OR mapping CONTAINS 'trigger.' OR mapping CONTAINS 'context.' THEN
+            DECLARE resolvedExpression = mapping
+            DECLARE hasReplacements = false
+            
+            // 3. Replace step output references with actual values
+            APPLY_REGEX_REPLACEMENT resolvedExpression WITH_PATTERN /steps\.([a-zA-Z0-9_-]+)\.outputs\.([a-zA-Z0-9_.]+)/g
+                EXTRACT stepName = match[1], outputPath = match[2]
+                DECLARE stepResult = context.stepResults.get(stepName)
+                IF stepResult AND stepResult.outputData THEN
+                    DECLARE value = getNestedValue(stepResult.outputData, outputPath)
+                    SET hasReplacements = true
+                    RETURN JSON.stringify(value)
+                ELSE
+                    LOG_WARNING "Step result not found for: ${stepName}"
+                    SET hasReplacements = true
+                    RETURN 'null'
+                END_IF
+            END_APPLY_REGEX
+            
+            // 4. Replace trigger references
+            APPLY_REGEX_REPLACEMENT resolvedExpression WITH_PATTERN /trigger\.([a-zA-Z0-9_.]+)/g
+                EXTRACT path = match[1]
+                DECLARE triggerResult = context.stepResults.get('trigger')
+                IF triggerResult AND triggerResult.outputData THEN
+                    DECLARE value = getNestedValue(triggerResult.outputData, path)
+                    SET hasReplacements = true
+                    RETURN JSON.stringify(value)
+                ELSE
+                    SET hasReplacements = true
+                    RETURN 'null'
+                END_IF
+            END_APPLY_REGEX
+            
+            // 5. Replace context variable references
+            APPLY_REGEX_REPLACEMENT resolvedExpression WITH_PATTERN /context\.([a-zA-Z0-9_.]+)/g
+                EXTRACT varName = match[1]
+                DECLARE value = context.contextVariables.get(varName)
+                SET hasReplacements = true
+                RETURN JSON.stringify(value)
+            END_APPLY_REGEX
+            
+            // 6. Process resolved expression with JavaScript object literal support
+            IF hasReplacements THEN
+                DECLARE trimmed = resolvedExpression.trim()
+                
+                // Fix undefined values before processing
+                DECLARE fixedExpression = trimmed.replace(/:\s*undefined/g, ': null').replace(/undefined/g, 'null')
+                
+                // 7. Handle object expressions with direct key-value extraction
+                IF fixedExpression STARTS_WITH '{' AND fixedExpression ENDS_WITH '}' THEN
+                    TRY
+                        // Extract key-value pairs using regex for robust parsing
+                        DECLARE keyValuePattern = /"?([a-zA-Z_][a-zA-Z0-9_]*)"?\s*:\s*([^,}]+)/g
+                        DECLARE result = {}
+                        DECLARE match
+                        
+                        WHILE (match = keyValuePattern.exec(fixedExpression)) IS_NOT_NULL
+                            DECLARE key = match[1]
+                            DECLARE value = match[2].trim()
+                            
+                            // Type-aware value parsing
+                            IF value EQUALS 'null' THEN
+                                SET result[key] = null
+                            ELSE_IF value EQUALS 'true' OR value EQUALS 'false' THEN
+                                SET result[key] = (value === 'true')
+                            ELSE_IF value STARTS_WITH '"' AND value ENDS_WITH '"' THEN
+                                SET result[key] = value.slice(1, -1)
+                            ELSE_IF value STARTS_WITH "'" AND value ENDS_WITH "'" THEN
+                                SET result[key] = value.slice(1, -1)
+                            ELSE_IF NOT_IS_NaN(Number(value)) THEN
+                                SET result[key] = Number(value)
+                            ELSE_IF value STARTS_WITH '{' OR value STARTS_WITH '[' THEN
+                                // Handle nested objects/arrays
+                                TRY
+                                    DECLARE nestedFixed = value.replace(/'/g, '"').replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
+                                    SET result[key] = JSON.parse(nestedFixed)
+                                CATCH_ERROR
+                                    SET result[key] = value
+                                END_TRY
+                            ELSE
+                                SET result[key] = value
+                            END_IF
+                        END_WHILE
+                        
+                        RETURN_VALUE result
+                    CATCH_ERROR
+                        RETURN_VALUE {}
+                    END_TRY
+                ELSE_IF fixedExpression STARTS_WITH '[' AND fixedExpression ENDS_WITH ']' THEN
+                    RETURN_VALUE []
+                END_IF
+                
+                RETURN_VALUE fixedExpression
+            END_IF
+         END_IF
+         
+         // 8. Handle simple dot notation references (legacy support)
+         IF mapping CONTAINS '.' AND NOT mapping CONTAINS 'steps.' THEN
+             DECLARE pathParts = mapping.split('.')
+             DECLARE sourceStep = pathParts[0]
+             DECLARE path = pathParts.slice(1).join('.')
+             
+             IF sourceStep EQUALS 'trigger' THEN
+                 DECLARE triggerResult = context.stepResults.get('trigger')
+                 RETURN triggerResult ? getNestedValue(triggerResult.outputData, path) : null
+             ELSE_IF sourceStep EQUALS 'context' THEN
+                 RETURN context.contextVariables.get(path)
+             ELSE
+                 DECLARE stepResult = context.stepResults.get(sourceStep)
+                 RETURN stepResult ? getNestedValue(stepResult.outputData, path) : null
+             END_IF
+         END_IF
+         
+         RETURN_VALUE mapping
+     `
+     
+     dependencies: [
+         "getNestedValue: (obj: any, path: string) => any",
+         "ExecutionContext interface",
+         "JSON.stringify and JSON.parse for value serialization"
+     ]
+     
+     error_handling: [
+         "Graceful handling of missing step references with null fallback",
+         "Safe parsing of malformed expressions with fallback objects",
+         "Comprehensive logging for debugging expression resolution issues",
+         "Type-safe value conversion with proper error boundaries"
+     ]
+     
+     performance_considerations: [
+         "Regex compilation optimization for repeated pattern matching",
+         "Efficient Map lookups for step results and context variables",
+         "Minimal object creation during expression resolution",
+         "Early returns for simple cases to avoid unnecessary processing"
+     ]
+ }
+
+ code cfv_internal_code.ServerExecutionEngine_EnhancedDependencyAnalysis {
+     title: "Enhanced Dependency Analysis with Cycle Detection and Execution Planning"
+     part_of_design: cfv_designs.StreamingExecutionAPIService
+     language: "TypeScript"
+     implementation_location: { 
+         filepath: "services/serverExecutionEngine.ts", 
+         entry_point_name: "analyzeDependencies",
+         entry_point_type: "private_method"
+     }
+     signature: "(steps: any[]) => DependencyAnalysis"
+     
+     detailed_behavior: `
+         // Human Review Focus: Correct dependency extraction, cycle detection algorithm, execution planning
+         // AI Agent Target: Generate sophisticated dependency analysis logic
+         
+         // 1. Initialize data structures
+         DECLARE graph = new Map<string, Set<string>>()
+         DECLARE stepMap = new Map<string, any>()
+         
+         // Build step map for quick lookup
+         FOR_EACH step IN steps
+             SET stepMap[step.step_id] = step
+         END_FOR
+         
+         // 2. Build dependency graph with enhanced parsing
+         FOR_EACH step IN steps
+             DECLARE dependencies = extractStepDependencies(step)
+             SET graph[step.step_id] = dependencies
+         END_FOR
+         
+         // 3. Detect cycles using Depth-First Search
+         DECLARE cycles = detectCycles(graph)
+         
+         // 4. Find independent steps (no dependencies or only depend on trigger/context)
+         DECLARE independentSteps = []
+         FOR_EACH step IN steps
+             DECLARE deps = graph.get(step.step_id) || new Set()
+             IF deps.size === 0 OR ALL_ELEMENTS_IN deps ARE ('trigger' OR 'context') THEN
+                 ADD step.step_id TO independentSteps
+             END_IF
+         END_FOR
+         
+         // 5. Create execution order layers for parallel processing
+         DECLARE executionOrder = createExecutionOrder(steps, graph)
+         
+         // 6. Log comprehensive dependency analysis
+         LOG_INFO "Dependency Graph: ${Array.from(graph.entries()).map(([step, deps]) => ({ step, dependencies: Array.from(deps) }))}"
+         
+         IF cycles.length > 0 THEN
+             LOG_WARNING "Detected ${cycles.length} dependency cycles: ${cycles}"
+         END_IF
+         
+         RETURN_VALUE {
+             graph: graph,
+             cycles: cycles,
+             independentSteps: independentSteps,
+             executionOrder: executionOrder
+         }
+     `
+     
+     dependencies: [
+         "extractStepDependencies: (step: any) => Set<string>",
+         "detectCycles: (graph: Map<string, Set<string>>) => string[][]",
+         "createExecutionOrder: (steps: any[], graph: Map<string, Set<string>>) => string[][]"
+     ]
+ }
+
+ code cfv_internal_code.ServerExecutionEngine_LayeredExecutionStrategy {
+     title: "Layered Execution Strategy with Parallel Processing and Fallback Mechanisms"
+     part_of_design: cfv_designs.StreamingExecutionAPIService
+     language: "TypeScript"
+     implementation_location: { 
+         filepath: "services/serverExecutionEngine.ts", 
+         entry_point_name: "executeStepsWithEnhancedDependencyResolution",
+         entry_point_type: "private_method"
+     }
+     signature: "(steps: any[], context: ExecutionContext, streamCallback: StreamingCallback, dependencyAnalysis: DependencyAnalysis) => Promise<void>"
+     
+     detailed_behavior: `
+         // Human Review Focus: Parallel execution coordination, error isolation, fallback strategies
+         // AI Agent Target: Generate robust layered execution logic
+         
+         DECLARE executionOrder = 1 // Start after trigger
+         
+         LOG_INFO "Starting enhanced step execution with ${dependencyAnalysis.executionOrder.length} execution layers"
+         
+         // Execute steps layer by layer for optimal parallelization
+         FOR layerIndex FROM 0 TO dependencyAnalysis.executionOrder.length - 1
+             DECLARE layer = dependencyAnalysis.executionOrder[layerIndex]
+             DECLARE layerSteps = layer.map(stepId => steps.find(s => s.step_id === stepId)).filter(Boolean)
+             
+             LOG_INFO "Executing layer ${layerIndex + 1}: ${layer.length} steps in parallel: ${layer}"
+             
+             IF layerSteps.length > 0 THEN
+                 TRY
+                     AWAIT executeStepsInParallel(layerSteps, context, streamCallback, executionOrder)
+                     SET executionOrder += layerSteps.length
+                 CATCH_ERROR error
+                     LOG_ERROR "Failed to execute layer ${layerIndex + 1}: ${error}"
+                     // Continue with next layer even if this one partially fails
+                     // This provides resilience against individual step failures
+                 END_TRY
+             END_IF
+         END_FOR
+         
+         // 6. Comprehensive execution reporting
+         DECLARE totalSteps = steps.length
+         DECLARE executedSteps = context.completedSteps - 1 // -1 for trigger
+         
+         LOG_INFO "Enhanced execution completed: ${executedSteps}/${totalSteps} steps executed successfully"
+         
+         IF executedSteps < totalSteps THEN
+             DECLARE unexecutedSteps = steps.filter(s => !context.stepResults.has(s.step_id))
+             LOG_WARNING "${unexecutedSteps.length} steps were not executed: ${unexecutedSteps.map(s => s.step_id)}"
+         END_IF
+     `
+     
+     dependencies: [
+         "executeStepsInParallel: (steps: any[], context: ExecutionContext, streamCallback: StreamingCallback, executionOrder: number) => Promise<void>",
+         "StreamingCallback interface",
+         "ExecutionContext interface",
+         "DependencyAnalysis interface"
+     ]
+     
+     error_handling: [
+         "Layer-level error isolation to prevent cascade failures",
+         "Comprehensive logging for execution tracking and debugging",
+         "Graceful degradation with partial execution support",
+         "Detailed reporting of executed vs. unexecuted steps"
+     ]
+     
+     performance_optimizations: [
+         "Parallel execution within dependency layers",
+         "Optimal resource utilization through layer-based processing",
+         "Early termination strategies for critical failures",
+         "Memory-efficient execution context management"
+     ]
+ }
+
+ code cfv_internal_code.ClientExecutionStreamHandler_EnhancedStateManagement {
+     title: "Enhanced Client Stream Handler with React State Management"
+     part_of_design: cfv_designs.ClientExecutionStreamHandler
+     language: "TypeScript"
+     implementation_location: { 
+         filepath: "services/clientExecutionStreamHandler.ts", 
+         entry_point_name: "handleStreamingEvent",
+         entry_point_type: "private_method"
+     }
+     signature: "(event: StreamingExecutionEvent, currentTrace: FlowExecutionTrace) => FlowExecutionTrace"
+     
+     detailed_behavior: `
+         // Human Review Focus: Proper React state management, object reference handling, event processing
+         // AI Agent Target: Generate robust client-side streaming event handler
+         
+         // 1. Create new trace object to ensure React re-rendering
+         DECLARE newTrace = { ...currentTrace }
+         
+         // 2. Process event based on type
+         SWITCH event.type
+             CASE 'execution.started':
+                 // Pre-populate all steps with PENDING status
+                 DECLARE executionStartedData = event.data as ExecutionStartedEvent
+                 DECLARE newSteps = new Map<string, StepExecutionTrace>()
+                 
+                 // Extract steps from flow definition and create placeholder traces
+                 FOR_EACH step IN executionStartedData.flowDefinition.steps
+                     DECLARE stepTrace = {
+                         stepId: step.step_id,
+                         componentFqn: step.component_ref,
+                         status: 'PENDING' as ExecutionStatusEnum,
+                         startTime: null,
+                         endTime: null,
+                         durationMs: null,
+                         inputData: null,
+                         outputData: null,
+                         executionOrder: null
+                     }
+                     SET newSteps[step.step_id] = stepTrace
+                 END_FOR
+                 
+                 SET newTrace.steps = newSteps
+                 SET newTrace.status = 'RUNNING'
+                 SET newTrace.startTime = event.timestamp
+                 BREAK
+                 
+             CASE 'step.started':
+                 DECLARE stepStartedData = event.data as StepStartedEvent
+                 DECLARE existingStep = newTrace.steps.get(stepStartedData.stepId)
+                 
+                 IF existingStep THEN
+                     // Create new step object to trigger React re-render
+                     DECLARE updatedStep = {
+                         ...existingStep,
+                         status: 'RUNNING' as ExecutionStatusEnum,
+                         startTime: event.timestamp,
+                         inputData: stepStartedData.inputData,
+                         executionOrder: stepStartedData.executionOrder
+                     }
+                     
+                     // Create new steps Map to ensure React detects change
+                     DECLARE newSteps = new Map(newTrace.steps)
+                     SET newSteps[stepStartedData.stepId] = updatedStep
+                     SET newTrace.steps = newSteps
+                 END_IF
+                 BREAK
+                 
+             CASE 'step.completed':
+                 DECLARE stepCompletedData = event.data as StepCompletedEvent
+                 DECLARE existingStep = newTrace.steps.get(stepCompletedData.stepId)
+                 
+                 IF existingStep THEN
+                     // Create new step object to trigger React re-render
+                     DECLARE updatedStep = {
+                         ...existingStep,
+                         status: 'SUCCESS' as ExecutionStatusEnum,
+                         endTime: event.timestamp,
+                         durationMs: stepCompletedData.actualDuration,
+                         outputData: stepCompletedData.outputData
+                     }
+                     
+                     // Create new steps Map to ensure React detects change
+                     DECLARE newSteps = new Map(newTrace.steps)
+                     SET newSteps[stepCompletedData.stepId] = updatedStep
+                     SET newTrace.steps = newSteps
+                 END_IF
+                 BREAK
+                 
+             CASE 'step.failed':
+                 DECLARE stepFailedData = event.data as StepFailedEvent
+                 DECLARE existingStep = newTrace.steps.get(stepFailedData.stepId)
+                 
+                 IF existingStep THEN
+                     // Create new step object to trigger React re-render
+                     DECLARE updatedStep = {
+                         ...existingStep,
+                         status: 'FAILURE' as ExecutionStatusEnum,
+                         endTime: event.timestamp,
+                         durationMs: stepFailedData.actualDuration,
+                         errorData: stepFailedData.error
+                     }
+                     
+                     // Create new steps Map to ensure React detects change
+                     DECLARE newSteps = new Map(newTrace.steps)
+                     SET newSteps[stepFailedData.stepId] = updatedStep
+                     SET newTrace.steps = newSteps
+                 END_IF
+                 BREAK
+                 
+             CASE 'execution.completed':
+                 DECLARE executionCompletedData = event.data as ExecutionCompletedEvent
+                 SET newTrace.status = 'COMPLETED'
+                 SET newTrace.endTime = event.timestamp
+                 SET newTrace.finalOutput = executionCompletedData.finalOutput
+                 BREAK
+                 
+             CASE 'execution.failed':
+                 DECLARE executionFailedData = event.data as ExecutionFailedEvent
+                 SET newTrace.status = 'FAILED'
+                 SET newTrace.endTime = event.timestamp
+                 SET newTrace.errorData = executionFailedData.error
+                 BREAK
+                 
+             DEFAULT:
+                 LOG_WARNING "Unknown event type: ${event.type}"
+                 BREAK
+         END_SWITCH
+         
+         // 3. Add timestamp to ensure React re-rendering
+         SET newTrace.lastUpdated = Date.now()
+         
+         RETURN_VALUE newTrace
+     `
+     
+     dependencies: [
+         "StreamingExecutionEvent interface",
+         "FlowExecutionTrace interface", 
+         "StepExecutionTrace interface",
+         "ExecutionStatusEnum enumeration"
+     ]
+     
+     react_optimization: [
+         "Always create new object references for state updates",
+         "Use Map constructor to create new Map instances",
+         "Add timestamp fields to force React re-rendering",
+         "Avoid mutating existing objects in place"
+     ]
+     
+     error_handling: [
+         "Graceful handling of missing step references",
+         "Validation of event data before processing",
+         "Fallback to previous state on processing errors",
+         "Comprehensive logging for debugging"
+     ]
+ }
