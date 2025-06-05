@@ -1,3 +1,9 @@
-node_modules
 .next
 .tsbuildinfo
+.vscode
+debug-reports
+node_modules
+playwright-report
+test-results
+test-results.json
+tsconfig.tsbuildinfo

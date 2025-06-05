@@ -1151,245 +1151,138 @@ flows:
   {
     fqn: 'com.casino.games',
     content: `dsl_version: "1.1"
-namespace: com.casino.users
+namespace: com.casino.games
 imports:
-  - namespace: com.casino.core # For shared context or components if any
+  - namespace: com.casino.core
     as: core
-  # If communication components are defined in core or a shared comms module
-  - namespace: com.casino.communications # Assuming a module for communication components
-    as: comms
 
 definitions:
   context:
-    - name: default-user-db-timeout-ms
-      value: 3000
+    - name: default-game-timeout-ms
+      value: 5000
       type: number
-    - name: minimum-registration-age
-      value: 18
+    - name: house-edge-slots
+      value: 0.05
       type: number
-    - name: welcome-email-subject
-      value: "Welcome to Our Platform!"
-      type: string
-    - name: welcome-email-template-id # If using a template service via Communication.SendEmail
-      value: "user-registration-welcome-v1"
-      type: string
+    - name: house-edge-blackjack
+      value: 0.02
+      type: number
+    - name: max-win-multiplier
+      value: 1000
+      type: number
 
   components:
-    # --- Database Adapter ---
-    - name: userDbAdapter
-      type: Integration.ExternalServiceAdapter
+    # Game Engine Components
+    - name: slotGameEngine
+      type: StdLib:HttpCall
       config:
-        adapterType: "StdLibPlugin:PostgresAdapter" # Conceptual
-        adapterConfig: { connectionStringSecretName: "user-db-connection-string", timeoutMs: "{{context.default-user-db-timeout-ms}}" }
-
-    # --- KYC Pre-check (if any, simplified from core for this module) ---
-    - name: basicKycCheckComponent
-      type: StdLib:HttpCall # Example: could be a lightweight external check
-      config:
-        url: "{{secrets.basic-kyc-service-url}}/precheck"
+        url: "{{secrets.game-engine-url}}/slots/spin"
         method: POST
-        timeoutMs: 2000
+        timeoutMs: "{{context.default-game-timeout-ms}}"
+        headers:
+          Authorization: "Bearer {{secrets.game-engine-api-key}}"
 
-    # --- Communication Component (using SendEmail abstraction) ---
-    - name: sendRegistrationEmailComponent
-      type: Communication.SendEmail # Assuming this is defined in comms module or here
+    - name: blackjackGameEngine
+      type: StdLib:HttpCall
       config:
-        serviceType: "StdLibPlugin:GenericSmtpAdapter" # Conceptual
-        serviceConfig: { smtpHostSecretName: "smtp-host", smtpUserSecretName: "smtp-user", smtpPasswordSecretName: "smtp-pass" }
-        fromAddress: "{{core.context.welcome-email-from}}" # Example of using imported context
-        defaultFromName: "Platform Registration"
+        url: "{{secrets.game-engine-url}}/blackjack/play"
+        method: POST
+        timeoutMs: "{{context.default-game-timeout-ms}}"
+        headers:
+          Authorization: "Bearer {{secrets.game-engine-api-key}}"
 
-    # --- Logic Components ---
-    - name: calculateAgeFromDOB
+    - name: rouletteGameEngine
+      type: StdLib:HttpCall
+      config:
+        url: "{{secrets.game-engine-url}}/roulette/spin"
+        method: POST
+        timeoutMs: "{{context.default-game-timeout-ms}}"
+        headers:
+          Authorization: "Bearer {{secrets.game-engine-api-key}}"
+
+    # Game Result Calculator
+    - name: calculateGameOutcome
       type: StdLib:MapData
       config:
         expression: |
           {
-            dobTimestamp: parse_datetime(data.dateOfBirth, 'YYYY-MM-DD').to_millis(),
-            age: floor((to_millis(now()) - parse_datetime(data.dateOfBirth, 'YYYY-MM-DD').to_millis()) / (365.25 * 24 * 60 * 60 * 1000)),
-            inputData: data
+            winnings: data.isWin ? data.betAmount * data.multiplier : 0,
+            multiplier: data.multiplier || 0,
+            isWin: data.isWin || false,
+            gameDetails: data.gameDetails,
+            transactionId: data.transactionId,
+            houseEdge: data.gameType == 'slots' ? {{context.house-edge-slots}} : {{context.house-edge-blackjack}}
           }
-        # Assumes parse_datetime, to_millis, now(), floor are available expression functions
-
-    - name: conceptualPasswordHasher
-      type: StdLib:MapData # Placeholder for actual secure hashing
-      config:
-        # In a real system, use Crypto.SecureExecutor with a KMS or a secure hashing library via WASM/plugin
-        expression: "{ hashedPassword: 'hashed-' + data.password, originalData: data.originalData }"
-        # This is NOT secure for production. It's a placeholder.
 
 flows:
-  - name: UserRegistrationFlow
+  - name: ExecuteGameFlow
     trigger:
-      type: StdLib.Trigger:Http
-      config:
-        path: /api/users/register # Assuming this is a public registration endpoint
-        method: POST
-        responseConfig: { errorStatusCode: 400 } # Default for validation/logic errors
+      type: StdLib:Manual
     steps:
-      - step_id: validate-registration-payload
+      - step_id: validate-game-request
         component_ref: StdLib:JsonSchemaValidator
         config:
           schema:
             type: object
-            required: [email, password, confirmPassword, firstName, lastName, dateOfBirth, country, termsAccepted]
+            required: [gameType, betAmount, userId, transactionId]
             properties:
-              email: { type: string, format: email }
-              password: { type: string, minLength: 10, pattern: "" } # Stricter password
-              confirmPassword: { type: string }
-              firstName: { type: string, minLength: 1, maxLength: 50 }
-              lastName: { type: string, minLength: 1, maxLength: 50 }
-              dateOfBirth: { type: string, format: "date", description: "YYYY-MM-DD" } # ISO 8601 date
-              country: { type: string, pattern: "^[A-Z]{2}$" } # ISO 3166-1 alpha-2
-              termsAccepted: { type: boolean, const: true, description: "User must accept terms." }
-        inputs_map: { data: "trigger.body" }
-        outputs_map: { error: "steps.fail-on-payload-validation.inputs.data" }
-
-      - step_id: fail-on-payload-validation
-        component_ref: StdLib:FailFlow
-        config: { errorMessageExpression: "{ message: 'Registration payload validation failed: ' + data.message, type: 'UserRegistration.PayloadValidationError', details: data.details }" }
-
-      - step_id: check-password-match
-        component_ref: StdLib:FilterData
-        config:
-          expression: "data.password == data.confirmPassword"
-          matchOutput: passwordsMatchData
-          noMatchOutput: passwordsMismatchError
-        inputs_map: { data: "steps.validate-registration-payload.outputs.validData" } # Original valid payload
-        run_after: [validate-registration-payload]
-        outputs_map: { passwordsMismatchError: "steps.fail-on-password-mismatch.inputs.data" }
-
-      - step_id: fail-on-password-mismatch
-        component_ref: StdLib:FailFlow
-        config: { errorMessageExpression: "{ message: 'Passwords do not match.', type: 'UserRegistration.PasswordMismatchError' }" }
-
-      - step_id: calculate-age
-        component_ref: calculateAgeFromDOB # Named MapData
-        inputs_map: { data: "steps.check-password-match.outputs.passwordsMatchData" } # Use data where passwords matched
-        run_after: [check-password-match]
-
-      - step_id: verify-age-eligibility
-        component_ref: StdLib:FilterData
-        config:
-          expression: "data.age >= {{context.minimum-registration-age}}"
-          matchOutput: ageEligibleData
-          noMatchOutput: underageError
-        inputs_map: { data: "steps.calculate-age.outputs.result" } # Output from calculateAgeFromDOB
-        run_after: [calculate-age]
-        outputs_map: { underageError: "steps.fail-on-underage.inputs.data" }
-
-      - step_id: fail-on-underage
-        component_ref: StdLib:FailFlow
-        config: { errorMessageExpression: "{ message: 'User must be at least ' + {{context.minimum-registration-age}} + ' years old.', type: 'UserRegistration.UnderageError', details: { age: data.age } }" }
-
-      - step_id: check-email-availability
-        component_ref: userDbAdapter
-        config:
-          operation: "QuerySingleRow_ReturnFirst" # Expects 0 or 1 row
+              gameType: { type: string, enum: [slots, blackjack, roulette] }
+              betAmount: { type: number, minimum: 1, maximum: 10000 }
+              userId: { type: string }
+              transactionId: { type: string }
+              gameParameters: { type: object }
         inputs_map:
-          requestData:
-            query: "SELECT user_id FROM users WHERE email = $1;"
-            params: "[ steps.verify-age-eligibility.outputs.ageEligibleData.inputData.email ]" # original email from payload
-        run_after: [verify-age-eligibility]
+          data: "trigger.initialData"
 
-      - step_id: route-on-email-check # Switch based on DB query result
+      - step_id: route-to-game-engine
         component_ref: StdLib:Switch
         config:
           cases:
-            - conditionExpression: "data == null" # If dbAdapter returns null for no rows found
-              outputName: emailAvailable
-            # No language needed if 'data == null' is default expression lang
-          defaultOutputName: emailTakenError # If data is not null, email exists
-        inputs_map: { data: "steps.check-email-availability.outputs.responseData" } # responseData might be null or a row object
-        run_after: [check-email-availability]
-
-      - step_id: fail-on-email-taken
-        component_ref: StdLib:FailFlow
-        config: { errorMessageExpression: "{ message: 'Email address is already registered.', type: 'UserRegistration.EmailTakenError' }" }
-        # This step needs to be wired from route-on-email-check.outputs.emailTakenError
-        # Let's assume it's implicitly wired if the output port name matches the input port name of a step, or use an explicit outputs_map on the Switch.
-        # For clarity, adding explicit wiring from Switch:
-        # (This cannot be done directly on Switch, so we handle it by having fail-on-email-taken consume the 'emailTakenError' output if it's emitted)
-
-      - step_id: perform-basic-kyc-precheck # Optional pre-check
-        component_ref: basicKycCheckComponent
+            - conditionExpression: "data.gameType == 'slots'"
+              outputName: slotsGame
+            - conditionExpression: "data.gameType == 'blackjack'"
+              outputName: blackjackGame
+            - conditionExpression: "data.gameType == 'roulette'"
+              outputName: rouletteGame
+          defaultOutputName: unsupportedGame
         inputs_map:
-          data: "{ firstName: steps.verify-age-eligibility.outputs.ageEligibleData.inputData.firstName, lastName: steps.verify-age-eligibility.outputs.ageEligibleData.inputData.lastName, dateOfBirth: steps.verify-age-eligibility.outputs.ageEligibleData.inputData.dateOfBirth, country: steps.verify-age-eligibility.outputs.ageEligibleData.inputData.country }"
-        run_after: [route-on-email-check]
-        condition: "steps.route-on-email-check.outputs.emailAvailable != null" # Proceed only if email is available
-        outputs_map: { error: "steps.fail-on-kyc-precheck.inputs.data" } # If KYC service fails
+          data: "steps.validate-game-request.outputs.validData"
+        run_after: [validate-game-request]
 
-      - step_id: fail-on-kyc-precheck
-        component_ref: StdLib:FailFlow
-        config: { errorMessageExpression: "{ message: 'Basic KYC pre-check failed: ' + data.message, type: 'UserRegistration.KycPrecheckFailed', details: data.details }" }
-
-      - step_id: filter-kyc-precheck-result
-        component_ref: StdLib:FilterData
-        config:
-          expression: "data.status == 'approved' || data.status == 'requires_further_review'" # Example statuses
-          matchOutput: kycOkData
-          noMatchOutput: kycRejectedError
-        inputs_map: { data: "steps.perform-basic-kyc-precheck.outputs.response.body" } # Assuming response structure
-        run_after: [perform-basic-kyc-precheck]
-        condition: "steps.perform-basic-kyc-precheck.outputs.response != null" # Ensure KYC call was successful
-        outputs_map: { kycRejectedError: "steps.fail-on-kyc-rejected.inputs.data" }
-
-      - step_id: fail-on-kyc-rejected
-        component_ref: StdLib:FailFlow
-        config: { errorMessageExpression: "{ message: 'User registration cannot proceed due to KYC pre-check result.', type: 'UserRegistration.KycRejected', details: { status: data.status, reason: data.reason } }" }
-
-      - step_id: hash-user-password
-        component_ref: conceptualPasswordHasher # Placeholder
+      - step_id: execute-slots-game
+        component_ref: slotGameEngine
         inputs_map:
-          data: "{ password: steps.verify-age-eligibility.outputs.ageEligibleData.inputData.password, originalData: steps.verify-age-eligibility.outputs.ageEligibleData.inputData }" # Pass original valid payload
-        run_after: [filter-kyc-precheck-result]
-        condition: "steps.filter-kyc-precheck-result.outputs.kycOkData != null"
+          data: "steps.route-to-game-engine.outputs.slotsGame"
+        run_after: [route-to-game-engine]
+        condition: "steps.route-to-game-engine.outputs.slotsGame != null"
 
-      - step_id: create-user-record
-        component_ref: userDbAdapter
-        config:
-          operation: "ExecuteDML_ReturnFirst"
+      - step_id: execute-blackjack-game
+        component_ref: blackjackGameEngine
         inputs_map:
-          requestData:
-            query: "INSERT INTO users (email, password_hash, first_name, last_name, date_of_birth, country, kyc_precheck_status, terms_accepted_at, created_at, last_login_at) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), NOW()) RETURNING user_id, email, first_name, created_at;"
-            params: "[ steps.hash-user-password.outputs.result.originalData.email, steps.hash-user-password.outputs.result.hashedPassword, steps.hash-user-password.outputs.result.originalData.firstName, steps.hash-user-password.outputs.result.originalData.lastName, steps.hash-user-password.outputs.result.originalData.dateOfBirth, steps.hash-user-password.outputs.result.originalData.country, steps.filter-kyc-precheck-result.outputs.kycOkData.status ]"
-        run_after: [hash-user-password]
-        outputs_map: { error: "steps.fail-on-db-create-user.inputs.data" }
+          data: "steps.route-to-game-engine.outputs.blackjackGame"
+        run_after: [route-to-game-engine]
+        condition: "steps.route-to-game-engine.outputs.blackjackGame != null"
 
-      - step_id: fail-on-db-create-user
-        component_ref: StdLib:FailFlow
-        config: { errorMessageExpression: "{ message: 'Failed to create user record in database: ' + data.message, type: 'UserRegistration.DatabaseError', details: data.details }" }
-
-      - step_id: create-initial-user-profile # Example: Create a related profile record
-        component_ref: userDbAdapter
-        config:
-          operation: "ExecuteDML"
+      - step_id: execute-roulette-game
+        component_ref: rouletteGameEngine
         inputs_map:
-          requestData:
-            query: "INSERT INTO user_profiles (user_id, display_name, preferred_language, timezone) VALUES ($1, $2, 'en', 'UTC');" # Default profile values
-            params: "[ steps.create-user-record.outputs.responseData.user_id, steps.create-user-record.outputs.responseData.first_name ]"
-        run_after: [create-user-record]
-        # Error handling for this step can be added if critical, or log and continue.
+          data: "steps.route-to-game-engine.outputs.rouletteGame"
+        run_after: [route-to-game-engine]
+        condition: "steps.route-to-game-engine.outputs.rouletteGame != null"
 
-      - step_id: send-welcome-notification
-        component_ref: sendRegistrationEmailComponent # Using Communication.SendEmail
+      - step_id: calculate-final-outcome
+        component_ref: calculateGameOutcome
         inputs_map:
-          toAddresses: "steps.create-user-record.outputs.responseData.email"
-          subject: "{{context.welcome-email-subject}}"
-          # bodyText: "'Hello ' + steps.create-user-record.outputs.responseData.first_name + ', welcome! Your account is ready.'"
-          templateId: "{{context.welcome-email-template-id}}"
-          templateData: "{ userName: steps.create-user-record.outputs.responseData.first_name, userId: steps.create-user-record.outputs.responseData.user_id }"
-          data: "{ userName: steps.create-user-record.outputs.responseData.first_name, userId: steps.create-user-record.outputs.responseData.user_id }" # Context for subject/template expressions
-        run_after: [create-initial-user-profile] # After profile creation
-        # Non-critical error: log and continue if email fails, user is already created.
-
-      # Final output of the flow: the created user's basic info
-      - step_id: prepare-success-response
-        component_ref: StdLib:MapData
-        config:
-          expression: "{ userId: data.user_id, email: data.email, message: 'User registered successfully. Welcome email sent.' }"
-        inputs_map: { data: "steps.create-user-record.outputs.responseData" }
-        run_after: [send-welcome-notification] # After attempting to send email
+          data: |
+            {
+              isWin: steps.execute-slots-game.outputs.response.body.isWin || steps.execute-blackjack-game.outputs.response.body.isWin || steps.execute-roulette-game.outputs.response.body.isWin,
+              multiplier: steps.execute-slots-game.outputs.response.body.multiplier || steps.execute-blackjack-game.outputs.response.body.multiplier || steps.execute-roulette-game.outputs.response.body.multiplier,
+              betAmount: steps.validate-game-request.outputs.validData.betAmount,
+              gameType: steps.validate-game-request.outputs.validData.gameType,
+              gameDetails: steps.execute-slots-game.outputs.response.body.gameDetails || steps.execute-blackjack-game.outputs.response.body.gameDetails || steps.execute-roulette-game.outputs.response.body.gameDetails,
+              transactionId: steps.validate-game-request.outputs.validData.transactionId
+            }
+        run_after: [execute-slots-game, execute-blackjack-game, execute-roulette-game]
     `
   },
 

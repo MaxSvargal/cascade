@@ -548,31 +548,38 @@ export async function generateSystemOverviewGraphData(
                   targetFlowFqn = `${module.fqn}.${flowName}`;
                 }
                 
-                const edgeData: SystemEdgeData = {
-                  type: 'invocationEdge'
-                };
+                // Check if the target flow actually exists before creating the edge
+                const targetFlowExists = moduleRegistry.getFlowDefinitionDsl(targetFlowFqn) !== null;
                 
-                edges.push({
-                  id: `${flowFqn}-${targetFlowFqn}`,
-                  source: flowFqn,
-                  target: targetFlowFqn,
-                  type: 'systemEdge',
-                  data: edgeData,
-                  style: {
-                    stroke: '#2196F3',
-                    strokeWidth: 2,
-                    strokeDasharray: '5,5'
-                  },
-                  markerEnd: {
-                    type: MarkerType.ArrowClosed,
-                    color: '#2196F3'
-                  },
-                  label: step.step_id,
-                  labelStyle: {
-                    fontSize: '10px',
-                    fill: '#666'
-                  }
-                });
+                if (targetFlowExists) {
+                  const edgeData: SystemEdgeData = {
+                    type: 'invocationEdge'
+                  };
+                  
+                  edges.push({
+                    id: `${flowFqn}-${targetFlowFqn}`,
+                    source: flowFqn,
+                    target: targetFlowFqn,
+                    type: 'systemEdge',
+                    data: edgeData,
+                    style: {
+                      stroke: '#2196F3',
+                      strokeWidth: 2,
+                      strokeDasharray: '5,5'
+                    },
+                    markerEnd: {
+                      type: MarkerType.ArrowClosed,
+                      color: '#2196F3'
+                    },
+                    label: step.step_id,
+                    labelStyle: {
+                      fontSize: '10px',
+                      fill: '#666'
+                    }
+                  });
+                } else {
+                  console.warn(`⚠️ SubFlowInvoker references non-existent flow: ${targetFlowFqn} in step ${step.step_id} of flow ${flowFqn}`);
+                }
               }
             }
           });
