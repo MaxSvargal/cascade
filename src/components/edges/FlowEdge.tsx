@@ -46,7 +46,7 @@ const FlowEdge: React.FC<EdgeProps<FlowEdgeData>> = ({
       case 'combinedDependency':
         return {
           ...baseStyle,
-          stroke: '#6B7280', // Lighter gray for combined
+          stroke: '#111', // Lighter gray for combined
           strokeDasharray: 'none'
         };
       

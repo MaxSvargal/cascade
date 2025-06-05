@@ -772,6 +772,66 @@ export interface NodeColors {
   triggerNodeColor?: string;
   /** Default color for sub-flow invoker nodes. */
   subFlowInvokerColor?: string;
+  /** Registry of component-specific colors using perceptually uniform OKLCH color space. */
+  componentColors?: ComponentColorRegistry;
+}
+
+export interface ComponentColorRegistry {
+  // Data Processing Components (Blue-Cyan range: 180-240°)
+  /** Primary color for data processing components (MapData, FilterData, JsonSchemaValidator). */
+  dataProcessingColor?: string;
+  /** Background color for data processing components. */
+  dataProcessingBackgroundColor?: string;
+  /** Accent color for data processing components. */
+  dataProcessingAccentColor?: string;
+
+  // Control Flow Components (Purple range: 270-330°)
+  /** Primary color for control flow components (Fork, Switch, MergeStreams). */
+  controlFlowColor?: string;
+  /** Background color for control flow components. */
+  controlFlowBackgroundColor?: string;
+  /** Accent color for control flow components. */
+  controlFlowAccentColor?: string;
+
+  // External Communication Components (Orange-Red range: 0-60°)
+  /** Primary color for communication components (HttpCall, SendEmail, SendNotification). */
+  communicationColor?: string;
+  /** Background color for communication components. */
+  communicationBackgroundColor?: string;
+  /** Accent color for communication components. */
+  communicationAccentColor?: string;
+
+  // Integration Components (Teal-Green range: 120-180°)
+  /** Primary color for integration components (ExternalServiceAdapter). */
+  integrationColor?: string;
+  /** Background color for integration components. */
+  integrationBackgroundColor?: string;
+  /** Accent color for integration components. */
+  integrationAccentColor?: string;
+
+  // Security Components (Red-Pink range: 330-30°)
+  /** Primary color for security components (Authorize). */
+  securityColor?: string;
+  /** Background color for security components. */
+  securityBackgroundColor?: string;
+  /** Accent color for security components. */
+  securityAccentColor?: string;
+
+  // Flow Control Components (Yellow-Green range: 60-120°)
+  /** Primary color for flow control components (SubFlowInvoker, FailFlow). */
+  flowControlColor?: string;
+  /** Background color for flow control components. */
+  flowControlBackgroundColor?: string;
+  /** Accent color for flow control components. */
+  flowControlAccentColor?: string;
+
+  // Validation Components (Magenta range: 300-360°)
+  /** Primary color for validation components (JsonSchemaValidator when used for validation). */
+  validationColor?: string;
+  /** Background color for validation components. */
+  validationBackgroundColor?: string;
+  /** Accent color for validation components. */
+  validationAccentColor?: string;
 }
 
 export interface EdgeColors {
@@ -1072,4 +1132,73 @@ export interface ExecutionCancellationResponse {
   executionId: string;
   cancelled: boolean;
   message: string;
+}
+
+// --- Component Styling Types ---
+export type ComponentCategoryEnum = 
+  | 'dataProcessing' 
+  | 'controlFlow' 
+  | 'communication' 
+  | 'integration' 
+  | 'security' 
+  | 'flowControl' 
+  | 'validation' 
+  | 'custom';
+
+export interface ComponentStyleDefinition {
+  /** Fully qualified name of the component (e.g., 'StdLib:MapData'). */
+  componentFqn: string;
+  /** Category for grouping similar components. */
+  category: ComponentCategoryEnum;
+  /** Human-readable display name for the component. */
+  displayName?: string;
+  /** Unicode emoji or icon identifier for visual representation. */
+  icon?: string;
+  /** Brief description of the component's purpose. */
+  description?: string;
+  
+  // Color properties (will be resolved from ComponentColorRegistry based on category)
+  /** Override primary color for this specific component. */
+  primaryColor?: string;
+  /** Override background color for this specific component. */
+  backgroundColor?: string;
+  /** Override accent color for this specific component. */
+  accentColor?: string;
+  
+  // Visual properties
+  /** Border style for the component. */
+  borderStyle?: string;
+  /** Border width in pixels. */
+  borderWidth?: number;
+  /** Border radius in pixels. */
+  borderRadius?: number;
+  
+  // Typography
+  /** Font size for component text. */
+  fontSize?: number;
+  /** Font weight for component text. */
+  fontWeight?: string;
+  
+  // Special styling flags
+  /** Whether this component should have enhanced visual prominence. */
+  isHighPriority?: boolean;
+  /** Whether to show configuration preview in the node. */
+  showConfigPreview?: boolean;
+  /** Maximum lines to show in config preview. */
+  maxConfigPreviewLines?: number;
+}
+
+export interface ComponentStyleRegistry {
+  /** Map of component FQN to style definition. */
+  styles: Record<string, ComponentStyleDefinition>;
+  /** Default styles for each category. */
+  defaultCategoryStyles: Record<string, ComponentStyleDefinition>;
+  
+  // Methods for style resolution (conceptual - would be implemented in service)
+  /** Get style definition for a specific component. Signature: (componentFqn: string) => ComponentStyleDefinition | null */
+  getStyleForComponent: (componentFqn: string) => ComponentStyleDefinition | null;
+  /** Get default style for a category. Signature: (category: ComponentCategoryEnum) => ComponentStyleDefinition */
+  getCategoryStyle: (category: ComponentCategoryEnum) => ComponentStyleDefinition;
+  /** Register a new component style. Signature: (style: ComponentStyleDefinition) => void */
+  registerComponentStyle: (style: ComponentStyleDefinition) => void;
 } 

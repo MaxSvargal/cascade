@@ -67,7 +67,7 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
     const triggerTrace = traceData?.steps.find(t => t.stepId === 'trigger');
     
     const triggerNodeData: TriggerEntryPointNodeData = {
-      label: `Trigger: ${flowDefinition.trigger.type}`,
+      label: flowFqn.split('.').pop() || 'Flow',
       triggerType: flowDefinition.trigger.type,
       dslObject: flowDefinition.trigger,
       resolvedComponentFqn: flowDefinition.trigger.type,

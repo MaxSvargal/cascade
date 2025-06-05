@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { SubFlowInvokerNodeData } from '@/models/cfv_models_generated';
+import { getComponentStyle, componentStylingService } from '../../services/componentStylingService';
 
 const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data, selected }) => {
   const [isStatusHovered, setIsStatusHovered] = useState(false);
@@ -54,8 +55,11 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
     };
   };
 
-  // Enhanced styling for clean design mode vs execution mode
+  // Enhanced styling for clean design mode vs execution mode with component-specific colors
   const getNodeStyle = () => {
+    // Get component-specific styling for SubFlowInvoker
+    const componentStyle = getComponentStyle('StdLib:SubFlowInvoker');
+    
     // DYNAMIC WIDTH: Calculate width based on content length
     const labelLength = data.label?.length || 0;
     const fqnLength = data.invokedFlowFqn?.length || 0;
@@ -67,9 +71,14 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
       dynamicWidth = Math.min(400, 160 + (maxContentLength - 20) * 8); // 8px per extra character, max 400px
     }
     
+    // Apply component-specific styling properties
+    const borderRadius = componentStyle?.borderRadius || 8;
+    const borderWidth = componentStyle?.borderWidth || 1;
+    const borderStyle = componentStyle?.borderStyle || 'solid';
+    
     const baseStyle = {
       padding: data.executionStatus ? '20px 16px 12px 16px' : '12px 16px',
-      borderRadius: '8px',
+      borderRadius: `${borderRadius}px`,
       width: `${dynamicWidth}px`, // FIXED: Use calculated dynamic width instead of min/max
       transition: 'all 0.2s ease',
       boxSizing: 'border-box' as const,
@@ -81,51 +90,60 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
     };
 
     if (!data.executionStatus) {
-      // Clean design mode - white background with transparent border
+      // Clean design mode - use component-specific colors
+      const backgroundColor = componentStyle?.backgroundColor || '#FFFFFF';
+      const borderColor = componentStyle?.primaryColor || 'transparent';
+      
       return {
         ...baseStyle,
-        backgroundColor: '#FFFFFF', // Pure white background
-        border: '1px solid transparent', // Transparent border for pending nodes
+        backgroundColor,
+        border: `${borderWidth}px ${borderStyle} ${borderColor}`,
         boxShadow: selected 
-          ? '0 6px 20px rgba(139, 92, 246, 0.4)' 
-          : '0 4px 12px rgba(139, 92, 246, 0.15)'
+          ? `0 6px 20px ${componentStyle?.primaryColor ? componentStyle.primaryColor + '40' : 'rgba(139, 92, 246, 0.4)'}` 
+          : '0 4px 12px rgba(75, 85, 99, 0.15)' // Dark grey purple shadow like other nodes
       };
     } else {
-      // Debug mode - very light pastel backgrounds with subtle borders
+      // Debug mode - execution status takes precedence over component colors
+      const statusColors = componentStylingService.getExecutionStatusColors();
+      const statusBackgroundColors = componentStylingService.getExecutionStatusBackgroundColors();
+      
       let backgroundColor = '';
       let borderColor = '';
       switch (data.executionStatus) {
         case 'SUCCESS':
-          backgroundColor = '#fff'; // Very light green background
-          borderColor = '#E6FFFA'; // Very subtle green border
+          backgroundColor = statusBackgroundColors.SUCCESS;
+          borderColor = statusColors.SUCCESS + '30';
           break;
         case 'FAILURE':
-          backgroundColor = '#FFFAFA'; // Very light red background
-          borderColor = '#FFE6E6'; // Very subtle red border
+          backgroundColor = statusBackgroundColors.FAILURE;
+          borderColor = statusColors.FAILURE + '30';
           break;
         case 'RUNNING':
-          backgroundColor = '#FFFEF9'; // Very light amber background
-          borderColor = '#FFF4E6'; // Very subtle amber border
+          backgroundColor = statusBackgroundColors.RUNNING;
+          borderColor = statusColors.RUNNING + '30';
           break;
         case 'SKIPPED':
-          backgroundColor = '#FAFAFA'; // Very light gray background
-          borderColor = '#F0F0F0'; // Very subtle gray border
+          backgroundColor = statusBackgroundColors.SKIPPED;
+          borderColor = statusColors.SKIPPED + '30';
           break;
         default:
-          backgroundColor = '#FFFFFF'; // White background
-          borderColor = 'transparent'; // Transparent border
+          backgroundColor = statusBackgroundColors.PENDING;
+          borderColor = statusColors.PENDING + '30';
       }
       
       return {
         ...baseStyle,
         backgroundColor,
-        border: `1px solid ${borderColor}`,
+        border: `${borderWidth}px ${borderStyle} ${borderColor}`,
         boxShadow: selected 
-          ? '0 6px 20px rgba(139, 92, 246, 0.4)' 
-          : '0 4px 12px rgba(139, 92, 246, 0.2)'
+          ? `0 6px 20px ${componentStyle?.primaryColor ? componentStyle.primaryColor + '40' : 'rgba(139, 92, 246, 0.4)'}` 
+          : '0 4px 12px rgba(75, 85, 99, 0.15)' // Dark grey purple shadow like other nodes
       };
     }
   };
+
+  // Get component-specific styling for display
+  const componentStyle = getComponentStyle('StdLib:SubFlowInvoker');
 
   return (
     <div style={getNodeStyle()}>
@@ -153,16 +171,30 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
         </div>
       )}
       
+      {/* Component icon and label */}
       <div style={{ 
-        fontWeight: '600', 
-        marginBottom: '8px',
-        color: '#1F2937',
-        fontSize: '13px',
-        textAlign: 'center',
-        wordWrap: 'break-word',
-        lineHeight: '1.3'
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '6px',
+        marginBottom: '8px'
       }}>
-        {data.label}
+        <span style={{ 
+          fontSize: '14px',
+          lineHeight: '1'
+        }}>
+          📋
+        </span>
+        <div style={{ 
+          fontWeight: '600', 
+          color: '#1F2937',
+          fontSize: '13px',
+          textAlign: 'center',
+          wordWrap: 'break-word',
+          lineHeight: '1.3'
+        }}>
+          {data.label}
+        </div>
       </div>
       
       {data.invokedFlowFqn && (
@@ -212,14 +244,18 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
       {data.resolvedComponentFqn && (
         <div style={{ 
           fontSize: '10px', 
-          color: '#6B7280',
+          color: componentStyle?.primaryColor ? 
+            componentStyle.primaryColor.replace('0.75', '0.45') : // Much darker text
+            '#374151', // Dark gray text
           marginBottom: '8px',
           textAlign: 'center',
           fontFamily: 'ui-monospace, monospace',
-          backgroundColor: '#F9FAFB',
-          padding: '3px 6px',
-          borderRadius: '4px',
-          border: '1px solid #F3F4F6',
+          backgroundColor: componentStyle?.backgroundColor ? 
+            componentStyle.backgroundColor.replace('0.98', '0.92') : // Much darker background
+            'rgba(0, 0, 0, 0.08)', // More noticeable darkening
+          padding: '2px 6px',
+          borderRadius: '3px',
+          opacity: 0.9,
           whiteSpace: 'normal',
           overflow: 'visible',
           textOverflow: 'unset',

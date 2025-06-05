@@ -162,7 +162,7 @@ const TriggerNode: React.FC<NodeProps<TriggerEntryPointNodeData>> = ({ data, sel
         marginBottom: '8px',
         wordWrap: 'break-word'
       }}>
-        ⚡ {data.triggerType}
+        ⚡ {data.triggerType.replace('StdLib:', 'StdLib.Trigger:')}
       </div>
 
       {data.contextVarUsages && data.contextVarUsages.length > 0 && (

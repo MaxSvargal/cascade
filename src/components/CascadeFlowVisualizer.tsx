@@ -198,7 +198,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
     colorTheme: {
       primaryColor: '#3B82F6',
       secondaryColor: '#10B981',
-      backgroundColor: '#f8fafc',
+      backgroundColor: 'oklch(0.96 0.005 220)', // Darker, more subtle background to complement pastel palette
       sidebarBackgroundColor: '#ffffff',
       nodeColors: {
         successColor: '#10B981',
@@ -638,7 +638,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
               style={{
                 width: '100%',
                 padding: '8px 12px',
-                backgroundColor: systemViewActive ? '#3B82F6' : '#f8fafc',
+                backgroundColor: systemViewActive ? '#3B82F6' : 'oklch(0.96 0.005 220)',
                 color: systemViewActive ? 'white' : '#374151',
                 border: `1px solid ${systemViewActive ? '#3B82F6' : '#E5E7EB'}`,
                 borderRadius: '6px',
@@ -830,7 +830,11 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
               {...props.customReactFlowProOptions}
             >
               <Controls />
-              <Background />
+              <Background 
+                color="oklch(0.92 0.008 220)" 
+                gap={20} 
+                size={1}
+              />
               <MiniMap />
               <AutoZoomToFit currentFlowFqn={currentFlowFqn} nodes={nodes} isGeneratingGraph={isGeneratingGraph} />
             </ReactFlow>

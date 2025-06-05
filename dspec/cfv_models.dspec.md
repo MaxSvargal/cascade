@@ -890,7 +890,7 @@ model cfv_models.ColorTheme {
 
 model cfv_models.NodeColors {
     id: "CFV_MOD_UI_004"
-    description: "Color configuration for different node types and states using refined pastel backgrounds and subtle borders."
+    description: "Color configuration for different node types and states using refined pastel backgrounds and subtle borders with perceptually uniform OKLCH color space."
 
     // Execution Status Colors (Refined Palette based on cfv_consumer_directives.RefinedNodeStyling)
     successColor?: String { default: "#22C55E"; description: "Subtle green border color for successful execution." }
@@ -911,66 +911,105 @@ model cfv_models.NodeColors {
     triggerNodeBackgroundColor?: String { default: "#F7FEF7"; description: "Very light green background for trigger nodes in design mode." }
     subFlowInvokerColor?: String { default: "#E9D5FF"; description: "Subtle purple border color for sub-flow invoker nodes in design mode (purple theme)." }
     subFlowInvokerBackgroundColor?: String { default: "#FDFCFF"; description: "Very light purple background for sub-flow invoker nodes in design mode." }
+
+    // Component-Specific Colors (OKLCH-based perceptually uniform color system)
+    componentColors?: cfv_models.ComponentColorRegistry { description: "Registry of component-specific colors using perceptually uniform OKLCH color space." }
 }
 
-model cfv_models.EdgeColors {
-    id: "CFV_MOD_UI_005"
-    description: "Color configuration for different edge types and states. Enhanced based on cfv_consumer_directives.GraphVisualization"
+model cfv_models.ComponentColorRegistry {
+    id: "CFV_MOD_UI_009"
+    description: "Registry of component-specific styling using perceptually uniform OKLCH color space for accessibility and visual distinction. Updated to reflect current pastel implementation with lighter backgrounds."
 
-    // Default Flow Edge Colors (Design Mode)
-    dataFlowColor?: String { default: "#2196F3"; description: "Blue dashed lines for data dependencies." } // From GraphVisualization edge_type_styling
-    controlFlowColor?: String { default: "#666"; description: "Standard gray lines for generic control flow." } // Default if no other type
+    // Data Processing Components (Blue-Cyan range: 180-240°) - Pastel colors with very light backgrounds
+    dataProcessingColor?: String { default: "oklch(0.75 0.08 220)"; description: "Primary color for data processing components (MapData, FilterData, JsonSchemaValidator). Pastel blue for subtle appearance." }
+    dataProcessingBackgroundColor?: String { default: "oklch(0.99 0.01 220)"; description: "Background color for data processing components. Very light with minimal chroma." }
+    dataProcessingAccentColor?: String { default: "oklch(0.65 0.12 220)"; description: "Accent color for data processing components." }
 
-    // Enhanced Edge Type Colors (from cfv_consumer_directives.GraphVisualization edge_type_styling)
-    executionOrderDependencyColor?: String { default: "#9C27B0"; description: "Purple solid lines for 'run_after' dependencies." }
-    errorRoutingColor?: String { default: "#f44336"; description: "Red dashed lines for 'outputs_map' error routing." }
+    // Control Flow Components (Purple range: 270-300°) - Pastel purple
+    controlFlowColor?: String { default: "oklch(0.75 0.08 280)"; description: "Primary color for control flow components (Fork, Switch, MergeStreams, Security.Authorize)." }
+    controlFlowBackgroundColor?: String { default: "oklch(0.99 0.01 280)"; description: "Background color for control flow components." }
+    controlFlowAccentColor?: String { default: "oklch(0.65 0.12 280)"; description: "Accent color for control flow components." }
 
-    // System Edge Colors
-    invocationEdgeColor?: String { default: "#FF9800"; description: "Color for invocation edges in system overview." }
-    triggerLinkEdgeColor?: String { default: "#4CAF50"; description: "Color for trigger link edges in system overview." }
+    // External Communication Components (Green range: 120-150°) - HttpCall is green
+    communicationColor?: String { default: "oklch(0.75 0.08 135)"; description: "Primary color for communication components (HttpCall, WebhookCall, RestApiCall). Green for external protocol communication." }
+    communicationBackgroundColor?: String { default: "oklch(0.99 0.01 135)"; description: "Background color for communication components." }
+    communicationAccentColor?: String { default: "oklch(0.65 0.12 135)"; description: "Accent color for communication components." }
 
-    // Execution State Colors (Debug/Trace Mode)
-    executedPathColor?: String { default: "#4B5563"; description: "Dark gray color for executed paths in debug mode." }
-    notExecutedPathColor?: String { default: "#D1D5DB"; description: "Light gray color for not executed paths (updated from #ccc)." }
-    criticalPathColor?: String { default: "#2563EB"; description: "Blue color for critical path edges (updated from #2196f3)." } // Tailwind blue-600
+    // Integration Components (Orange range: 30-60°) - SendEmail/SendNotification are orange
+    integrationColor?: String { default: "oklch(0.75 0.08 45)"; description: "Primary color for integration components (ExternalServiceAdapter, SendEmail, SendNotification). Orange for external service integration." }
+    integrationBackgroundColor?: String { default: "oklch(0.99 0.01 45)"; description: "Background color for integration components." }
+    integrationAccentColor?: String { default: "oklch(0.65 0.12 45)"; description: "Accent color for integration components." }
+
+    // Security Components (Gray range: 0°) - Neutral gray for security and failure
+    securityColor?: String { default: "oklch(0.75 0.02 0)"; description: "Primary color for security components (FailFlow, Authenticate, ValidateToken). Neutral gray with low chroma." }
+    securityBackgroundColor?: String { default: "oklch(0.99 0.005 0)"; description: "Background color for security components. Very neutral." }
+    securityAccentColor?: String { default: "oklch(0.65 0.04 0)"; description: "Accent color for security components." }
+
+    // Flow Control Components (Purple range: 270-300°) - SubFlowInvoker is violet
+    flowControlColor?: String { default: "oklch(0.75 0.08 280)"; description: "Primary color for flow control components (SubFlowInvoker, RetryFlow, DelayExecution). Violet for sub-flow management." }
+    flowControlBackgroundColor?: String { default: "oklch(0.99 0.01 280)"; description: "Background color for flow control components." }
+    flowControlAccentColor?: String { default: "oklch(0.65 0.12 280)"; description: "Accent color for flow control components." }
+
+    // Validation Components (Magenta range: 300-330°) - Pastel magenta
+    validationColor?: String { default: "oklch(0.75 0.08 315)"; description: "Primary color for validation components (SchemaValidator, BusinessRuleValidator)." }
+    validationBackgroundColor?: String { default: "oklch(0.99 0.01 315)"; description: "Background color for validation components." }
+    validationAccentColor?: String { default: "oklch(0.65 0.12 315)"; description: "Accent color for validation components." }
 }
 
-model cfv_models.NodeStyleOptions {
-    id: "CFV_MOD_UI_006"
-    description: "Styling options for nodes with refined visual design."
+model cfv_models.ComponentStyleDefinition {
+    id: "CFV_MOD_UI_010"
+    description: "Complete style definition for a specific component type including colors, icons, and visual properties."
 
-    defaultBorderWidth?: Number { default: 1; description: "Default border width in pixels." }
-    selectedBorderWidth?: Number { default: 1; description: "Border width for selected nodes." }
-    defaultBorderStyle?: String { default: "solid"; description: "Default border style." }
-    enableShadows?: Boolean { default: true; description: "Whether to show node shadows." }
-    defaultShadow?: String { default: "0 4px 12px rgba(0, 0, 0, 0.15)"; description: "Default shadow for nodes." }
-    selectedShadow?: String { default: "0 6px 20px rgba(59, 130, 246, 0.4)"; description: "Shadow for selected nodes." }
-    enableBackgrounds?: Boolean { default: true; description: "Whether to use light pastel backgrounds." }
-    enableTransitions?: Boolean { default: true; description: "Whether to enable smooth transitions between states." }
-    transitionDuration?: String { default: "all 0.2s ease"; description: "CSS transition duration and easing." }
+    componentFqn: String { required: true; description: "Fully qualified name of the component (e.g., 'StdLib:MapData')." }
+    category: cfv_models.ComponentCategoryEnum { required: true; description: "Category for grouping similar components." }
+    displayName?: String { description: "Human-readable display name for the component." }
+    icon?: String { description: "Unicode emoji or icon identifier for visual representation." }
+    description?: String { description: "Brief description of the component's purpose." }
+    
+    // Color properties (will be resolved from ComponentColorRegistry based on category)
+    primaryColor?: String { description: "Override primary color for this specific component." }
+    backgroundColor?: String { description: "Override background color for this specific component." }
+    accentColor?: String { description: "Override accent color for this specific component." }
+    
+    // Visual properties
+    borderStyle?: String { default: "solid"; description: "Border style for the component." }
+    borderWidth?: Number { default: 1; description: "Border width in pixels." }
+    borderRadius?: Number { default: 8; description: "Border radius in pixels." }
+    
+    // Typography
+    fontSize?: Number { default: 12; description: "Font size for component text." }
+    fontWeight?: String { default: "500"; description: "Font weight for component text." }
+    
+    // Special styling flags
+    isHighPriority?: Boolean { default: false; description: "Whether this component should have enhanced visual prominence." }
+    showConfigPreview?: Boolean { default: false; description: "Whether to show configuration preview in the node." }
+    maxConfigPreviewLines?: Number { default: 2; description: "Maximum lines to show in config preview." }
 }
 
-model cfv_models.EdgeStyleOptions {
-    id: "CFV_MOD_UI_007"
-    description: "Styling options for edges."
-
-    defaultStrokeWidth?: Number { default: 2; description: "Default edge stroke width." }
-    selectedStrokeWidth?: Number { default: 3; description: "Stroke width for selected edges." }
-    // useDashedLines is deprecated in favor of specific styling per edge type (dataFlowColor, executionOrderDependencyColor etc implies style)
-    // dashPattern?: String { default: "5,5"; description: "Dash pattern for dashed edges." } // Can be applied based on edge type
-    showEdgeLabels?: Boolean { default: true; description: "Whether to show labels on edges (updated from false)." }
-    edgeLabelFontSize?: Number { default: 10; description: "Font size for edge labels." }
+model cfv_models.ComponentCategoryEnum {
+    id: "CFV_MOD_UI_011"
+    description: "Categories for grouping components with similar styling."
+    type: String
+    constraints: "enum:['dataProcessing', 'controlFlow', 'communication', 'integration', 'security', 'flowControl', 'validation', 'custom']"
 }
 
-model cfv_models.InteractionOptions {
-    id: "CFV_MOD_UI_008"
-    description: "Configuration for user interaction behavior."
+model cfv_models.ComponentStyleRegistry {
+    id: "CFV_MOD_UI_012"
+    description: "Registry containing style definitions for all supported components."
 
-    enableDoubleClickNavigation?: Boolean { default: true; description: "Enable double-click navigation for SubFlowInvoker nodes." }
-    enableHoverEffects?: Boolean { default: true; description: "Enable hover effects on nodes and edges." }
-    multiSelectEnabled?: Boolean { default: false; description: "Enable multi-selection of nodes." }
-    enableAnimations?: Boolean { default: true; description: "Enable animations for state changes." }
-    animationDuration?: Number { default: 200; description: "Animation duration in milliseconds." }
+    styles: Record<String, cfv_models.ComponentStyleDefinition> { required: true; description: "Map of component FQN to style definition." }
+    defaultCategoryStyles: Record<String, cfv_models.ComponentStyleDefinition> { required: true; description: "Default styles for each category." }
+    
+    // Methods for style resolution (conceptual - would be implemented in service)
+    getStyleForComponent: cfv_models.Function {
+        description: "Signature: (componentFqn: string) => cfv_models.ComponentStyleDefinition | null; Get style definition for a specific component."
+    }
+    getCategoryStyle: cfv_models.Function {
+        description: "Signature: (category: cfv_models.ComponentCategoryEnum) => cfv_models.ComponentStyleDefinition; Get default style for a category."
+    }
+    registerComponentStyle: cfv_models.Function {
+        description: "Signature: (style: cfv_models.ComponentStyleDefinition) => void; Register a new component style."
+    }
 }
 
 // --- Interaction Message Models ---
