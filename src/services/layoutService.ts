@@ -125,10 +125,10 @@ export const layoutPresets: Record<string, LayoutPreset> = {
       algorithm: 'layered',
       direction: 'RIGHT',
       spacing: {
-        nodeNode: 100,
-        edgeNode: 30,
-        edgeEdge: 15,
-        layerSpacing: 120
+        nodeNode: 125,    // Increased by 25% (100 -> 125)
+        edgeNode: 38,     // Increased by ~25% (30 -> 38)
+        edgeEdge: 19,     // Increased by ~25% (15 -> 19)
+        layerSpacing: 100 // Reduced from 120 to bring triggers closer to flows
       },
       nodeSize: {
         calculateFromContent: true,

@@ -507,16 +507,18 @@ export async function generateSystemOverviewGraphData(
             id: `${triggerNodeId}-${flowFqn}`,
             source: triggerNodeId,
             target: flowFqn,
+            sourceHandle: 'right', // From trigger's right handle
+            targetHandle: 'left',  // To flow's left handle
             type: 'systemEdge',
             data: edgeData,
             style: {
-              stroke: '#4CAF50',
+              stroke: '#555',
               strokeWidth: 2,
               strokeDasharray: 'none'
             },
             markerEnd: {
               type: MarkerType.ArrowClosed,
-              color: '#4CAF50'
+              color: '#555'
             }
           });
         }
@@ -560,6 +562,8 @@ export async function generateSystemOverviewGraphData(
                     id: `${flowFqn}-${targetFlowFqn}`,
                     source: flowFqn,
                     target: targetFlowFqn,
+                    sourceHandle: 'right', // From source flow's right handle
+                    targetHandle: 'left',  // To target flow's left handle
                     type: 'systemEdge',
                     data: edgeData,
                     style: {

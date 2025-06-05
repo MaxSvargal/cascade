@@ -17,7 +17,7 @@ const SystemFlowNode: React.FC<NodeProps<SystemGraphNodeData>> = ({ data, select
       onClick={handleClick}
       style={{
         padding: '12px',
-        border: `2px solid ${selected ? '#1976D2' : '#666'}`,
+        border: `2px solid ${selected ? '#1976D2' : '#ddd'}`,
         borderRadius: '8px',
         backgroundColor: 'white',
         minWidth: '160px',
@@ -42,11 +42,12 @@ const SystemFlowNode: React.FC<NodeProps<SystemGraphNodeData>> = ({ data, select
         if (data.navigatable) {
           e.currentTarget.style.transform = 'scale(1)';
           e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)';
-          e.currentTarget.style.borderColor = selected ? '#1976D2' : '#666';
+          e.currentTarget.style.borderColor = selected ? '#1976D2' : '#ddd';
         }
       }}
     >
-      <Handle type="target" position={Position.Top} />
+      {/* Left handle for inputs (from triggers and other flows) - for horizontal layout */}
+      <Handle type="target" position={Position.Left} id="left" />
       
       <div style={{ 
         fontWeight: 'bold', 
@@ -106,7 +107,8 @@ const SystemFlowNode: React.FC<NodeProps<SystemGraphNodeData>> = ({ data, select
         </div>
       )}
       
-      <Handle type="source" position={Position.Right} />
+      {/* Right handle for outputs (to other flows) - for horizontal layout */}
+      <Handle type="source" position={Position.Right} id="right" />
     </div>
   );
 };
