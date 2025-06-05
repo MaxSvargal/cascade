@@ -1,6 +1,4 @@
 // cfv_policies.dspec
-// Refined according to DefinitiveSpec methodology with qualified names and stable IDs
-// Defines Non-Functional Requirements (NFRs) and key architectural decisions as policies.
 
 // --- Architectural Philosophy & Key Decisions as Policies (from Section II) ---
 policy cfv_policies.Arch_ReactFlowElkjsFoundation {
@@ -57,21 +55,33 @@ policy cfv_policies.Arch_SubflowsNavigableNodes {
     nfr SubflowVisualization {
         id: "CFV_NFR_ARCH_005"
         statement: "Steps invoking sub-flows (e.g., component_ref: 'StdLib:SubFlowInvoker' or a named component of this type) will be rendered as distinct, single nodes (cfv_models.SubFlowInvokerNodeData). These nodes provide summary information (invokedFlowFqn) and act as navigation points to the sub-flow's detail view. No inline rendering of sub-flow steps within the parent flow graph."
-        verification_method: "Visual inspection; Test cases for sub-flow navigation interaction (cfv_interactions.UserNavigatesToSubFlow)."
+        verification_method: "Visual inspection; Test cases for sub-flow navigation interaction (e.g., a test verifying double-click on SubFlowInvoker node loads the target flow)." // Updated verification
         source: "CascadeFlowVisualizer Library Specification, Section II"
-        applies_to: [cfv_designs.GraphBuilderService, cfv_models.SubFlowInvokerNodeData]
+        applies_to: [cfv_designs.GraphBuilderService, cfv_models.SubFlowInvokerNodeData, cfv_consumer_directives.SubFlowInvokerNavigation]
     }
 }
 
 policy cfv_policies.Arch_TraceOverlaysStateDriven {
     id: "CFV_POL_ARCH_006"
-    title: "Trace Overlays are State-Driven"
-    nfr TraceDisplayMethod {
-        id: "CFV_NFR_ARCH_006"
-        statement: "Visualization of execution traces (cfv_models.FlowExecutionTrace) is a distinct display mode (`props.mode = 'trace'`). The visualizer re-renders the graph with trace data overlays (executionStatus, durationMs, etc. on cfv_models.BaseNodeData and cfv_models.FlowEdgeData) when `props.traceData` changes. No real-time streaming of trace events is supported in V1."
+    title: "Trace Overlays are State-Driven (V1 - Batch Load)"
+    nfr TraceDisplayMethodV1 { // Renamed to clarify V1 scope, as FR12 introduces streaming
+        id: "CFV_NFR_ARCH_006_V1"
+        statement: "Visualization of execution traces (cfv_models.FlowExecutionTrace) is primarily a distinct display mode (`props.mode = 'trace' or 'test_result'`). The visualizer re-renders the graph with trace data overlays (executionStatus, durationMs, etc. on cfv_models.BaseNodeData and cfv_models.FlowEdgeData) when `props.traceData` or `props.testResultData.trace` changes. This policy covers batch loading of complete traces."
         verification_method: "Testing trace display updates based on `props.traceData` changes; Visual inspection of overlays."
         source: "CascadeFlowVisualizer Library Specification, Section II"
         applies_to: [cfv_designs.TraceVisualizationService, cfv_models.BaseNodeData, cfv_models.FlowEdgeData]
+    }
+}
+
+policy cfv_policies.Arch_StreamingTraceUpdates { // New policy for FR12
+    id: "CFV_POL_ARCH_011"
+    title: "Streaming Trace Updates for Real-time Debugging"
+    nfr RealtimeTraceStreaming {
+        id: "CFV_NFR_ARCH_011"
+        statement: "The visualizer, particularly in the Debug & Test tab, must support receiving real-time execution updates via a streaming mechanism (e.g., Server-Sent Events) when initiated by cfv_models.UnifiedDebugTestActions. This involves updating node statuses (PENDING, RUNNING, SUCCESS, FAILURE) and potentially other visual cues dynamically as events arrive. This complements batch trace loading."
+        verification_method: "Integration tests simulating SSE events and verifying UI updates; E2E tests using a mock streaming server."
+        source: "Requirement FR12_EnhancedStreamingExecution"
+        applies_to: [cfv_designs.ClientExecutionStreamHandler, cfv_designs.DebugTestTabService, cfv_models.UnifiedDebugTestActions, cfv_consumer_directives.CustomNodeRendering, cfv_consumer_directives.InspectorDebugTestTabImplementation]
     }
 }
 
@@ -93,7 +103,7 @@ policy cfv_policies.Arch_JotaiStateManagement {
     nfr UseJotai {
         id: "CFV_NFR_ARCH_008"
         statement: "Utilize Jotai for global and shared state within the library (e.g., selectedElementAtom, currentFlowFqnAtom, moduleRegistryAtoms). Promote atomicity, granular reactivity, and reduced complexity in state updates and propagation."
-        verification_method: "Code review of Jotai usage patterns (atom definitions, useAtom, useSetAtom, useAtomValue) as guided by cfv_internal_directives.dspec.md."
+        verification_method: "Code review of Jotai usage patterns (atom definitions, useAtom, useSetAtom, useAtomValue) as guided by cfv_internal_directives.CFV_TypeScript_React_Jotai_Generator_Directives."
         source: "CascadeFlowVisualizer Library Specification, Section II"
         applies_to: [cfv_internal_directives.CFV_TypeScript_React_Jotai_Generator_Directives]
     }
@@ -130,15 +140,16 @@ policy cfv_policies.NFRs_General {
 
     nfr NFR1_Performance {
         id: "CFV_NFR_PERF_001"
-        statement: "Render flows of moderate complexity (e.g., 50-100 nodes, 50-150 edges) smoothly. Module loading, parsing, processing, graph generation (cfv_designs.GraphBuilderService), layout (cfv_designs.LayoutService), and state updates (Jotai) must be efficient to ensure interactive performance."
+        statement: "Render flows of moderate complexity (e.g., 50-100 nodes, 50-150 edges) smoothly. Module loading, parsing, processing, graph generation (cfv_designs.GraphBuilderService), layout (cfv_designs.LayoutService), and state updates (Jotai) must be efficient to ensure interactive performance. Real-time streaming updates should also maintain UI responsiveness."
         metrics: {
             target_initial_load_and_render_time_moderate_flow_ms: 1000, // From cfv_models.DslModuleInput to first render
             target_layout_time_moderate_flow_ms: 500,  // ELK.js layout computation
-            target_interaction_feedback_ms: 200 // e.g., selecting a node and inspector updating
+            target_interaction_feedback_ms: 200, // e.g., selecting a node and inspector updating
+            target_streaming_event_processing_ms: 50 // Time from SSE event receipt to UI update for a single node
         }
-        verification_method: "Performance testing with sample complex flows (like casinoPlatformExample.ts). Profiling of React rendering, Jotai updates, and ELK.js layout execution using browser dev tools and React Profiler."
-        source: "CascadeFlowVisualizer Library Specification, Section V.NFR1"
-        applies_to: [cfv_designs.GraphBuilderService, cfv_designs.LayoutService, cfv_designs.ModuleRegistryService]
+        verification_method: "Performance testing with sample complex flows (like casinoPlatformExample.ts). Profiling of React rendering, Jotai updates, ELK.js layout execution, and SSE event handling using browser dev tools and React Profiler."
+        source: "CascadeFlowVisualizer Library Specification, Section V.NFR1 and FR12 implications"
+        applies_to: [cfv_designs.GraphBuilderService, cfv_designs.LayoutService, cfv_designs.ModuleRegistryService, cfv_designs.ClientExecutionStreamHandler]
     }
 
     nfr NFR2_Extensibility {
@@ -151,7 +162,7 @@ policy cfv_policies.NFRs_General {
 
     nfr NFR3_Maintainability {
         id: "CFV_NFR_MAIN_001"
-        statement: "Codebase should be well-structured (following cfv_designs.dspec.md), written in TypeScript, internally documented (TSDoc for public APIs and key functions), and reasonably easy to debug/extend by developers familiar with React, Jotai, and TypeScript. Adherence to cfv_internal_directives.dspec.md for AI-generated code is expected."
+        statement: "Codebase should be well-structured (following cfv_designs.dspec.md), written in TypeScript, internally documented (TSDoc for public APIs and key functions), and reasonably easy to debug/extend by developers familiar with React, Jotai, and TypeScript. Adherence to cfv_internal_directives.CFV_TypeScript_React_Jotai_Generator_Directives for AI-generated code is expected."
         verification_method: "Code reviews; Static analysis (ESLint, TypeScript strict mode); Cyclomatic complexity checks; Developer feedback during extension or bug fixing."
         source: "CascadeFlowVisualizer Library Specification, Section V.NFR3"
         applies_to: [cfv_internal_directives.CFV_TypeScript_React_Jotai_Generator_Directives]
@@ -159,10 +170,10 @@ policy cfv_policies.NFRs_General {
 
     nfr NFR4_Reactivity {
         id: "CFV_NFR_REACT_001"
-        statement: "Visualization must reactively update to changes in input props (e.g., `props.initialModules`, `props.mode`, `props.traceData`) or internal state changes from user interaction (e.g., node selection, sidebar navigation), driven by Jotai state updates."
-        verification_method: "Test cases (cfv_tests.dspec.md) for various prop and state change scenarios ensuring UI updates correctly and efficiently."
-        source: "CascadeFlowVisualizer Library Specification, Section V.NFR4"
-        applies_to: [cfv_designs.CascadeFlowVisualizerComponent, cfv_designs.SelectionService]
+        statement: "Visualization must reactively update to changes in input props (e.g., `props.initialModules`, `props.mode`, `props.traceData`) or internal state changes from user interaction (e.g., node selection, sidebar navigation), driven by Jotai state updates. This includes real-time updates from streaming execution data."
+        verification_method: "Test cases for various prop and state change scenarios ensuring UI updates correctly and efficiently. Specific tests for streaming updates reflecting on the graph."
+        source: "CascadeFlowVisualizer Library Specification, Section V.NFR4 and FR12 implications"
+        applies_to: [cfv_designs.CascadeFlowVisualizerComponent, cfv_designs.SelectionService, cfv_designs.ClientExecutionStreamHandler]
     }
 
     nfr NFR5_TypeScript {

@@ -2,7 +2,7 @@
 // Refined according to DefinitiveSpec methodology with qualified names and stable IDs
 
 requirement cfv_overview.CorePurpose {
-    id: "CFV_REQ_CORE_001" // Added stable ID for reference
+    id: "CFV_REQ_CORE_001"
     title: "Core Purpose of CascadeFlowVisualizer Library"
     description: `
         The CascadeFlowVisualizer is a React-based library designed to provide an interactive,
@@ -23,7 +23,7 @@ requirement cfv_overview.CorePurpose {
 }
 
 design cfv_overview.LibraryDefinition {
-    id: "CFV_DES_LIB_001" // Added stable ID
+    id: "CFV_DES_LIB_001"
     title: "CascadeFlowVisualizer Library"
     description: "A React-based library for visualizing, editing, debugging, and testing Cascade DSL V1.1 flows and systems."
     responsibilities: [
@@ -34,7 +34,7 @@ design cfv_overview.LibraryDefinition {
         "Providing an interface for defining and running property tests (cfv_models.FlowTestCase) against flows through cfv_models.UnifiedDebugTestActions.",
         "Orchestrating interactions between internal services (cfv_designs.ModuleRegistryService, cfv_designs.GraphBuilderService, cfv_designs.LayoutService, etc.) and consumer-provided components/callbacks."
     ]
-    fulfills: [cfv_overview.CorePurpose] // Using qualified name
+    fulfills: [cfv_overview.CorePurpose]
     applies_policies: [
         cfv_policies.Arch_ReactFlowElkjsFoundation,
         cfv_policies.Arch_ModuleCentric,

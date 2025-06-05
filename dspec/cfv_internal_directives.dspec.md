@@ -1,5 +1,6 @@
 // cfv_internal_directives.dspec.md
 // Directives for the CascadeFlowVisualizer (CFV) TypeScript/React/Jotai AI Implementation Agent.
+// Refined for clarity and alignment with refactored services.
 
 directive CFV_TypeScript_React_Jotai_Generator_Directives {
     target_tool: "CFV_TypeScript_React_Jotai_Generator_v1.0"
@@ -10,8 +11,9 @@ directive CFV_TypeScript_React_Jotai_Generator_Directives {
     global_settings: {
         output_base_path: "./src" // Relative to project root where DSpecs are
         models_output_path: "./src/models/cfv_models_generated.ts" // Where generated TypeScript interfaces from cfv_models.dspec go
-        state_atoms_output_path_prefix: "./src/state/" // e.g., ./src/state/moduleRegistryAtoms.ts
-        services_output_path_prefix: "./src/services/" // e.g., ./src/services/moduleRegistryService.ts
+        // Suggests organizing atoms and service logic by the design artifact they belong to
+        state_atoms_output_path_template: "./src/state/{{DesignArtifactName}}Atoms.ts" // e.g., ./src/state/ModuleRegistryServiceAtoms.ts
+        services_output_path_template: "./src/services/{{DesignArtifactName}}Logic.ts" // e.g., ./src/services/ModuleRegistryServiceLogic.ts
         components_output_path_prefix: "./src/components/" // e.g., ./src/components/CascadeFlowVisualizer.tsx
         default_prettier_config_path?: ".prettierrc.js" // Optional: for code formatting
     }
@@ -77,6 +79,10 @@ directive CFV_TypeScript_React_Jotai_Generator_Directives {
         // For 'code MyComponent { language: "TypeScriptReact"; signature: "React.FC<MyComponentProps>"; ... }'
         default_functional_component_shell: {
             template: |
+                import React from 'react';
+                /* AI Agent inserts other necessary imports based on detailed_behavior and directives */
+                {{additional_imports}}
+
                 interface {{componentName}}Props {
                     /* AI Agent populates with props derived from signature or linked cfv_models.XYZProps */
                     {{props_interface_content}}
@@ -95,25 +101,23 @@ directive CFV_TypeScript_React_Jotai_Generator_Directives {
                 };
 
                 export default React.memo({{componentName}});
-            default_imports: ["import React from 'react';"]
+            default_imports: ["import React from 'react';"] // Base import
         },
-        // Example: How detailed_behavior "RENDER_JSX <MyChildComponent prop1={localVar} />" is translated
         jsx_rendering: {
             component_tag_template: "<{{componentName}} {{props}} />",
             html_tag_template: "<{{tagName}} {{attributes}}>{{children}}</{{tagName}}>"
         },
-        // For 'USE_EFFECT (cleanupFn) => { /* effect_logic */ } WITH_DEPS [dep1, dep2]' in detailed_behavior
         use_effect_hook: {
             template: |
                 React.useEffect(() => {
                     {{effect_logic}}
-                    {{#if cleanupFn}}
+                    {{#if cleanupFn_logic}}
                     return () => {
                         {{cleanupFn_logic}}
                     };
                     {{/if}}
                 }, [{{dependency_array_expression}}]);
-            imports: ["import React from 'react';"] // Redundant if default_imports used, but good for explicitness
+            imports: ["import React from 'react';"]
         },
         use_callback_hook: {
             template: "const {{callbackName}} = React.useCallback(({{callback_args}}) => { {{callback_logic}} }, [{{dependency_array_expression}}]);",
@@ -122,65 +126,114 @@ directive CFV_TypeScript_React_Jotai_Generator_Directives {
         use_memo_hook: {
             template: "const {{memoizedValueName}} = React.useMemo(() => { {{calculation_logic}} }, [{{dependency_array_expression}}]);",
             imports: ["import React from 'react';"]
+        },
+        use_ref_hook: { // Added for USE_REF_HOOK pseudocode
+            template: "const {{refName}}Ref = React.useRef<{{refType}}>({{initial_value}});", // Assuming refType can be inferred or specified
+            imports: ["import React from 'react';"]
         }
     }
 
     // --- Abstract Call Implementations (e.g., for props callbacks, external libraries) ---
     abstract_call_implementations: {
-        // For 'CALL props.requestModule WITH { fqn: moduleFqn } ASSIGN_TO result' in detailed_behavior
-        "props.requestModule": { // Matches the abstract call target
-            // Assumes `props` is in scope of the generated function
-            call_template: "await props.requestModule({{moduleFqn}});",
-            // SVS Rule: `props.requestModule` must be a field in the props interface of the component.
+        // Props Callbacks
+        "props.requestModule": {
+            call_template: "await props.requestModule({{fqn}});", // Parameter name 'fqn' from CALL ... WITH { fqn: ... }
         },
         "props.onSaveModule": {
-            call_template: "await props.onSaveModule({{payload_variable_name}});",
+            call_template: "await props.onSaveModule({{payload}});", // Parameter name 'payload'
         },
         "props.parseContextVariables": {
-            call_template: "props.parseContextVariables({{string_value_variable_name}});",
+            call_template: "props.parseContextVariables({{value}});", // Parameter name 'value'
         },
-        "YamlParser.parse": { // For 'CALL YamlParser.parse WITH { content: rawYaml } ...'
-            library_import: "import { parse as yamlParse } from 'yaml';", // Actual library
-            call_template: "yamlParse({{rawYaml}});",
+        "props.onViewChange": {
+            call_template: "props.onViewChange({{viewPayload}});"
         },
-        "YamlSerializer.stringify": {
+        "props.onElementSelect": {
+            call_template: "props.onElementSelect({{selectedElement}});"
+        },
+        "props.onModuleLoadError": {
+            call_template: "props.onModuleLoadError({{fqn}}, {{error}});"
+        },
+
+        // Abstracted Internal Service Calls (Examples)
+        "AbstractModuleRegistry.getLoadedModule": {
+            call_template: "{{registryInstance}}.getLoadedModule({{fqn}});", // Assumes registryInstance is in scope
+            // This directive might be used if ModuleRegistryService methods are called from other services.
+            // Actual implementation of ModuleRegistryService itself would directly manipulate atoms.
+        },
+        "AbstractYamlParser.parse": {
+            library_import: "import { parse as yamlParse } from 'yaml';",
+            call_template: "yamlParse({{content}});", // Parameter 'content'
+        },
+        "AbstractYamlSerializer.stringify": {
             library_import: "import { stringify as yamlStringify } from 'yaml';",
-            call_template: "yamlStringify({{jsObject}}, { indent: 2 });", // Example with options
+            call_template: "yamlStringify({{jsObject}}, { indent: 2 });", // Parameter 'jsObject'
         },
-        "ELKLayoutEngine.layout": { // For 'CALL ELKLayoutEngine.layout WITH { nodes, edges, options } ...'
-            library_import: "import ElkWorker from '@hiso/elkjs-worker/dist/elk-worker.min.js?worker';\nimport ELK from 'elkjs/lib/elk.bundled.js';", // Conceptual, actual import might vary
+        "AbstractELKEngine.layout": {
+            library_import: "import ELK from 'elkjs/lib/elk.bundled.js';\nconst elk = new ELK();", // Example setup
             // This is a complex one, might involve a helper function.
-            call_template: "await runElkLayout(elkInstance, {{nodes}}, {{edges}}, {{options}});", // Assumes a helper 'runElkLayout'
-            // The Agent might need a sub-directive or more detailed pattern for setting up ELK.
+            call_template: "await elk.layout({{elkGraphInput}});", // Parameter 'elkGraphInput'
+            // The Agent might need a sub-directive or more detailed pattern for setting up ELK if not global like this.
+        },
+        "PerformanceAPI.now": { // For performance.now()
+            call_template: "performance.now()"
+        },
+        "SystemTime.now": { // For new Date()
+            call_template: "new Date()"
+        },
+        "SystemTime.toISOString": { // For date.toISOString()
+            call_template: "{{date}}.toISOString()" // Parameter 'date'
+        },
+        "GlobalTimers.setTimeout": { // For setTimeout
+            call_template: "setTimeout({{callback}}, {{delayMs}})"
+        },
+        "GlobalTimers.clearTimeout": { // For clearTimeout
+            call_template: "clearTimeout({{timeoutId}})"
+        },
+        "ReactFlowAPI.useReactFlow": { // For React Flow's useReactFlow hook
+             // This is a hook, so its usage is more complex than a simple call.
+             // The AI agent would need to understand that `USE_CALL ReactFlowAPI.useReactFlow().fitView`
+             // implies the component is within ReactFlowProvider and `useReactFlow` is called at the top.
+            info: "This is a React hook. The AI agent should ensure useReactFlow() is called appropriately within the component.",
+            call_template_for_method: "reactFlowInstance.{{methodName}}({{args}})" // e.g. reactFlowInstance.fitView(...)
+        },
+        "AbstractLogger.logWarning": {
+             call_template: "console.warn({{message}});" // Simple console log for now
+        },
+        "AbstractLogger.logError": {
+             call_template: "console.error({{message}});"
+        },
+         "AbstractLogger.logInfo": {
+             call_template: "console.log({{message}});"
         }
         // SVS Rule: All parameters in call_template (e.g., {{moduleFqn}}) must be resolvable from the detailed_behavior CALL arguments.
     }
 
     // --- NFR Implementation Patterns ---
     nfr_implementation_patterns: {
-        // For 'cfv_policies.NFRs.NFR1_Performance' (e.g., memoization)
-        // The `react_component_structure.default_functional_component_shell` already includes React.memo.
-        // `use_callback_hook` and `use_memo_hook` are used explicitly in `detailed_behavior` when needed.
-        PERFORMANCE_CRITICAL_COMPONENT_MEMOIZATION: { // Triggered if component's code spec has applies_nfrs: [cfv_policies.NFRs.NFR1_Performance]
-            // This might just confirm default React.memo usage or add specific logging if profiling is enabled.
-            info: "Ensure React.memo is used. For functions within, use React.useCallback. For derived data, use React.useMemo. These should be explicit in detailed_behavior for critical paths."
+        PERFORMANCE_CRITICAL_COMPONENT_MEMOIZATION: {
+            info: "Ensure React.memo is used for the component shell. For functions passed as props or defined within, use React.useCallback. For derived data/objects, use React.useMemo. These should be explicitly requested via USE_CALLBACK_HOOK or USE_MEMO_HOOK in detailed_behavior for critical paths."
         }
     }
 
     // --- General Logic & Error Handling ---
     error_handling_patterns: {
-        // For 'RETURN_ERROR_WITH { type: "ModuleNotFound", message: `Module ${fqn} not found` }' in detailed_behavior
-        CONSTRUCT_ERROR_OBJECT: { // Generic error object structure
+        CONSTRUCT_ERROR_OBJECT: { // Generic error object structure for internal errors
             template: "{ errorType: '{{type}}', message: {{message_expression}}, details: {{details_object_expression}} }"
         },
-        // For general try-catch blocks if specified by a policy or code spec attribute
-        WRAP_IN_TRY_CATCH: {
+        THROW_ERROR_STATEMENT: { // For THROW_ERROR pseudocode
+            template: "throw new Error({{message_expression}});", // Simple Error, can be enhanced
+        },
+        WRAP_IN_TRY_CATCH: { // If detailed_behavior specifies TRY ... CATCH_ERROR
             template: |
                 try {
                     {{try_block_content}}
                 } catch (error: any) {
-                    console.error("An unexpected error occurred:", error); // Default logging
-                    {{catch_block_content_or_rethrow}}
+                    /* AI Agent inserts catch_block_content from detailed_behavior */
+                    {{catch_block_content}}
+                    /* Default if no catch_block_content: */
+                    /* console.error("An unexpected error occurred in {{CodeSpecName}}:", error); */
+                    /* throw error; // Re-throw by default if not handled */
                 }
         }
     }
