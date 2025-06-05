@@ -1027,3 +1027,147 @@ design cfv_designs.AutoZoomToFitService {
     }
     source: "Enhanced implementation for horizontal layout support with fork handling"
 }
+
+design cfv_designs.StreamingExecutionAPIService {
+    title: "Streaming Execution API Service"
+    description: "Server-side flow execution service with real-time streaming updates for debug and test execution."
+    part_of: cfv_designs.CoreArchitecture
+    responsibilities: [
+        "Execute Cascade DSL flows on the server with realistic component simulation",
+        "Stream execution status updates in real-time via Server-Sent Events (SSE)",
+        "Handle progressive step execution with natural timing and parallel processing",
+        "Provide execution context and data lineage for debugging",
+        "Support test case execution with assertion validation",
+        "Manage execution state and provide execution history",
+        "Handle execution cancellation and timeout scenarios"
+    ]
+    
+    api_endpoints: {
+        execute_flow: {
+            method: "POST",
+            path: "/api/execution/flow",
+            description: "Execute a flow with streaming status updates",
+            request_body: {
+                flowDefinition: "Complete DSL flow definition object",
+                triggerInput: "Input data for the flow trigger",
+                executionOptions: "ExecutionOptions with timeout, mocks, etc.",
+                targetStepId: "Optional step ID to execute up to (for partial execution)"
+            },
+            response: "Server-Sent Events stream with execution updates",
+            stream_events: [
+                "execution.started: Initial execution context",
+                "step.started: Step execution began with input data",
+                "step.completed: Step execution finished with output data",
+                "step.failed: Step execution failed with error details",
+                "execution.completed: Flow execution finished with final results",
+                "execution.failed: Flow execution failed with error details"
+            ]
+        },
+        
+        execute_step: {
+            method: "POST", 
+            path: "/api/execution/step",
+            description: "Execute a single step with resolved input data",
+            request_body: {
+                stepDefinition: "Step configuration and component reference",
+                inputData: "Resolved input data for the step",
+                componentConfig: "Component configuration object",
+                executionOptions: "ExecutionOptions for the step execution"
+            },
+            response: "StepExecutionTrace with timing and output data"
+        },
+        
+        cancel_execution: {
+            method: "DELETE",
+            path: "/api/execution/{executionId}",
+            description: "Cancel a running execution",
+            response: "Cancellation confirmation"
+        },
+        
+        get_execution_status: {
+            method: "GET",
+            path: "/api/execution/{executionId}/status",
+            description: "Get current status of an execution",
+            response: "ExecutionStatus with current step and progress"
+        }
+    }
+    
+    streaming_protocol: {
+        transport: "Server-Sent Events (SSE)",
+        content_type: "text/event-stream",
+        event_format: "JSON with event type and data payload",
+        heartbeat_interval: "30 seconds to maintain connection",
+        reconnection_support: "Client can reconnect with last event ID",
+        error_handling: "Error events with detailed error information"
+    }
+    
+    execution_engine: {
+        component_simulation: "Realistic component execution with schema-based output generation",
+        timing_simulation: "Natural timing based on component types (sync/async)",
+        parallel_execution: "Support for fork components and parallel step execution",
+        data_propagation: "Proper data flow through inputs_map and context variables",
+        error_simulation: "Configurable error scenarios for testing",
+        resource_management: "Execution timeout and memory limits"
+    }
+    
+    state_management: {
+        execution_context: "Maintain execution state across streaming updates",
+        step_results: "Store intermediate step results for data lineage",
+        context_variables: "Track context variable changes throughout execution",
+        execution_history: "Persist execution traces for debugging and analysis"
+    }
+    
+    dependencies: [
+        "Next.js API Routes for HTTP endpoints",
+        "Server-Sent Events for real-time streaming",
+        "In-memory execution state management",
+        "Component schema validation and simulation"
+    ]
+    
+    source: "New server-side execution service with streaming capabilities"
+}
+
+design cfv_designs.ClientExecutionStreamHandler {
+    title: "Client Execution Stream Handler"
+    description: "Client-side service to handle streaming execution updates and update visualizer state."
+    part_of: cfv_designs.DebugTestTabService
+    responsibilities: [
+        "Establish SSE connection to execution API",
+        "Parse streaming execution events and update node states",
+        "Handle connection errors and automatic reconnection",
+        "Provide execution progress feedback to UI components",
+        "Manage execution cancellation from client side",
+        "Cache execution results for replay and analysis"
+    ]
+    
+    event_handlers: {
+        execution_started: "Initialize execution state and set all nodes to PENDING",
+        step_started: "Update specific node to RUNNING status with input data",
+        step_completed: "Update node to SUCCESS status with output data and timing",
+        step_failed: "Update node to FAILURE status with error details",
+        execution_completed: "Update final execution state and show completion",
+        execution_failed: "Handle execution failure and show error state"
+    }
+    
+    connection_management: {
+        auto_reconnect: "Automatic reconnection with exponential backoff",
+        event_replay: "Request missed events after reconnection",
+        heartbeat_monitoring: "Detect connection issues and reconnect",
+        graceful_degradation: "Fallback to polling if SSE not supported"
+    }
+    
+    state_synchronization: {
+        node_state_updates: "Update React Flow nodes with execution status",
+        execution_context: "Maintain current execution context for UI",
+        progress_tracking: "Track execution progress for progress bars",
+        result_caching: "Cache execution results for later analysis"
+    }
+    
+    dependencies: [
+        cfv_designs.DebugTestActionsService,
+        "EventSource API for SSE connections",
+        "React state management for UI updates"
+    ]
+    
+    source: "New client-side streaming execution handler"
+}

@@ -12,7 +12,8 @@ import {
   IModuleRegistry,
   ComponentSchema,
   FlowExecutionTrace,
-  VisualizerModeEnum
+  VisualizerModeEnum,
+  ExecutionStatusEnum
 } from '@/models/cfv_models_generated';
 import { layoutNodes, layoutPresets, layoutSystemOverview } from './layoutService';
 import { enhanceNodesWithTrace, enhanceEdgesWithTrace } from './traceVisualizationService';
@@ -39,6 +40,20 @@ export interface GenerateFlowDetailParams {
 export async function generateFlowDetailGraphData(params: GenerateFlowDetailParams): Promise<GraphData> {
   const { flowFqn, mode, moduleRegistry, parseContextVarsFn, componentSchemas, traceData, useAutoLayout = true } = params;
   
+  // DEBUG: Log trace data when execution completes
+  if (traceData && traceData.status === 'COMPLETED') {
+    console.log('🔍 GRAPH BUILDER - Final execution trace received:', {
+      traceId: traceData.traceId,
+      status: traceData.status,
+      stepCount: traceData.steps?.length || 0,
+      steps: traceData.steps?.map(s => ({ 
+        stepId: s.stepId, 
+        status: s.status,
+        durationMs: s.durationMs 
+      })) || []
+    });
+  }
+  
   const flowDefinition = moduleRegistry.getFlowDefinition(flowFqn);
   if (!flowDefinition) {
     return { nodes: [], edges: [] };
@@ -59,13 +74,22 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
       componentSchema: componentSchemas[flowDefinition.trigger.type] || undefined,
       isNamedComponent: false,
       contextVarUsages: parseContextVarsFn(JSON.stringify(flowDefinition.trigger)),
-      // CRITICAL: Only populate execution fields when trace data is available
-      ...(triggerTrace && {
+      // CRITICAL: Handle debug mode initialization
+      ...(triggerTrace ? {
+        // Trace data exists - use actual execution status
         executionStatus: triggerTrace.status,
         executionDurationMs: triggerTrace.durationMs,
         executionInputData: triggerTrace.inputData,
         executionOutputData: triggerTrace.outputData
-      })
+      } : (mode === 'trace' || traceData) ? {
+        // Debug mode (trace mode OR trace data exists) but no trace data yet - initialize with PENDING
+        executionStatus: 'PENDING' as ExecutionStatusEnum,
+        executionDurationMs: undefined,
+        executionInputData: undefined,
+        executionOutputData: undefined
+      } : {}),
+      // Force React Flow to detect changes by adding timestamp when execution data exists
+      ...(traceData && { _lastUpdated: Date.now() })
     };
 
     nodes.push({
@@ -95,14 +119,22 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
         componentSchema: componentInfo ? moduleRegistry.getComponentSchema(componentInfo.baseType) || undefined : undefined,
         isNamedComponent: componentInfo?.isNamedComponent || false,
         contextVarUsages: parseContextVarsFn(JSON.stringify(step)),
-        // CRITICAL: Only populate execution fields when trace data is available
-        // This ensures nodes start clean in design mode without "Not Executed" status
-        ...(stepTrace && {
+        // CRITICAL: Handle debug mode initialization for steps
+        ...(stepTrace ? {
+          // Trace data exists - use actual execution status
           executionStatus: stepTrace.status,
           executionDurationMs: stepTrace.durationMs,
           executionInputData: stepTrace.inputData,
           executionOutputData: stepTrace.outputData
-        })
+        } : (mode === 'trace' || traceData) ? {
+          // Debug mode (trace mode OR trace data exists) but no trace data yet - initialize with PENDING
+          executionStatus: 'PENDING' as ExecutionStatusEnum,
+          executionDurationMs: undefined,
+          executionInputData: undefined,
+          executionOutputData: undefined
+        } : {}),
+        // Force React Flow to detect changes by adding timestamp when execution data exists
+        ...(traceData && { _lastUpdated: Date.now() })
       };
 
       // Check if this is a SubFlowInvoker
@@ -391,36 +423,14 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
       // Use the automatic layout selection logic that chooses square layout for flows with many nodes
       const layouted = await layoutNodes(nodes, edges, {}); // Empty options to trigger automatic selection
       
-      // Apply trace enhancements if trace data is available
-      if (traceData) {
-        const enhancedNodes = enhanceNodesWithTrace(layouted.nodes, traceData, {
-          showTimings: true,
-          showDataFlow: true,
-          highlightCriticalPath: true,
-          showErrorDetails: true
-        });
-        
-        const enhancedEdges = enhanceEdgesWithTrace(layouted.edges, traceData, {
-          showDataFlow: true,
-          highlightCriticalPath: true
-        });
-        
-        return { nodes: enhancedNodes, edges: enhancedEdges };
-      }
-      
+      // Return layouted nodes directly - execution status is already correctly set above
       return layouted;
     } catch (error) {
       console.warn('Auto-layout failed, using manual positions:', error);
     }
   }
 
-  // Apply trace enhancements even without layout if trace data is available
-  if (traceData) {
-    const enhancedNodes = enhanceNodesWithTrace(nodes, traceData);
-    const enhancedEdges = enhanceEdgesWithTrace(edges, traceData);
-    return { nodes: enhancedNodes, edges: enhancedEdges };
-  }
-
+  // Return nodes directly - execution status is already correctly set above
   return { nodes, edges };
 }
 

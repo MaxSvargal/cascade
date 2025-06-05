@@ -14,10 +14,12 @@ import {
   ExecutionOptions,
   StepExecutionTrace,
   ExecutionStatusEnum,
-  FlowExecutionTrace
+  FlowExecutionTrace,
+  StreamingExecutionRequest
 } from '../models/cfv_models_generated';
 import { SimulationService } from './simulationService';
 import { DataGenerationService } from './dataGenerationService';
+import { ClientExecutionStreamHandler, ExecutionStreamOptions } from './clientExecutionStreamHandler';
 
 export class DebugTestActionsService implements UnifiedDebugTestActions {
   private simulationService: SimulationService;
@@ -27,13 +29,15 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
   private onRunTestCase?: (testCase: FlowTestCase) => Promise<TestRunResult>;
   private updateExecutionStateCallback?: (flowFqn: string, executionResults: FlowSimulationResult | FlowExecutionTrace) => void;
   private currentFlowFqn?: string;
+  private streamHandler: ClientExecutionStreamHandler;
 
   constructor(
     moduleRegistry: IModuleRegistry,
     componentSchemas: Record<string, ComponentSchema>,
     onRunTestCase?: (testCase: FlowTestCase) => Promise<TestRunResult>,
     updateExecutionStateCallback?: (flowFqn: string, executionResults: FlowSimulationResult | FlowExecutionTrace) => void,
-    currentFlowFqn?: string
+    currentFlowFqn?: string,
+    streamHandler?: ClientExecutionStreamHandler
   ) {
     this.moduleRegistry = moduleRegistry;
     this.componentSchemas = componentSchemas;
@@ -42,6 +46,7 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
     this.currentFlowFqn = currentFlowFqn;
     this.simulationService = new SimulationService(moduleRegistry, componentSchemas);
     this.dataGenerationService = this.simulationService.getDataGenerationService();
+    this.streamHandler = streamHandler || new ClientExecutionStreamHandler();
   }
 
   async simulateFlowExecution(
@@ -650,8 +655,75 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
       const isTriggerExecution = targetId === 'trigger';
       
       if (isTriggerExecution) {
-        // For trigger execution, run progressive flow simulation
-        return await this.runProgressiveFlowExecution(targetFlowFqn, inputData, executionOptions);
+        // For trigger execution, use streaming execution API
+        console.log('🌊 Starting streaming execution...');
+        
+        // Get flow definition
+        const flowDef = this.moduleRegistry.getFlowDefinitionDsl(targetFlowFqn);
+        if (!flowDef) {
+          throw new Error(`Flow definition not found: ${targetFlowFqn}`);
+        }
+        
+        // Create streaming execution request
+        const streamingRequest: StreamingExecutionRequest = {
+          flowDefinition: flowDef,
+          triggerInput: inputData,
+          executionOptions: {
+            useMocks: true,
+            timeoutMs: executionOptions?.timeoutMs || 30000
+          }
+        };
+        
+        // Add the correct flow FQN for the client stream handler
+        (streamingRequest as any).flowFqn = targetFlowFqn;
+        
+        // Set up streaming options
+        const streamOptions: ExecutionStreamOptions = {
+          updateExecutionState: this.updateExecutionStateCallback,
+          onExecutionStarted: (data: any) => {
+            console.log('🚀 Execution started:', data);
+          },
+          onStepStarted: (data: any) => {
+            console.log('⏳ Step started:', data.stepId);
+          },
+          onStepCompleted: (data: any) => {
+            console.log('✅ Step completed:', data.stepId);
+          },
+          onStepFailed: (data: any) => {
+            console.error('❌ Step failed:', data.stepId, data.error);
+          },
+          onExecutionCompleted: (data: any) => {
+            console.log('🎉 Execution completed:', data);
+          },
+          onExecutionFailed: (data: any) => {
+            console.error('💥 Execution failed:', data.error);
+          },
+          onConnectionError: (error: Error) => {
+            console.error('🔌 Connection error:', error);
+          }
+        };
+        
+        // Start streaming execution
+        const executionId = await this.streamHandler.startFlowExecution(streamingRequest, streamOptions);
+        
+        console.log('📡 Streaming execution started with ID:', executionId);
+        
+        // Return execution result immediately (streaming will update the UI)
+        return {
+          executionId,
+          status: 'RUNNING' as const,
+          startTime: new Date().toISOString(),
+          logs: [
+            {
+              stepId: targetId,
+              timestamp: new Date().toISOString(),
+              level: 'info',
+              message: 'Streaming execution started',
+              data: { targetId, executionId }
+            }
+          ],
+          finalOutput: { message: 'Execution started, streaming updates in progress...' }
+        };
       } else {
         // For step execution, run up to that step
         const targetStepId = targetId;

@@ -935,4 +935,141 @@ export interface InputMapping {
   transformationRule?: string;
   /** Whether this input field is required by the component schema. */
   isRequired: boolean;
+}
+
+export interface StreamingExecutionRequest {
+  /** Complete DSL flow definition object */
+  flowDefinition: any;
+  /** Input data for the flow trigger */
+  triggerInput: any;
+  /** Execution options with timeout, mocks, etc. */
+  executionOptions?: ExecutionOptions;
+  /** Optional step ID to execute up to (for partial execution) */
+  targetStepId?: string;
+  /** Unique execution ID for tracking */
+  executionId?: string;
+}
+
+export interface StepExecutionRequest {
+  /** Step configuration and component reference */
+  stepDefinition: any;
+  /** Resolved input data for the step */
+  inputData: any;
+  /** Component configuration object */
+  componentConfig: any;
+  /** Execution options for the step execution */
+  executionOptions?: ExecutionOptions;
+}
+
+export type StreamingEventType = 
+  | 'execution.started'
+  | 'step.started' 
+  | 'step.completed'
+  | 'step.failed'
+  | 'execution.completed'
+  | 'execution.failed'
+  | 'execution.cancelled'
+  | 'execution.warning'
+  | 'heartbeat';
+
+export interface StreamingExecutionEvent {
+  /** Event type identifier */
+  type: StreamingEventType;
+  /** Unique execution ID */
+  executionId: string;
+  /** Event timestamp */
+  timestamp: string;
+  /** Event sequence number for ordering */
+  sequence: number;
+  /** Event data payload */
+  data: any;
+}
+
+export interface ExecutionStartedEvent {
+  executionId: string;
+  flowFqn: string;
+  triggerInput: any;
+  totalSteps: number;
+  estimatedDuration: number;
+}
+
+export interface StepStartedEvent {
+  stepId: string;
+  componentFqn: string;
+  inputData: any;
+  estimatedDuration: number;
+  executionOrder: number;
+}
+
+export interface StepCompletedEvent {
+  stepId: string;
+  componentFqn: string;
+  inputData: any;
+  outputData: any;
+  actualDuration: number;
+  executionOrder: number;
+  contextChanges?: Record<string, any>;
+}
+
+export interface StepFailedEvent {
+  stepId: string;
+  componentFqn: string;
+  inputData: any;
+  error: ExecutionError;
+  actualDuration: number;
+  executionOrder: number;
+}
+
+export interface ExecutionCompletedEvent {
+  executionId: string;
+  flowFqn: string;
+  status: FlowExecutionStatusEnum;
+  totalDuration: number;
+  stepCount: number;
+  successfulSteps: number;
+  failedSteps: number;
+  finalOutput: any;
+  finalContext: Record<string, any>;
+}
+
+export interface ExecutionFailedEvent {
+  executionId: string;
+  flowFqn: string;
+  error: ExecutionError;
+  totalDuration: number;
+  completedSteps: number;
+  failedStep?: string;
+}
+
+export interface ExecutionWarningEvent {
+  warningType: string;
+  message: string;
+  affectedSteps?: string[];
+  timestamp: string;
+}
+
+export interface ExecutionStatus {
+  executionId: string;
+  flowFqn: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  currentStep?: string;
+  progress: {
+    totalSteps: number;
+    completedSteps: number;
+    currentStepIndex: number;
+  };
+  startTime: string;
+  estimatedEndTime?: string;
+  actualEndTime?: string;
+}
+
+export interface ExecutionCancellationRequest {
+  executionId: string;
+  reason?: string;
+}
+
+export interface ExecutionCancellationResponse {
+  executionId: string;
+  cancelled: boolean;
+  message: string;
 } 
