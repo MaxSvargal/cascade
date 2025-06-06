@@ -1,22 +1,25 @@
 {
-  "name": "cascade-visualizer",
+  "name": "cascade-visualizer-monorepo",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "type-check": "tsc --noEmit",
-    "test": "vitest",
-    "test:ui": "vitest --ui",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed",
-    "test:e2e:debug": "playwright test --debug"
+    "dev": "pnpm --parallel --recursive dev",
+    "build": "pnpm --recursive build",
+    "start": "pnpm --filter cascade-workspace start",
+    "lint": "pnpm --recursive lint",
+    "type-check": "pnpm --recursive type-check",
+    "test": "pnpm --recursive test",
+    "test:ui": "pnpm --recursive test:ui",
+    "test:run": "pnpm --recursive test:run",
+    "test:coverage": "pnpm --recursive test:coverage",
+    "test:e2e": "pnpm --filter cascade-workspace test:e2e",
+    "test:e2e:ui": "pnpm --filter cascade-workspace test:e2e:ui",
+    "test:e2e:headed": "pnpm --filter cascade-workspace test:e2e:headed",
+    "test:e2e:debug": "pnpm --filter cascade-workspace test:e2e:debug"
   },
   "dependencies": {
     "@reactflow/background": "^11.3.0",
@@ -44,21 +47,10 @@
     "zod": "^3.25.48"
   },
   "devDependencies": {
-    "@playwright/test": "^1.52.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^14.6.1",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
-    "@vitejs/plugin-react": "^4.5.1",
-    "commander": "^12.0.0",
     "eslint": "^8.0.0",
-    "eslint-config-next": "14.0.0",
-    "jsdom": "^26.1.0",
-    "msw": "^2.9.0",
-    "playwright": "^1.52.0",
     "prettier": "^3.0.0",
-    "tsx": "^4.7.0",
-    "vitest": "^3.2.1"
+    "typescript": "^5.0.0"
   }
 }

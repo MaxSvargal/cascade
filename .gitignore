@@ -1,7 +1,9 @@
+.cursor
 .next
 .tsbuildinfo
 .vscode
 debug-reports
+dist
 node_modules
 playwright-report
 test-results
