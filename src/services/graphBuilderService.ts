@@ -512,13 +512,13 @@ export async function generateSystemOverviewGraphData(
             type: 'systemEdge',
             data: edgeData,
             style: {
-              stroke: '#555',
+              stroke: '#4CAF50',
               strokeWidth: 2,
               strokeDasharray: 'none'
             },
             markerEnd: {
               type: MarkerType.ArrowClosed,
-              color: '#555'
+              color: '#4CAF50'
             }
           });
         }

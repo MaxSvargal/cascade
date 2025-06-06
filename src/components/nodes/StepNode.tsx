@@ -1,118 +1,59 @@
 // Enhanced Step Node Component
 // Updated for white backgrounds, transparent borders, and compact status indicators
-// Now includes component-specific styling with OKLCH colors
+// Now uses BaseNode for consistent styling and width calculation
 
 import React, { useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { StepNodeData } from '@/models/cfv_models_generated';
 import { getComponentStyle, componentStylingService } from '../../services/componentStylingService';
+import BaseNode, { DynamicWidthConfig } from './BaseNode';
+
+// Step-specific width configuration
+const STEP_WIDTH_CONFIG: DynamicWidthConfig = {
+  baseWidth: 200,
+  maxWidth: 260,
+  scalingFactor: 6,
+  contentThreshold: 20
+};
 
 const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
-  const [isStatusHovered, setIsStatusHovered] = useState(false);
+  // Get component-specific styling and information
+  const componentFqn = data.resolvedComponentFqn;
+  const componentStyle = componentFqn ? getComponentStyle(componentFqn) : null;
+  const isExternalServiceAdapter = componentFqn === 'Integration.ExternalServiceAdapter';
+  const dslObject = data.dslObject || {};
+  const config = dslObject.config || {};
 
-  const getStatusColor = () => {
-    switch (data.executionStatus) {
-      case 'SUCCESS': return '#10B981'; // Softer green
-      case 'FAILURE': return '#EF4444'; // Softer red
-      case 'RUNNING': return '#F59E0B'; // Softer amber
-      case 'SKIPPED': return '#6B7280'; // Softer gray
-      default: return '#3B82F6'; // Softer blue
-    }
-  };
+  // Prepare additional content for width calculation
+  const additionalContent = [
+    data.resolvedComponentFqn || '',
+    ...(data.contextVarUsages || []),
+    data.error?.message || ''
+  ];
 
-  const getStatusIcon = () => {
-    switch (data.executionStatus) {
-      case 'SUCCESS': return '●';
-      case 'FAILURE': return '●';
-      case 'RUNNING': return '●';
-      case 'SKIPPED': return '○';
-      default: return '○';
-    }
-  };
+  // For ExternalServiceAdapter, also consider config content
+  if (isExternalServiceAdapter) {
+    const adapterType = config.adapterType || '';
+    const operation = config.operation || '';
+    additionalContent.push(adapterType, operation);
+  }
 
-  // Compact status indicator with hover animation
-  const getCompactStatusStyle = () => {
-    const color = getStatusColor();
-    return {
-      position: 'absolute' as const,
-      top: '4px',
-      left: '4px',
-      fontSize: '8px',
-      color: color,
-      backgroundColor: `${color}10`, // Very light background
-      border: `1px solid ${color}20`, // Very subtle border
-      padding: '2px 4px',
-      borderRadius: '6px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '2px',
-      fontWeight: '500',
-      transition: 'all 0.2s ease',
-      cursor: 'default',
-      zIndex: 10,
-      maxWidth: isStatusHovered ? '120px' : '40px',
-      overflow: 'hidden',
-      whiteSpace: 'nowrap' as const
-    };
-  };
-
-  // Enhanced styling for clean design mode vs execution mode with component-specific colors
-  const getNodeStyle = () => {
-    // Get component-specific styling
-    const componentFqn = data.resolvedComponentFqn;
-    const componentStyle = componentFqn ? getComponentStyle(componentFqn) : null;
-    
-    // ENHANCED: Check if this is an Integration.ExternalServiceAdapter for dynamic sizing
-    const isExternalServiceAdapter = componentFqn === 'Integration.ExternalServiceAdapter';
-    const dslObject = data.dslObject || {};
-    const config = dslObject.config || {};
-    
-    // DYNAMIC WIDTH: Calculate width based on content for ExternalServiceAdapter
-    let dynamicWidth = 180; // Base width for regular step nodes
-    let dynamicHeight = 'auto'; // Base height
-    
-    if (isExternalServiceAdapter) {
-      const label = data.label || '';
-      const adapterType = config.adapterType || '';
-      const operation = config.operation || '';
-      
-      // Calculate width based on content length
-      const labelLength = label.length;
-      const adapterTypeLength = adapterType.length;
-      const operationLength = operation.length;
-      const maxContentLength = Math.max(labelLength, adapterTypeLength, operationLength);
-      
-      // Scale width based on content
-      dynamicWidth = Math.min(450, Math.max(220, 180 + (maxContentLength - 15) * 7)); // 7px per extra character, max 450px
-    }
-    
+  // Get custom style based on component and execution status
+  const getCustomStyle = () => {
     // Apply component-specific styling properties
     const borderRadius = componentStyle?.borderRadius || 8;
     const borderWidth = componentStyle?.borderWidth || 1;
     const borderStyle = componentStyle?.borderStyle || 'solid';
     
-    const baseStyle = {
-      padding: data.executionStatus ? '24px 28px 14px 28px' : '14px 18px', // Debug mode padding vs design mode
-      borderRadius: `${borderRadius}px`,
-      width: `${dynamicWidth}px`, // Use calculated dynamic width
-      height: dynamicHeight,
-      transition: 'all 0.2s ease',
-      boxSizing: 'border-box' as const,
-      overflow: 'visible' as const, // Allow content to be visible
-      display: 'flex' as const,
-      flexDirection: 'column' as const,
-      position: 'relative' as const,
-    };
-
     if (!data.executionStatus) {
       // Clean design mode - use component-specific colors or fallback to white
       const backgroundColor = componentStyle?.backgroundColor || '#FFFFFF';
       const borderColor = componentStyle?.primaryColor || 'transparent';
       
       return {
-        ...baseStyle,
         backgroundColor,
         border: `${borderWidth}px ${borderStyle} ${borderColor}`,
+        borderRadius: `${borderRadius}px`,
         boxShadow: selected 
           ? `0 6px 20px ${componentStyle?.primaryColor ? componentStyle.primaryColor + '40' : 'rgba(59, 130, 246, 0.4)'}` 
           : '0 4px 12px rgba(0, 0, 0, 0.15)'
@@ -147,9 +88,9 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
       }
       
       return {
-        ...baseStyle,
         backgroundColor,
         border: `${borderWidth}px ${borderStyle} ${borderColor}`,
+        borderRadius: `${borderRadius}px`,
         boxShadow: selected 
           ? `0 6px 20px ${componentStyle?.primaryColor ? componentStyle.primaryColor + '40' : 'rgba(59, 130, 246, 0.4)'}` 
           : '0 4px 12px rgba(0, 0, 0, 0.15)'
@@ -157,38 +98,18 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
     }
   };
 
-  // Get component-specific styling and information
-  const componentFqn = data.resolvedComponentFqn;
-  const componentStyle = componentFqn ? getComponentStyle(componentFqn) : null;
-  const isExternalServiceAdapter = componentFqn === 'Integration.ExternalServiceAdapter';
-  const dslObject = data.dslObject || {};
-  const config = dslObject.config || {};
-
   return (
-    <div style={getNodeStyle()}>
+    <BaseNode
+      widthConfig={STEP_WIDTH_CONFIG}
+      label={data.label}
+      fqn={data.resolvedComponentFqn}
+      selected={selected}
+      executionStatus={data.executionStatus}
+      additionalContent={additionalContent}
+      customStyle={getCustomStyle()}
+    >
       {/* Left handle for inputs (from previous steps) */}
       <Handle type="target" position={Position.Left} />
-      
-      {/* Compact status indicator with hover animation */}
-      {data.executionStatus && (
-        <div 
-          style={getCompactStatusStyle()}
-          onMouseEnter={() => setIsStatusHovered(true)}
-          onMouseLeave={() => setIsStatusHovered(false)}
-        >
-          <span>{getStatusIcon()}</span>
-          {data.executionDurationMs ? (
-            <span style={{ fontSize: '7px' }}>
-              {data.executionDurationMs}ms
-            </span>
-          ) : ''}
-          {isStatusHovered && (
-            <span style={{ marginLeft: '4px', fontSize: '7px' }}>
-              {data.executionStatus.toLowerCase()}
-            </span>
-          )}
-        </div>
-      )}
       
       {/* Component icon and label */}
       <div style={{ 
@@ -350,7 +271,7 @@ const StepNode: React.FC<NodeProps<StepNodeData>> = ({ data, selected }) => {
       
       {/* Right handle for outputs (to next steps) */}
       <Handle type="source" position={Position.Right} />
-    </div>
+    </BaseNode>
   );
 };
 

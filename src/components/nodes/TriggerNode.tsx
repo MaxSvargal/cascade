@@ -1,143 +1,41 @@
 // Enhanced Trigger Node Component
-// Updated for white backgrounds, transparent borders, and compact status indicators
+// Updated to use BaseNode with dynamic width
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { TriggerEntryPointNodeData } from '@/models/cfv_models_generated';
+import BaseNode, { DynamicWidthConfig } from './BaseNode';
+
+// Trigger-specific width configuration
+const TRIGGER_WIDTH_CONFIG: DynamicWidthConfig = {
+  baseWidth: 180,
+  maxWidth: 300,
+  scalingFactor: 6,
+  contentThreshold: 20
+};
 
 const TriggerNode: React.FC<NodeProps<TriggerEntryPointNodeData>> = ({ data, selected }) => {
-  const [isStatusHovered, setIsStatusHovered] = useState(false);
-
-  const getStatusColor = () => {
-    switch (data.executionStatus) {
-      case 'SUCCESS': return '#10B981'; // Softer green
-      case 'FAILURE': return '#EF4444'; // Softer red
-      case 'RUNNING': return '#F59E0B'; // Softer amber
-      case 'SKIPPED': return '#6B7280'; // Softer gray
-      default: return '#059669'; // Softer emerald for triggers
-    }
-  };
-
-  const getStatusIcon = () => {
-    switch (data.executionStatus) {
-      case 'SUCCESS': return '●';
-      case 'FAILURE': return '●';
-      case 'RUNNING': return '●';
-      case 'SKIPPED': return '○';
-      default: return '○';
-    }
-  };
-
-  // Compact status indicator with hover animation
-  const getCompactStatusStyle = () => {
-    const color = getStatusColor();
-    return {
-      position: 'absolute' as const,
-      top: '4px',
-      left: '4px',
-      fontSize: '8px',
-      color: color,
-      backgroundColor: `${color}10`, // Very light background
-      border: `1px solid ${color}20`, // Very subtle border
-      padding: '2px 4px',
-      borderRadius: '6px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '2px',
-      fontWeight: '500',
-      transition: 'all 0.2s ease',
-      cursor: 'default',
-      zIndex: 10,
-      maxWidth: isStatusHovered ? '120px' : '40px',
-      overflow: 'hidden',
-      whiteSpace: 'nowrap' as const
-    };
-  };
-
-  const getNodeStyle = () => {
-    const baseStyle = {
-      padding: data.executionStatus ? '24px 28px 14px 28px' : '14px 18px', // Debug mode padding vs design mode
-      borderRadius: '8px',
-      minWidth: '160px',
-      maxWidth: '260px',
-      transition: 'all 0.2s ease',
-      boxSizing: 'border-box' as const,
-      overflow: 'hidden' as const,
-      display: 'flex' as const,
-      flexDirection: 'column' as const,
-      position: 'relative' as const,
-    };
-
-    if (!data.executionStatus) {
-      // Clean design mode - white background with transparent border
-      return {
-        ...baseStyle,
-        backgroundColor: '#FFFFFF', // Pure white background
-        border: '1px solid transparent', // Transparent border for pending nodes
-        boxShadow: selected 
-          ? '0 6px 20px rgba(5, 150, 105, 0.4)' 
-          : '0 4px 12px rgba(5, 150, 105, 0.15)'
-      };
-    } else {
-      // Debug mode - very light pastel backgrounds with subtle borders
-      let backgroundColor = '';
-      let borderColor = '';
-      switch (data.executionStatus) {
-        case 'SUCCESS':
-          backgroundColor = '#FAFFFE'; // Very light green background
-          borderColor = '#E6FFFA'; // Very subtle green border
-          break;
-        case 'FAILURE':
-          backgroundColor = '#FFFAFA'; // Very light red background
-          borderColor = '#FFE6E6'; // Very subtle red border
-          break;
-        case 'RUNNING':
-          backgroundColor = '#FFFEF9'; // Very light amber background
-          borderColor = '#FFF4E6'; // Very subtle amber border
-          break;
-        case 'SKIPPED':
-          backgroundColor = '#FAFAFA'; // Very light gray background
-          borderColor = '#F0F0F0'; // Very subtle gray border
-          break;
-        default:
-          backgroundColor = '#FFFFFF'; // White background
-          borderColor = 'transparent'; // Transparent border
-      }
-      
-      return {
-        ...baseStyle,
-        backgroundColor,
-        border: `1px solid ${borderColor}`,
-        boxShadow: selected 
-          ? '0 6px 20px rgba(5, 150, 105, 0.4)' 
-          : '0 4px 12px rgba(5, 150, 105, 0.2)'
-      };
-    }
-  };
+  // Prepare additional content for width calculation
+  const additionalContent = [
+    data.triggerType?.replace('StdLib:', 'StdLib.Trigger:') || '',
+    ...(data.contextVarUsages || [])
+  ];
 
   return (
-    <div style={getNodeStyle()}>
-      {/* Compact status indicator with hover animation */}
-      {data.executionStatus && (
-        <div 
-          style={getCompactStatusStyle()}
-          onMouseEnter={() => setIsStatusHovered(true)}
-          onMouseLeave={() => setIsStatusHovered(false)}
-        >
-          <span>{getStatusIcon()}</span>
-          {data.executionDurationMs && (
-            <span style={{ fontSize: '7px', opacity: 0.8 }}>
-              {data.executionDurationMs}ms
-            </span>
-          )}
-          {isStatusHovered && (
-            <span style={{ marginLeft: '4px', fontSize: '7px' }}>
-              {data.executionStatus.toLowerCase()}
-            </span>
-          )}
-        </div>
-      )}
-
+    <BaseNode
+      widthConfig={TRIGGER_WIDTH_CONFIG}
+      label={data.label}
+      fqn={data.triggerType}
+      selected={selected}
+      executionStatus={data.executionStatus}
+      additionalContent={additionalContent}
+      customStyle={{
+        // Trigger-specific styling can be added here if needed
+        boxShadow: selected 
+          ? '0 6px 20px rgba(5, 150, 105, 0.4)' 
+          : '0 4px 12px rgba(0, 0, 0, 0.15)'
+      }}
+    >
       <div style={{ 
         fontWeight: '600', 
         marginBottom: '8px', 
@@ -196,7 +94,7 @@ const TriggerNode: React.FC<NodeProps<TriggerEntryPointNodeData>> = ({ data, sel
       
       {/* Right handle for outputs (to next steps) */}
       <Handle type="source" position={Position.Right} />
-    </div>
+    </BaseNode>
   );
 };
 

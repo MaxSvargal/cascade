@@ -471,10 +471,9 @@ export class LayoutService {
       width = Math.max(width, 200);
     }
     
-    // ENHANCED CONSTRAINTS: Allow much wider nodes for SubFlowInvoker AND ExternalServiceAdapter
-    const needsWideLayout = isSubFlowInvoker || isExternalServiceAdapter;
-    const maxWidthLimit = needsWideLayout ? 500 : (opts.maxWidth || 300); // 500px max for special nodes
-    const maxHeightLimit = needsWideLayout ? 250 : (opts.maxHeight || 200); // 250px max height for special nodes
+    // ENHANCED CONSTRAINTS: Allow much wider nodes for ALL component nodes (matching SubFlowInvoker)
+          const maxWidthLimit = opts.maxWidth || 500; // 250px max for all component nodes
+    const maxHeightLimit = opts.maxHeight || 200; // 200px max height for all component nodes
     
     width = Math.min(Math.max(width, opts.minWidth || 100), maxWidthLimit);
     height = Math.min(Math.max(height, opts.minHeight || 60), maxHeightLimit);
@@ -506,21 +505,22 @@ export class LayoutService {
     const averageWidth = nodesWithSizes.reduce((sum, n) => sum + (n.width || 150), 0) / nodesWithSizes.length;
     const hasSubFlowNodes = nodes.some(n => n.type === 'subFlowInvokerNode');
     const hasTriggerNodes = nodes.some(n => n.type === 'triggerNode');
+    const hasSystemNodes = nodes.some(n => n.type === 'systemTriggerNode' || n.type === 'systemFlowNode');
     
     // ENHANCED: Check for Integration.ExternalServiceAdapter nodes that also need width compensation
     const hasExternalServiceAdapterNodes = nodes.some(n => n.data?.resolvedComponentFqn === 'Integration.ExternalServiceAdapter');
-    const hasWideNodes = hasSubFlowNodes || hasExternalServiceAdapterNodes;
+    const hasWideNodes = hasSubFlowNodes || hasExternalServiceAdapterNodes || hasSystemNodes;
     
     // ENHANCED: Calculate width overflow compensation for long nodes - INCREASED for better right-side spacing
-    const standardWidth = 150; // Standard baseline width
+    const standardWidth = 500; // Standard baseline width
     const widthOverflow = Math.max(0, maxWidth - standardWidth);
     const widthCompensation = widthOverflow * 0.8; // INCREASED from 0.6 to 0.8 (80% of overflow)
     const bufferSpace = 30; // INCREASED from 20 to 30 for better spacing
     
-    // CRITICAL: Calculate fork spacing with width compensation for LEFT side spacing
-    const baseForkSpacing = (baseSpacing.nodeNode || 30) / 1.5; // Base reduction by 1.5x
-    const forkWidthCompensation = hasWideNodes ? Math.max(0, (maxWidth - 200) * 0.4) : 0; // 40% of width overflow for fork spacing
-    const enhancedForkSpacing = Math.max(baseForkSpacing, 15 + forkWidthCompensation); // Minimum 15px + width compensation
+    // CRITICAL: Calculate fork spacing with ENHANCED width compensation for LEFT side spacing
+    const baseForkSpacing = (baseSpacing.nodeNode || 30) / 1.2; // REDUCED reduction factor (was 1.5x, now 1.2x for more space)
+    const forkWidthCompensation = hasWideNodes ? Math.max(0, (maxWidth - 200) * 0.5) : 0; // INCREASED to 50% of width overflow for fork spacing
+    const enhancedForkSpacing = Math.max(baseForkSpacing, 20 + forkWidthCompensation); // INCREASED minimum to 20px + width compensation
     
     // USER REQUESTED: Reduced spacing - fork spacing by 2x, base spacing by 1.5x + WIDTH COMPENSATION
     const adaptiveSpacing: LayoutSpacing = {
@@ -563,9 +563,10 @@ export class LayoutService {
       bufferSpace: `${bufferSpace} (increased)`,
       hasSubFlows: hasSubFlowNodes,
       hasExternalServiceAdapters: hasExternalServiceAdapterNodes,
+      hasSystemNodes: hasSystemNodes,
       hasWideNodes,
       nodeCount: nodes.length,
-      improvements: 'LEFT-side fork compensation + RIGHT-side layer compensation for SubFlow AND ExternalServiceAdapter nodes'
+      improvements: 'LEFT-side fork compensation + RIGHT-side layer compensation for SubFlow, ExternalServiceAdapter AND System nodes'
     });
     
     // Round to reasonable values
@@ -615,10 +616,10 @@ export class LayoutService {
 
     const defaultNodeSize = {
       calculateFromContent: true,
-      minWidth: 140,        // Keep standard minimum width
-      maxWidth: 500,        // INCREASED: Allow much wider nodes for SubFlowInvoker (was 240)
+      minWidth: 500,        // Keep standard minimum width
+              maxWidth: 250,        // UPDATED: Consistent max width for all nodes
       minHeight: 60,        // Keep standard minimum height
-      maxHeight: 250,       // INCREASED: Allow taller nodes for wrapped content (was 120)
+      maxHeight: 200,       // INCREASED: Allow taller nodes for wrapped content (was 120)
       padding: { top: 8, right: 12, bottom: 8, left: 12 }
     };
 
@@ -1036,10 +1037,10 @@ export async function layoutSystemOverview(
     algorithm: 'layered' as const,
     direction: 'RIGHT' as const,
     spacing: {
-      nodeNode: 20,         // REDUCED spacing for system overview (1.5x reduction from 30)
-      edgeNode: 7,          // REDUCED edge spacing (1.5x reduction from 10)
-      edgeEdge: 3,          // REDUCED edge separation (1.5x reduction from 5)
-      layerSpacing: 33      // REDUCED layer separation (1.5x reduction from 50) - will be enhanced with width compensation
+      nodeNode: 60,         // INCREASED spacing for system overview (was 40, now 60)
+      edgeNode: 20,         // INCREASED edge spacing (was 14, now 20)
+      edgeEdge: 10,         // INCREASED edge separation (was 6, now 10)
+      layerSpacing: 100     // INCREASED layer separation (was 66, now 100)
     },
     nodeSize: {
       calculateFromContent: true,

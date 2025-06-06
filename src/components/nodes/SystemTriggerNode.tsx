@@ -1,29 +1,40 @@
 // Enhanced System Trigger Node Component
-// Updated for left-to-right layout and improved styling
+// Updated to use BaseNode with dynamic width
 
 import React from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { SystemGraphNodeData } from '@/models/cfv_models_generated';
+import BaseNode, { DynamicWidthConfig } from './BaseNode';
+
+// SystemTrigger-specific width configuration
+const SYSTEM_TRIGGER_WIDTH_CONFIG: DynamicWidthConfig = {
+  baseWidth: 100,
+  maxWidth: 200,
+  scalingFactor: 6,
+  contentThreshold: 20
+};
 
 const SystemTriggerNode: React.FC<NodeProps<SystemGraphNodeData>> = ({ data, selected }) => {
+  // Prepare additional content for width calculation
+  const additionalContent = [
+    data.fqn || '',
+    ...(data.contextVarUsages || []),
+    data.error?.message || ''
+  ];
+
   return (
-    <div
-      style={{
-        padding: '12px',
-        border: 'none',
-        borderRadius: '8px',
+    <BaseNode
+      widthConfig={SYSTEM_TRIGGER_WIDTH_CONFIG}
+      label={data.label}
+      fqn={data.fqn}
+      selected={selected}
+      additionalContent={additionalContent}
+      customStyle={{
         backgroundColor: 'transparent',
-        minWidth: '120px',
-        maxWidth: '200px',
-        minHeight: '80px', // Same as flow nodes
+        border: 'none',
         boxShadow: 'none',
-        transition: 'all 0.2s ease',
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        position: 'relative'
+        minHeight: '80px',
+        justifyContent: 'center'
       }}
     >
       <div style={{ 
@@ -78,7 +89,7 @@ const SystemTriggerNode: React.FC<NodeProps<SystemGraphNodeData>> = ({ data, sel
       
       {/* Right handle for outputs (to flows) - for horizontal layout */}
       <Handle type="source" position={Position.Right} id="right" />
-    </div>
+    </BaseNode>
   );
 };
 

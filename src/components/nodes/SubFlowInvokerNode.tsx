@@ -1,106 +1,53 @@
 // Enhanced SubFlowInvoker Node Component
 // Updated for white backgrounds, transparent borders, and compact status indicators
+// Now uses BaseNode for consistent styling and width calculation
 
 import React, { useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { SubFlowInvokerNodeData } from '@/models/cfv_models_generated';
 import { getComponentStyle, componentStylingService } from '../../services/componentStylingService';
+import BaseNode, { DynamicWidthConfig } from './BaseNode';
+
+// SubFlowInvoker-specific width configuration
+const SUBFLOW_INVOKER_WIDTH_CONFIG: DynamicWidthConfig = {
+  baseWidth: 200,
+  maxWidth: 400,
+  scalingFactor: 6,
+  contentThreshold: 20
+};
 
 const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data, selected }) => {
-  const [isStatusHovered, setIsStatusHovered] = useState(false);
+  // Get component-specific styling for SubFlowInvoker
+  const componentStyle = getComponentStyle('StdLib:SubFlowInvoker');
 
-  const getStatusColor = () => {
-    switch (data.executionStatus) {
-      case 'SUCCESS': return '#10B981'; // Softer green
-      case 'FAILURE': return '#EF4444'; // Softer red
-      case 'RUNNING': return '#F59E0B'; // Softer amber
-      case 'SKIPPED': return '#6B7280'; // Softer gray
-      default: return '#8B5CF6'; // Softer purple for sub-flow invokers
-    }
-  };
+  // Prepare additional content for width calculation
+  const additionalContent = [
+    data.invokedFlowFqn || '',
+    data.resolvedComponentFqn || '',
+    ...(data.contextVarUsages || []),
+    data.error?.message || ''
+  ];
 
-  const getStatusIcon = () => {
-    switch (data.executionStatus) {
-      case 'SUCCESS': return '●';
-      case 'FAILURE': return '●';
-      case 'RUNNING': return '●';
-      case 'SKIPPED': return '○';
-      default: return '○';
-    }
-  };
-
-  // Compact status indicator with hover animation
-  const getCompactStatusStyle = () => {
-    const color = getStatusColor();
-    return {
-      position: 'absolute' as const,
-      top: '4px',
-      left: '4px',
-      fontSize: '8px',
-      color: color,
-      backgroundColor: `${color}10`, // Very light background
-      border: `1px solid ${color}20`, // Very subtle border
-      padding: '2px 4px',
-      borderRadius: '6px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '2px',
-      fontWeight: '500',
-      transition: 'all 0.2s ease',
-      cursor: 'default',
-      zIndex: 10,
-      maxWidth: isStatusHovered ? '120px' : '40px',
-      overflow: 'hidden',
-      whiteSpace: 'nowrap' as const
-    };
-  };
-
-  // Enhanced styling for clean design mode vs execution mode with component-specific colors
-  const getNodeStyle = () => {
-    // Get component-specific styling for SubFlowInvoker
-    const componentStyle = getComponentStyle('StdLib:SubFlowInvoker');
-    
-    // DYNAMIC WIDTH: Calculate width based on content length
-    const labelLength = data.label?.length || 0;
-    const fqnLength = data.invokedFlowFqn?.length || 0;
-    const maxContentLength = Math.max(labelLength, fqnLength);
-    
-    // ADAPTIVE WIDTH: Scale based on content length
-    let dynamicWidth = 160; // Base width
-    if (maxContentLength > 20) {
-      dynamicWidth = Math.min(400, 160 + (maxContentLength - 20) * 8); // 8px per extra character, max 400px
-    }
-    
+  // Get custom style based on component and execution status
+  const getCustomStyle = () => {
     // Apply component-specific styling properties
     const borderRadius = componentStyle?.borderRadius || 8;
     const borderWidth = componentStyle?.borderWidth || 1;
     const borderStyle = componentStyle?.borderStyle || 'solid';
     
-    const baseStyle = {
-      padding: data.executionStatus ? '20px 16px 12px 16px' : '12px 16px',
-      borderRadius: `${borderRadius}px`,
-      width: `${dynamicWidth}px`, // FIXED: Use calculated dynamic width instead of min/max
-      transition: 'all 0.2s ease',
-      boxSizing: 'border-box' as const,
-      overflow: 'visible' as const, // CHANGED: Allow content to be visible instead of hidden
-      display: 'flex' as const,
-      flexDirection: 'column' as const,
-      position: 'relative' as const,
-      cursor: 'pointer' as const,
-    };
-
     if (!data.executionStatus) {
       // Clean design mode - use component-specific colors
       const backgroundColor = componentStyle?.backgroundColor || '#FFFFFF';
       const borderColor = componentStyle?.primaryColor || 'transparent';
       
       return {
-        ...baseStyle,
         backgroundColor,
         border: `${borderWidth}px ${borderStyle} ${borderColor}`,
+        borderRadius: `${borderRadius}px`,
+        cursor: 'pointer',
         boxShadow: selected 
           ? `0 6px 20px ${componentStyle?.primaryColor ? componentStyle.primaryColor + '40' : 'rgba(139, 92, 246, 0.4)'}` 
-          : '0 4px 12px rgba(75, 85, 99, 0.15)' // Dark grey purple shadow like other nodes
+          : '0 4px 12px rgba(75, 85, 99, 0.15)'
       };
     } else {
       // Debug mode - execution status takes precedence over component colors
@@ -132,44 +79,29 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
       }
       
       return {
-        ...baseStyle,
         backgroundColor,
         border: `${borderWidth}px ${borderStyle} ${borderColor}`,
+        borderRadius: `${borderRadius}px`,
+        cursor: 'pointer',
         boxShadow: selected 
           ? `0 6px 20px ${componentStyle?.primaryColor ? componentStyle.primaryColor + '40' : 'rgba(139, 92, 246, 0.4)'}` 
-          : '0 4px 12px rgba(75, 85, 99, 0.15)' // Dark grey purple shadow like other nodes
+          : '0 4px 12px rgba(75, 85, 99, 0.15)'
       };
     }
   };
 
-  // Get component-specific styling for display
-  const componentStyle = getComponentStyle('StdLib:SubFlowInvoker');
-
   return (
-    <div style={getNodeStyle()}>
+    <BaseNode
+      widthConfig={SUBFLOW_INVOKER_WIDTH_CONFIG}
+      label={data.label}
+      fqn={data.resolvedComponentFqn}
+      selected={selected}
+      executionStatus={data.executionStatus}
+      additionalContent={additionalContent}
+      customStyle={getCustomStyle()}
+    >
       {/* Left handle for inputs (from previous steps) */}
       <Handle type="target" position={Position.Left} />
-      
-      {/* Compact status indicator with hover animation */}
-      {data.executionStatus && (
-        <div 
-          style={getCompactStatusStyle()}
-          onMouseEnter={() => setIsStatusHovered(true)}
-          onMouseLeave={() => setIsStatusHovered(false)}
-        >
-          <span>{getStatusIcon()}</span>
-          {data.executionDurationMs ? (
-            <span style={{ fontSize: '7px' }}>
-              {data.executionDurationMs}ms
-            </span>
-          ) : ''}
-          {isStatusHovered && (
-            <span style={{ marginLeft: '4px', fontSize: '7px' }}>
-              {data.executionStatus.toLowerCase()}
-            </span>
-          )}
-        </div>
-      )}
       
       {/* Component icon and label */}
       <div style={{ 
@@ -229,15 +161,6 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
         }}
       >
         🔗 {data.invokedFlowFqn}
-        {data.invokedFlowFqn !== 'unknown' && (
-          <span style={{ 
-            marginLeft: '4px', 
-            fontSize: '8px',
-            opacity: 0.7
-          }}>
-            ⤴
-          </span>
-        )}
       </div>
       )}
       
@@ -298,7 +221,7 @@ const SubFlowInvokerNode: React.FC<NodeProps<SubFlowInvokerNodeData>> = ({ data,
       
       {/* Right handle for outputs (to next steps) */}
       <Handle type="source" position={Position.Right} />
-    </div>
+    </BaseNode>
   );
 };
 

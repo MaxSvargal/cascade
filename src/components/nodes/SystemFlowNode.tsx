@@ -1,9 +1,18 @@
 // System Flow Node Component
-// Used in system overview to represent entire flows
+// Updated to use BaseNode with dynamic width
 
 import React from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { SystemGraphNodeData } from '@/models/cfv_models_generated';
+import BaseNode, { DynamicWidthConfig } from './BaseNode';
+
+// SystemFlow-specific width configuration
+const SYSTEM_FLOW_WIDTH_CONFIG: DynamicWidthConfig = {
+  baseWidth: 160,
+  maxWidth: 280,
+  scalingFactor: 6,
+  contentThreshold: 20
+};
 
 const SystemFlowNode: React.FC<NodeProps<SystemGraphNodeData>> = ({ data, selected }) => {
   const handleClick = () => {
@@ -12,38 +21,26 @@ const SystemFlowNode: React.FC<NodeProps<SystemGraphNodeData>> = ({ data, select
     }
   };
 
+  // Prepare additional content for width calculation
+  const additionalContent = [
+    data.fqn || '',
+    ...(data.contextVarUsages || []),
+    data.error?.message || ''
+  ];
+
   return (
-    <div
+    <BaseNode
+      widthConfig={SYSTEM_FLOW_WIDTH_CONFIG}
+      label={data.label}
+      fqn={data.fqn}
+      selected={selected}
+      additionalContent={additionalContent}
       onClick={handleClick}
-      style={{
-        padding: '12px',
-        border: `2px solid ${selected ? '#1976D2' : '#ddd'}`,
-        borderRadius: '8px',
-        backgroundColor: 'white',
-        minWidth: '160px',
-        maxWidth: '280px',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+      customStyle={{
         cursor: data.navigatable ? 'pointer' : 'default',
-        transition: 'all 0.2s ease',
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative'
-      }}
-      onMouseEnter={(e) => {
-        if (data.navigatable) {
-          e.currentTarget.style.transform = 'scale(1.02)';
-          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-          e.currentTarget.style.borderColor = '#1976D2';
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (data.navigatable) {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)';
-          e.currentTarget.style.borderColor = selected ? '#1976D2' : '#ddd';
-        }
+        border: `2px solid ${selected ? '#1976D2' : '#ddd'}`,
+        backgroundColor: 'white',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
       }}
     >
       {/* Left handle for inputs (from triggers and other flows) - for horizontal layout */}
@@ -109,7 +106,7 @@ const SystemFlowNode: React.FC<NodeProps<SystemGraphNodeData>> = ({ data, select
       
       {/* Right handle for outputs (to other flows) - for horizontal layout */}
       <Handle type="source" position={Position.Right} id="right" />
-    </div>
+    </BaseNode>
   );
 };
 

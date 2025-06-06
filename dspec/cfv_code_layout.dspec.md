@@ -132,9 +132,9 @@ code cfv_code.LayoutService_CalculateNodeSizeWithStyling {
         END_IF
 
         DECLARE minW = sizeOptions.minWidth OR 150
-        DECLARE maxW = sizeOptions.maxWidth OR 300 // Adjusted from 280 to allow wider nodes for subflows
+        DECLARE maxW = sizeOptions.maxWidth OR 500 // INCREASED: Allow much wider nodes for all components (was 300, now matches SubFlowInvoker)
         DECLARE minH = sizeOptions.minHeight OR 60
-        DECLARE maxH = sizeOptions.maxHeight OR 150 // Adjusted for SubFlowInvoker
+        DECLARE maxH = sizeOptions.maxHeight OR 200 // INCREASED: Allow taller nodes for wrapped content (was 150)
 
         ASSIGN finalWidth = CALL Math.min WITH { values: [maxW, (CALL Math.max WITH { values: [minW, finalWidth] })] }
         ASSIGN finalHeight = CALL Math.min WITH { values: [maxH, (CALL Math.max WITH { values: [minH, finalHeight] })] }
@@ -172,20 +172,20 @@ code cfv_code.LayoutService_GetLayoutPresets {
                 algorithm: "layered",
                 direction: "RIGHT",
                 spacing: { nodeNode: 80, edgeNode: 20, layerSpacing: 100, edgeEdge: 10 }, // layerSpacing adjusted
-                nodeSize: { calculateFromContent: true, minWidth: 180, maxWidth: 280, minHeight: 70, maxHeight: 120, padding: { top: 12, right: 16, bottom: 12, left: 16 } }
+                nodeSize: { calculateFromContent: true, minWidth: 180, maxWidth: 500, minHeight: 70, maxHeight: 150, padding: { top: 12, right: 16, bottom: 12, left: 16 } } // INCREASED maxWidth from 280 to 500
             },
             flowDetailSquare: { // For grid-like layout of long flows
                 algorithm: "layered",
                 direction: "DOWN", // Top-to-bottom for square arrangement
                 spacing: { nodeNode: 100, edgeNode: 30, layerSpacing: 140, edgeEdge: 15 },
-                nodeSize: { calculateFromContent: true, minWidth: 160, maxWidth: 240, minHeight: 60, maxHeight: 100, padding: { top: 10, right: 14, bottom: 10, left: 14 } },
+                nodeSize: { calculateFromContent: true, minWidth: 160, maxWidth: 400, minHeight: 60, maxHeight: 120, padding: { top: 10, right: 14, bottom: 10, left: 14 } }, // INCREASED maxWidth from 240 to 400
                 squareLayout: { enabled: true, maxNodesPerLayer: 5 } // Custom property interpreted by layoutNodes
             },
             systemOverview: {
                 algorithm: "layered",
                 direction: "RIGHT",
                 spacing: { nodeNode: 100, edgeNode: 30, layerSpacing: 150, edgeEdge: 15 },
-                nodeSize: { calculateFromContent: true, minWidth: 200, maxWidth: 300, minHeight: 80, maxHeight: 130, padding: { top: 16, right: 20, bottom: 16, left: 20 } }
+                nodeSize: { calculateFromContent: true, minWidth: 200, maxWidth: 500, minHeight: 80, maxHeight: 180, padding: { top: 16, right: 20, bottom: 16, left: 20 } } // INCREASED maxWidth from 300 to 500, maxHeight from 130 to 180
             }
             // Other presets can be added here (e.g., compact)
         }

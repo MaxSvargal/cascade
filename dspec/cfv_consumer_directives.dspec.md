@@ -106,100 +106,80 @@ directive cfv_consumer_directives.InspectorTabImplementation {
 
     properties_tab_guidance: {
         // Props received: cfv_models.InspectorPropertiesTabProps (selectedElement, actions, moduleRegistry)
-        purpose: "Interactive form-based editor for a selected element's `config` block (or other designated editable parts of its `dslObject`), using schema-driven form generation.",
-        form_generation_libraries: "Use @rjsf/core (React JSON Schema Form) with @rjsf/validator-ajv8 for form generation from component schemas.",
-        validation_libraries: "Use Zod for runtime validation and type safety of form data, or rely on @rjsf/validator-ajv8.",
-        schema_integration: "Use `props.selectedElement.data.componentSchema.configSchema` (for steps) or `props.selectedElement.data.componentSchema.triggerConfigSchema` (for triggers) to generate forms for the `config` block. The `dslObject` for a step node is the step definition itself from the DSL.",
-        form_structure: "Generate forms with proper field types (text, number, boolean, select, object, array) based on JSON schema.",
-        default_values: "Pre-populate form with current configuration values from `props.selectedElement.data.dslObject.config` (or other path as appropriate for the selected element type).",
-        validation: "Validate form inputs against the schema using Zod or AJV with @rjsf/validator-ajv8. Show validation errors inline.",
-        state_management: "Manage local form state within tab component. React Hook Form can be used for complex form state.",
-        save_workflow: "On explicit user 'Save' action, call `props.actions.requestSave(newConfigValue, pathToConfig)`. The `pathToConfig` is relative to the `dslObject` of the `selectedElement`. For a step, to replace the whole config block, use `['config']`. To replace a specific field like `timeout` within config, use `['config', 'timeout']` if `newConfigValue` is just the timeout value, or `['config']` if `newConfigValue` is the entire new config object.",
-        yaml_preview: "Show live YAML preview of changes in a collapsible section. Use 'yaml' library to stringify form data.",
-        context_variables: "Display (and potentially allow editing if supported by DSL) of context variable usages found in `props.selectedElement.data.contextVarUsages`.",
-        ui_layout: "Use clean form layout with proper spacing, labels, help text, and error display.",
-        implementation_libraries: "Use @rjsf/core, @rjsf/validator-ajv8, zod (optional), react-hook-form (optional), yaml for implementation.",
-        implementation_notes: "Ensure `pathToConfig` is correctly constructed for `props.actions.requestSave`. For editing `step.config.timeout` where `newConfigValue` is the new timeout value, `pathToConfig` would be `['config', 'timeout']`. If replacing the entire `step.config` object, `pathToConfig` is `['config']` and `newConfigValue` is the new config object."
+        purpose: "Enhanced interactive form-based editor for a selected element's `config` block using advanced schema-driven form generation with modern styling and comprehensive validation.",
+        
+        enhanced_form_generation: {
+            libraries: "Use @rjsf/core (React JSON Schema Form) with @rjsf/validator-ajv8 for robust form generation from component schemas. Apply @rjsf/mui or custom themes for modern styling.",
+            validation_libraries: "Use Zod for runtime validation and type safety of form data, combined with @rjsf/validator-ajv8 for schema validation.",
+            schema_integration: "Use `props.selectedElement.data.componentSchema.configSchema` (for steps) or `props.selectedElement.data.componentSchema.triggerConfigSchema` (for triggers) to generate comprehensive forms for the `config` block.",
+            ui_schema_generation: "Generate intelligent UI schemas with appropriate widgets (text, number, select, textarea, date-time, etc.) based on JSON schema properties, formats, and constraints."
+        },
+        
+        enhanced_form_features: {
+            field_types: "Support all JSON schema types with appropriate form controls: string (text/textarea/select), number (numeric input with validation), boolean (checkbox/toggle), object (nested forms), array (dynamic lists with add/remove).",
+            validation_display: "Show real-time validation with inline error messages, field-level warnings, and success indicators. Use color coding and icons for validation states.",
+            default_values: "Pre-populate forms with current configuration values from `props.selectedElement.data.dslObject.config` and apply schema defaults for missing fields.",
+            conditional_fields: "Support conditional field display based on schema dependencies and oneOf/anyOf constructs.",
+            help_text: "Display schema descriptions, examples, and help text for each field to guide users."
+        },
+        
+        modern_styling: {
+            design_system: "Apply consistent design system with proper spacing, typography, and color schemes. Use card-based layouts for grouped fields.",
+            responsive_layout: "Ensure forms are responsive and work well in sidebar layouts with proper field sizing and spacing.",
+            accessibility: "Include proper ARIA labels, keyboard navigation, and screen reader support for all form elements.",
+            visual_hierarchy: "Use clear visual hierarchy with section headers, field grouping, and proper spacing between form elements."
+        },
+        
+        state_management: "Manage local form state with React Hook Form or similar for complex form state, debounced validation, and optimistic updates.",
+        save_workflow: "On explicit user 'Save' action, call `props.actions.requestSave(newConfigValue, pathToConfig)` with comprehensive validation and error handling. Show save progress and success/error states.",
+        yaml_preview: "Provide optional YAML preview of current form state with syntax highlighting and proper formatting."
     }
 
     debug_test_tab_guidance: {
         // Props received: cfv_models.InspectorDebugTestTabProps (currentFlowFqn, selectedElement?, traceData?, testResultData?, actions, moduleRegistry)
-        purpose: "Comprehensive debugging and testing interface for the `props.currentFlowFqn` or `props.selectedElement` within that flow."
+        purpose: "Comprehensive debugging and testing interface for the `props.currentFlowFqn` or `props.selectedElement` within that flow with enhanced data management."
 
-        debug_section: {
-            scope: "Focuses on understanding and executing the *current* flow or a *selected step* within it, potentially using server-side streaming execution.",
-
-            input_data_interface: {
-                guidance: "Provide UI for viewing and editing the `triggerInputData` for the current flow (if `props.selectedElement` is the flow or trigger) or the `stepInputData` for a selected step. This data can be sourced from `props.actions.resolveStepInputData` for client-side preparation or used directly with server-side execution actions.",
-                form_generation: "If editing, use `props.selectedElement.data.componentSchema.inputSchema` (for steps) or `props.selectedElement.data.componentSchema.triggerOutputSchema` (for triggers, which defines the data structure provided *to* the flow) to generate an input form with `@rjsf/core`. The `props.actions.generateSchemaBasedInput` can be used to get a template.",
-                validation: "Validate user-provided input data using `props.actions.validateDataAgainstSchema` before execution."
+        enhanced_data_sections: {
+            layout: "Sequential vertical layout without tabs - display all three data sections one after another for better visibility and workflow",
+            input_data_section: {
+                purpose: "Display and edit input data for the selected step/trigger based on component input schema",
+                schema_integration: "Use component.inputSchema to generate realistic test data and validate input format",
+                data_generation: "Provide schema-based data generation buttons with ReactFlow node palette colors",
+                validation: "Real-time validation against input schema with clear error display"
             },
-
-            component_config_display: { // Renamed from component_config_editing as editing is in PropertiesTab
-                guidance: "Display the *actual* `dslConfig` for the selected step (from `props.selectedElement.data.dslObject.config`). This config is implicitly used when `props.actions.runDebugStep` or server-side execution actions are called. Configuration is *edited* in the Properties tab, but *used* here."
+            configuration_data_section: {
+                purpose: "Display and edit configuration data from the selected element's config block",
+                schema_integration: "Use component.configSchema to validate configuration format and structure",
+                data_source: "Load from selectedElement.data.dslObject.config and allow editing",
+                validation: "Real-time validation against config schema with clear error display"
             },
-
-            execution_controls: {
-                run_flow_from_trigger: "Button to execute the entire `props.currentFlowFqn` using provided/generated trigger input. Calls `props.actions.simulateFlowExecution(props.currentFlowFqn, undefined, triggerInputData)`. CRITICAL: This action now triggers server-side streaming execution. The UI must react to streamed events to update node statuses (PENDING, RUNNING, SUCCESS/FAILURE/SKIPPED) and display data. Nodes should NOT reset to 'not executed'.",
-                run_flow_up_to_step: "Button to simulate execution up to the `props.selectedElement` (if it's a step). Calls `props.actions.simulateFlowExecution(props.currentFlowFqn, props.selectedElement.id, triggerInputData)`. CRITICAL: Triggers server-side streaming. UI reacts to streamed events. Supports advanced dependency-aware partial execution.",
-                run_selected_step: "Button to execute only the `props.selectedElement` (if it's a step) with provided `stepInputData` and its `dslConfig`. Calls `props.actions.runDebugStep(props.currentFlowFqn, props.selectedElement.id, stepInputData, stepDslConfig)`. CRITICAL: Triggers server-side streaming for the single step. UI reacts to streamed events.",
-                execution_state_management: "All execution actions that trigger server-side streaming must result in UI updates driven by the received stream events. The `props.actions.updateExecutionState` callback should be used by the client stream handler to inform the visualizer of the new trace data, which then updates React Flow nodes. Nodes start with no execution status in design mode and only show execution status (PENDING, RUNNING, SUCCESS, FAILURE, SKIPPED) after debug/test execution is initiated and events are received. The client stream handler (part of the host app or visualizer's internal logic using cfv_designs.ClientExecutionStreamHandler) pre-populates all flow steps with PENDING status on 'execution.started' for immediate visual feedback.",
-                enhanced_streaming_features: "ENHANCED: Execution uses Server-Sent Events for real-time updates. Server performs comprehensive dependency analysis (including cycle detection as warnings) and layered execution. Client-side stream handler ensures proper React re-rendering via new object references and manages robust connection handling with automatic reconnection.",
-                dependency_resolution_features: "ENHANCED: Server-side features include cycle detection (DFS), complex expression parsing for dependencies, and layered execution with fallback strategies for deadlocks.",
-                parallel_execution_support: "ENHANCED: Server-side execution supports parallel step processing within dependency layers. Fork components trigger parallel branch execution."
-            },
-
-            results_display: {
-                trace_visualization: "If `props.traceData` (from a full run, simulation, or streaming execution) is available, the main graph will be updated. This tab can show a summary or specific details.",
-                step_i_o_data: "For a selected step after execution/simulation (data available in `props.traceData.steps[stepId].executionInputData / executionOutputData`), display its input and output. Use `react-json-view`.",
-                logs: "Display logs from `props.traceData.steps[stepId].logs` if available.",
-                errors: "Clearly display any `cfv_models.ExecutionError` from results or `props.traceData.steps[stepId].errorData`.",
-                timing_information: "ENHANCED: Display execution timing from `props.traceData` (e.g., `durationMs`), component type (sync/async if available), and parallel execution indicators (if determinable from trace)."
-            },
-
-            data_lineage_visualization: {
-                guidance: "Optionally, use `props.actions.resolveStepInputData` which returns `cfv_models.ResolvedStepInput` containing `inputSources` information to visualize how a step's input is constructed."
+            output_data_section: {
+                purpose: "Display expected or actual output data based on component output schema and execution results",
+                schema_integration: "Use component.outputSchema to generate realistic expected output data",
+                data_generation: "Generate mock output data based on schema when no execution results available",
+                execution_integration: "Update with actual output data after step execution",
+                read_only: "Display-only section that updates based on schema or execution results"
             }
         },
 
-        test_section: {
-            scope: "Focuses on managing and running persisted `cfv_models.FlowTestCase` definitions for the `props.currentFlowFqn`.",
-
-            test_case_management: {
-                list_display: "Display existing test cases for `props.currentFlowFqn` (host app needs to provide these, perhaps via a new prop or fetched via an action).",
-                creation_ui: "UI to create a new `cfv_models.FlowTestCase`. Use `props.actions.generateTestCaseTemplate` to pre-fill. Use schema-based forms for `triggerInput` based on the flow's trigger schema.",
-                editing_ui: "UI to edit an existing `cfv_models.FlowTestCase`."
-            },
-
-            test_execution_controls: {
-                run_single_test_case: "Button to run a selected `cfv_models.FlowTestCase`. Calls `props.actions.runTestCase(testCase)`, which triggers server-side execution and streaming updates. Results update `props.testResultData`.",
-                run_all_tests_for_flow: "Button to run all test cases for `props.currentFlowFqn`. Iteratively calls `props.actions.runTestCase`."
-            },
-
-            test_results_display: {
-                summary: "Display overall pass/fail for test runs from `props.testResultData`.",
-                assertion_details: "For each `cfv_models.AssertionResult` in `props.testResultData.assertionResults`, show targetPath, expected, actual, comparison, and passed status.",
-                trace_link: "If `props.testResultData.trace` is available, provide a way to view this trace in the visualizer (host app would set `props.traceData` and `props.mode` to 'trace')."
-            }
+        trigger_data_handling: {
+            input_data: "For trigger elements, generate input data based on trigger.inputSchema from flow definition, not component schema",
+            output_data: "For trigger elements, generate output data based on trigger.outputSchema or default trigger output structure",
+            configuration_data: "For trigger elements, show trigger configuration from flow definition trigger block"
         },
 
-        enhanced_schema_features: { // Features provided by props.actions
-            input_structure_generation: "Generate input structure templates from component input schemas with proper data types using `props.actions.generateSchemaBasedInput`.",
-            schema_validation: "Validate input data against component schemas with detailed error reporting using `props.actions.validateDataAgainstSchema`.",
-            data_type_conversion_guidance: "Handle data type conversion based on schema types (string, number, boolean, object, array) when preparing inputs.",
-            nested_object_support: "Support complex nested objects and arrays based on JSON schema structure in forms.",
-            required_field_handling: "Visually distinguish between required and optional fields based on schema definitions in forms.",
-            default_value_resolution_guidance: "Use schema default values and consider resolving from previous step outputs intelligently when preparing inputs for `runDebugStep` or `simulateFlowExecution`.",
-            constraint_based_generation_guidance: "When generating test data, aim to respect schema constraints (min/max values, string patterns, enum values).",
-            context_variable_resolution_guidance: "Resolve context variables in input data with proper type handling if preparing inputs client-side."
+        styling_consistency: {
+            button_colors: "Use ReactFlow node palette colors for data generation buttons - success green (#10B981), warning orange (#F59E0B), error red (#EF4444)",
+            primary_buttons: "Style execution and action buttons to match ReactFlow node styling with proper padding, border-radius, and hover states",
+            component_info: "Display component information in rows rather than columns for better readability in sidebar layout",
+            spacing: "Use consistent 16px spacing between sections, 8px for internal elements"
         },
 
-        integration_requirements: { // These are props passed to the DebugTestTab renderer
-            trace_data_dependency: "Debug section relies on `props.traceData: cfv_models.FlowExecutionTrace | null` being updated by the stream handler or host app.",
-            test_execution_dependency: "Test section requires `props.actions.runTestCase` callback to be implemented by the host, which then calls the library's internal trigger for server-side execution.",
-            flow_context_dependency: "Both sections require `props.currentFlowFqn: string` for flow context.",
-            module_registry_dependency: "Uses `props.moduleRegistry: cfv_models.IModuleRegistry` for flow definition and schema lookups.",
-            actions_dependency: "Requires `props.actions: cfv_models.UnifiedDebugTestActions`."
+        data_generation_improvements: {
+            schema_based_generation: "Always use appropriate schema (input/config/output) for data generation rather than generic mock data",
+            trigger_specific: "For triggers, use flow definition trigger schema rather than component schema",
+            output_prediction: "Generate realistic output data based on input data and component behavior patterns",
+            error_scenarios: "Generate appropriate error cases based on schema validation rules and component failure modes"
         }
     }
 }

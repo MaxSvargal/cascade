@@ -39,7 +39,7 @@ const SystemEdge: React.FC<EdgeProps<SystemEdgeData>> = ({
     } else if (data?.type === 'triggerLinkEdge') {
       return {
         ...baseStyle,
-        stroke: '#999',
+        stroke: '#4CAF50',
       };
     } else {
       return {
@@ -61,13 +61,6 @@ const SystemEdge: React.FC<EdgeProps<SystemEdgeData>> = ({
         <text>
           <textPath href={`#${id}`} style={{ fontSize: '11px', fill: '#E65100', fontWeight: 'bold' }} startOffset="50%" textAnchor="middle">
             invokes
-          </textPath>
-        </text>
-      )}
-      {data?.type === 'triggerLinkEdge' && (
-        <text>
-          <textPath href={`#${id}`} style={{ fontSize: '10px', fill: '#555' }} startOffset="50%" textAnchor="middle">
-            triggers
           </textPath>
         </text>
       )}
