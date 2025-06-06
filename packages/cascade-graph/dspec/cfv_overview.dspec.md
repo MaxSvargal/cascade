@@ -43,3 +43,49 @@ design cfv_overview.LibraryDefinition {
     tags: ["React", "Visualization", "CascadeDSL", "Library", "DeveloperTool"]
     source: "CascadeFlowVisualizer Library Specification, refined with DefinitiveSpec methodology"
 }
+
+design cfv_overview.TriggerArchitecture {
+    id: "CFV_DES_TRIGGER_001"
+    title: "Trigger Architecture and Data Flow"
+    description: `
+        Triggers in the Cascade DSL are entry points that convert external events into standardized 
+        flow execution contexts. This architecture ensures predictable data flow and reliable 
+        component integration across different trigger types.
+    `
+    key_concepts: [
+        "Trigger Configuration vs Runtime Data: Triggers have two distinct data aspects - configuration (how to set up the trigger) and runtime data (standardized output provided to the flow).",
+        "External Event Processing: Triggers receive external events (HTTP requests, scheduled times, event bus messages) and convert them into standardized formats.",
+        "Standardized Output Schemas: Each trigger type provides a predictable output schema (triggerOutputSchema) that flows can reliably reference via 'trigger.*' expressions.",
+        "Configuration-Driven Behavior: Trigger behavior is determined by configuration (paths, schedules, event patterns) rather than runtime input data."
+    ]
+    data_flow_pattern: `
+        External Event → Trigger Processing → Standardized Output → Flow Execution
+        
+        1. External Event Arrives: HTTP request, scheduled time, event publication, manual execution
+        2. Trigger Processing: Authentication, validation, filtering, transformation to standard format
+        3. Standardized Output: Predictable data structure conforming to triggerOutputSchema
+        4. Flow Context: Trigger output becomes available as 'trigger.*' in flow expressions
+    `
+    trigger_types: [
+        "HTTP Triggers: Convert HTTP requests into HttpTriggerRequest format with path, method, headers, body, principal",
+        "Scheduled Triggers: Provide timing information and configured payload in ScheduledTriggerPayload format",
+        "EventBus Triggers: Standardize events into EventBusTriggerPayload with event metadata and payload",
+        "Manual Triggers: Pass through provided data as initialData for programmatic flow execution",
+        "Stream Triggers: Process streaming messages into StreamTriggerMessage or StreamTriggerBatch formats"
+    ]
+    schema_distinction: `
+        - configSchema: Defines the structure for configuring the trigger (e.g., HTTP path/method, CRON expression)
+        - inputSchema: Defines the structure of external event data the trigger receives (e.g., HTTP request structure, event bus message format)
+        - outputSchema: Defines the standardized data structure the trigger provides to the flow at runtime
+    `
+    implementation_notes: [
+        "Triggers receive external events as inputs (not from other flow steps)",
+        "inputSchema defines the structure of external event data triggers expect to receive",
+        "outputSchema defines the standardized format triggers provide to flows",
+        "configSchema defines how triggers should be configured to receive external events",
+        "Client-side simulation focuses on generating plausible standardized output for UI/testing purposes"
+    ]
+    fulfills: [cfv_overview.CorePurpose]
+    tags: ["Triggers", "DataFlow", "Architecture", "CascadeDSL"]
+    source: "Trigger Architecture Summary and stdlib.yml.md specifications"
+}

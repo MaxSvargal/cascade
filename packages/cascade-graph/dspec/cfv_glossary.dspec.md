@@ -31,4 +31,19 @@ glossary cfv_glossary.CascadeFlowVisualizerTerms {
     term IModuleRegistry {
         definition: "A TypeScript interface (`cfv_models.IModuleRegistry`) exposed by the visualizer's `cfv_designs.ModuleRegistryService`. It provides methods for consumer-rendered components (e.g., inspector tabs) to synchronously query information about loaded DSL modules, definitions, and component schemas."
     }
+    term TriggerDefinitionDsl {
+        definition: "A data structure (`cfv_models.TriggerDefinitionDsl`) representing the configuration of how a trigger should be set up in a Cascade DSL flow. Contains the trigger component type (e.g., 'StdLib.Trigger:Http') and its configuration object (e.g., HTTP path, method, authentication settings). This defines HOW the trigger operates, not the data it provides at runtime."
+    }
+    term TriggerRuntimeContext {
+        definition: "A data structure (`cfv_models.TriggerRuntimeContext`) representing the complete runtime context provided by a trigger to a flow execution. Includes the trigger type, configuration used, standardized output data, timestamp, and execution ID. This becomes available as 'trigger.*' in flow expressions."
+    }
+    term TriggerInputSchema {
+        definition: "A JSON Schema (`inputSchema` in `cfv_models.ComponentSchema`) that defines the structure of external event data a trigger expects to receive. For example, an HTTP trigger's input schema defines the raw HTTP request structure with path, method, headers, body, and principal fields. This represents the external data format before standardization."
+    }
+    term TriggerOutputSchema {
+        definition: "A JSON Schema (`outputSchema` in `cfv_models.ComponentSchema`) that defines the standardized data structure a trigger provides to the flow at runtime. For example, an HTTP trigger's output schema defines the HttpTriggerRequest format with path, method, headers, body, and principal fields. This is what flows can reliably reference via 'trigger.*' expressions."
+    }
+    term ExternalEventProcessing {
+        definition: "The conceptual process by which triggers convert external events (HTTP requests, scheduled times, event bus messages, etc.) into standardized flow execution contexts. Triggers act as adapters between external systems and the internal flow execution engine, ensuring predictable data flow regardless of the external event format."
+    }
 }

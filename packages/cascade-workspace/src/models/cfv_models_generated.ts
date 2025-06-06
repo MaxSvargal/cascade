@@ -318,6 +318,33 @@ export interface ComponentSchema {
   triggerOutputSchema?: JsonSchemaObject;
 }
 
+export interface TriggerDefinitionDsl {
+  /** Trigger component FQN (e.g., 'StdLib.Trigger:Http', 'StdLib.Trigger:Scheduled'). */
+  type: string;
+  /** Trigger-specific configuration object (e.g., HTTP path/method, CRON expression). Structure defined by triggerConfigSchema. */
+  config?: any;
+  // Note: Triggers don't have traditional 'inputs' - they receive external events
+  // The 'config' defines how they should be set up to receive those events
+}
+
+export interface TriggerRuntimeContext {
+  /** Type of trigger that generated this context. */
+  triggerType: string;
+  /** Configuration used to set up the trigger. */
+  triggerConfig: any;
+  /** Standardized runtime data provided to the flow (conforms to triggerOutputSchema). */
+  runtimeData: any;
+  /** Timestamp when the trigger was activated. */
+  activationTimestamp: string;
+  /** Additional metadata about the trigger activation. */
+  metadata?: {
+    /** Original external event that activated the trigger. */
+    originalEvent?: any;
+    /** Processing information (authentication, validation results, etc.). */
+    processingInfo?: any;
+  };
+}
+
 // --- Trace & Execution Types (Enhanced) ---
 export interface StepExecutionTrace {
   stepId: string;
@@ -358,8 +385,10 @@ export interface FlowExecutionTrace {
   endTime?: string;
   /** Total flow execution duration in milliseconds. */
   durationMs?: number;
-  /** Data that triggered the flow execution (from trigger.outputSchema). */
+  /** DEPRECATED: Use triggerContext instead. Data that triggered the flow execution (from trigger.outputSchema). */
   triggerData?: any;
+  /** Complete trigger runtime context including type, config, and standardized output data. */
+  triggerContext?: TriggerRuntimeContext;
   /** Initial context state. */
   initialContext?: Record<string, any>;
   /** Final context state. */
@@ -410,7 +439,7 @@ export interface FlowTestCase {
   flowFqn: string;
   /** Human-readable test description. */
   description?: string;
-  /** Input data for the flow trigger. Should conform to trigger's output schema. */
+  /** Input data for the flow trigger. Should conform to the trigger's OUTPUT schema (triggerOutputSchema) since this is what the trigger provides to the flow, not what the trigger receives from external events. */
   triggerInput: any;
   /** Initial context variable values. */
   initialContext?: Record<string, any>;
@@ -1051,6 +1080,17 @@ export interface ExecutionStartedEvent {
   triggerInput: any;
   totalSteps: number;
   estimatedDuration: number;
+}
+
+export interface ExecutionStartedEventData {
+  flowFqn: string;
+  /** DEPRECATED: Use triggerContext instead. The data provided by the trigger to the flow. */
+  triggerInput: any;
+  /** Complete trigger runtime context including type, config, and standardized output data. */
+  triggerContext?: TriggerRuntimeContext;
+  /** The definition of the flow being executed, for client-side PENDING state pre-population. */
+  flowDefinition: any;
+  // Potentially dependencyAnalysis results if useful for client
 }
 
 export interface StepStartedEvent {

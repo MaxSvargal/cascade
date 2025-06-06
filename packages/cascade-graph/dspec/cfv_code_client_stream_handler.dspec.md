@@ -25,10 +25,17 @@ code cfv_code.ClientExecutionStreamHandler_HandleStreamingEvent {
                 flowFqn: executionStartedData.flowFqn,
                 status: 'RUNNING',
                 startTime: event.timestamp,
-                triggerData: executionStartedData.triggerInput,
                 steps: (CREATE_INSTANCE Map), // Map<string, cfv_models.StepExecutionTrace>
                 lastUpdated: (CALL SystemTime.now).getTime()
             } ASSIGN_TO newTrace
+
+            // REFINED: Handle both new triggerContext and legacy triggerInput
+            IF executionStartedData.triggerContext IS_PRESENT THEN
+                ASSIGN newTrace.triggerContext = executionStartedData.triggerContext
+                ASSIGN newTrace.triggerData = executionStartedData.triggerContext.runtimeData // For backward compatibility
+            ELSE_IF executionStartedData.triggerInput IS_PRESENT THEN
+                ASSIGN newTrace.triggerData = executionStartedData.triggerInput
+            END_IF
 
             IF executionStartedData.flowDefinition AND executionStartedData.flowDefinition.steps IS_PRESENT THEN
                 FOR_EACH stepDef IN executionStartedData.flowDefinition.steps
@@ -56,7 +63,15 @@ code cfv_code.ClientExecutionStreamHandler_HandleStreamingEvent {
                 // For robustness, re-initialize based on the new event's data.
                 DECLARE esData = event.data AS cfv_models.ExecutionStartedEventData
                 ASSIGN newTrace.flowFqn = esData.flowFqn
-                ASSIGN newTrace.triggerData = esData.triggerInput
+                
+                // REFINED: Handle both new triggerContext and legacy triggerInput
+                IF esData.triggerContext IS_PRESENT THEN
+                    ASSIGN newTrace.triggerContext = esData.triggerContext
+                    ASSIGN newTrace.triggerData = esData.triggerContext.runtimeData // For backward compatibility
+                ELSE_IF esData.triggerInput IS_PRESENT THEN
+                    ASSIGN newTrace.triggerData = esData.triggerInput
+                END_IF
+                
                 ASSIGN newTrace.status = 'RUNNING'
                 ASSIGN newTrace.startTime = event.timestamp
                 ASSIGN newTrace.endTime = undefined // Clear end time

@@ -125,7 +125,7 @@ model cfv_models.FlowDefinitionDsl {
     type: "Object" // Represents the YAML structure of a single flow.
     // Example fields it might contain: name, trigger, steps, context, etc.
     name: String { required: true }
-    trigger: cfv_models.Any { required: true } // Structure of trigger object in DSL
+    trigger: cfv_models.TriggerDefinitionDsl { required: true; description: "Trigger configuration that defines how this flow is initiated." }
     steps?: List<cfv_models.FlowStepDsl>
     context?: Record<String, cfv_models.Any>
     moduleFqn?: String { description: "FQN of the module this flow belongs to, added during processing."}
@@ -376,12 +376,12 @@ model cfv_models.ComponentSchema {
     description: "Represents the schema for a component type."
     fqn: String { required: true; description: "FQN of the component type (e.g., StdLib:HttpCall)." }
     configSchema?: cfv_models.JsonSchemaObject { description: "JSON Schema for the component's 'config' block when used as a step." }
-    inputSchema?: cfv_models.JsonSchemaObject { description: "JSON Schema describing the expected data structure for the component's primary data input port." }
-    outputSchema?: cfv_models.JsonSchemaObject { description: "JSON Schema describing the data structure of the component's primary success output port." }
+    inputSchema?: cfv_models.JsonSchemaObject { description: "JSON Schema describing the expected data structure for the component's primary data input port. For triggers, this defines the structure of external event data they receive." }
+    outputSchema?: cfv_models.JsonSchemaObject { description: "JSON Schema describing the data structure of the component's primary success output port. For triggers, this defines the standardized format provided to flows." }
     errorOutputSchema?: cfv_models.JsonSchemaObject { description: "JSON Schema for the data structure on the error output port (often a StandardErrorStructure)." }
-    // For trigger components:
-    triggerConfigSchema?: cfv_models.JsonSchemaObject { description: "JSON Schema for the trigger's 'config' block within a flow definition's 'trigger' section." }
-    triggerOutputSchema?: cfv_models.JsonSchemaObject { description: "JSON Schema for the data structure the trigger provides TO THE FLOW (becomes `trigger.*` context)." }
+    // For trigger components - DEPRECATED: Use inputSchema/outputSchema instead
+    triggerConfigSchema?: cfv_models.JsonSchemaObject { description: "DEPRECATED: Use configSchema instead. JSON Schema for the trigger's configuration block within a flow definition's 'trigger' section." }
+    triggerOutputSchema?: cfv_models.JsonSchemaObject { description: "DEPRECATED: Use outputSchema instead. JSON Schema for the standardized data structure the trigger provides TO THE FLOW at runtime." }
 }
 
 model cfv_models.JsonSchemaObject {
@@ -419,7 +419,8 @@ model cfv_models.FlowExecutionTrace {
     startTime: String { required: true; description: "ISO timestamp of flow start." }
     endTime?: String { description: "ISO timestamp of flow completion." }
     durationMs?: Number { description: "Total flow execution duration in milliseconds." }
-    triggerData?: cfv_models.Any { description: "Data that triggered the flow execution (conforming to trigger.outputSchema)." }
+    triggerData?: cfv_models.Any { description: "DEPRECATED: Use triggerContext instead. Data that triggered the flow execution (conforming to trigger.outputSchema)." }
+    triggerContext?: cfv_models.TriggerRuntimeContext { description: "Complete trigger runtime context including type, config, and standardized output data." }
     initialContext?: Record<String, cfv_models.Any> { description: "Initial context state." }
     finalContext?: Record<String, cfv_models.Any> { description: "Final context state." }
     steps: List<cfv_models.StepExecutionTrace> { required: true; description: "Execution traces for all steps in execution order." } // Changed to List for ordered trace
@@ -479,7 +480,7 @@ model cfv_models.FlowTestCase {
     flowFqn: String { required: true; }
     name?: String { description: "Human-readable test name."}
     description?: String { description: "Human-readable test description." }
-    triggerInput: cfv_models.Any { required: true; description: "Input data for the flow trigger. Should conform to trigger's output schema." }
+    triggerInput: cfv_models.Any { required: true; description: "Input data for the flow trigger. Should conform to the trigger's OUTPUT schema (triggerOutputSchema) since this is what the trigger provides to the flow, not what the trigger receives from external events." }
     initialContext?: Record<String, cfv_models.Any> { description: "Initial context variable values." }
     componentMocks?: List<cfv_models.MockedComponentResponse>
     assertions: List<cfv_models.TestCaseAssertion> { required: true; }
@@ -1092,7 +1093,8 @@ model cfv_models.ExecutionStartedEventData {
     id: "CFV_MOD_STREAM_002"
     description: "Payload for the 'execution.started' event."
     flowFqn: String { required: true }
-    triggerInput: cfv_models.Any { required: true }
+    triggerInput: cfv_models.Any { required: true; description: "DEPRECATED: Use triggerContext instead. The data provided by the trigger to the flow." }
+    triggerContext?: cfv_models.TriggerRuntimeContext { description: "Complete trigger runtime context including type, config, and standardized output data." }
     flowDefinition: cfv_models.FlowDefinitionDsl { required: true; description: "The definition of the flow being executed, for client-side PENDING state pre-population."}
     // Potentially dependencyAnalysis results if useful for client
 }
@@ -1167,4 +1169,23 @@ model cfv_models.DependencyAnalysis {
     cycles: List<List<String>> { required: true; description: "List of detected circular dependency paths." }
     independentSteps: List<String> { required: true; description: "List of step IDs that can be executed independently or early." }
     executionOrder: List<List<String>> { required: true; description: "Layered execution order for parallel processing." }
+}
+
+model cfv_models.TriggerDefinitionDsl {
+    id: "CFV_MOD_TRIGGER_001"
+    description: "Raw DSL trigger definition object from parsed YAML. This represents the CONFIGURATION of how the trigger should be set up."
+    type: String { required: true; description: "Trigger component FQN (e.g., 'StdLib.Trigger:Http', 'StdLib.Trigger:Scheduled')." }
+    config?: cfv_models.Any { description: "Trigger-specific configuration object (e.g., HTTP path/method, CRON expression). Structure defined by triggerConfigSchema." }
+    // Note: Triggers don't have traditional 'inputs' - they receive external events
+    // The 'config' defines how they should be set up to receive those events
+}
+
+model cfv_models.TriggerRuntimeContext {
+    id: "CFV_MOD_TRIGGER_002"
+    description: "Runtime context provided by a trigger to the flow execution. This is the standardized output that becomes available as 'trigger.*' in the flow."
+    triggerType: String { required: true; description: "The FQN of the trigger component that generated this context." }
+    triggerConfig: cfv_models.Any { description: "The configuration that was used to set up this trigger instance." }
+    runtimeData: cfv_models.Any { required: true; description: "The standardized data structure provided by the trigger (conforming to triggerOutputSchema). This varies by trigger type but is predictable for each type." }
+    timestamp: String { required: true; description: "ISO timestamp when the trigger fired." }
+    executionId?: String { description: "Unique identifier for this trigger execution instance." }
 }

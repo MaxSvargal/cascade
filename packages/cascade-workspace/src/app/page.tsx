@@ -804,12 +804,27 @@ const InspectorDebugTestTab: React.FC<{
 
         // Load configuration data
         if (isTriggerElement && flowDefinition?.trigger) {
-          // For triggers, use trigger configuration from flow definition
-          setConfigurationData(JSON.stringify(flowDefinition.trigger, null, 2));
+          // For triggers, generate configuration from component schema with defaults
+          if (componentSchema?.configSchema) {
+            const mockConfigData = generateMockDataFromSchema(componentSchema.configSchema, componentSchema.fqn);
+            // Merge with actual trigger config from flow definition
+            const actualTriggerConfig = flowDefinition.trigger.config || {};
+            const mergedConfig = { ...mockConfigData, ...actualTriggerConfig };
+            setConfigurationData(JSON.stringify(mergedConfig, null, 2));
+          } else {
+            // Fallback to flow definition trigger config
+            setConfigurationData(JSON.stringify(flowDefinition.trigger, null, 2));
+          }
         } else {
-          // For steps, use step configuration
+          // For steps, use step configuration or generate from schema
           const currentConfig = selectedElement.data?.dslObject?.config || {};
-          setConfigurationData(JSON.stringify(currentConfig, null, 2));
+          if (Object.keys(currentConfig).length === 0 && componentSchema?.configSchema) {
+            // Generate default config if none exists
+            const mockConfigData = generateMockDataFromSchema(componentSchema.configSchema, componentSchema.fqn);
+            setConfigurationData(JSON.stringify(mockConfigData, null, 2));
+          } else {
+            setConfigurationData(JSON.stringify(currentConfig, null, 2));
+          }
         }
 
         // Generate input data based on appropriate schema
@@ -829,12 +844,12 @@ const InspectorDebugTestTab: React.FC<{
               body: {
                 // Generate body based on trigger input schema if available
                 ...(componentSchema?.inputSchema ? 
-                  generateMockDataFromSchema(componentSchema.inputSchema) : 
+                  generateMockDataFromSchema(componentSchema.inputSchema, componentSchema.fqn) : 
                   { data: 'sample trigger data' })
               }
             };
           } else if (componentSchema?.inputSchema) {
-            triggerInputData = generateMockDataFromSchema(componentSchema.inputSchema);
+            triggerInputData = generateMockDataFromSchema(componentSchema.inputSchema, componentSchema.fqn);
           } else {
             triggerInputData = { triggerData: 'sample data' };
           }
@@ -881,7 +896,7 @@ const InspectorDebugTestTab: React.FC<{
           let triggerOutputData = {};
           
           if (componentSchema?.outputSchema) {
-            triggerOutputData = generateMockDataFromSchema(componentSchema.outputSchema);
+            triggerOutputData = generateMockDataFromSchema(componentSchema.outputSchema, componentSchema.fqn);
           } else {
             // Default trigger output structure
             triggerOutputData = {
@@ -894,7 +909,20 @@ const InspectorDebugTestTab: React.FC<{
           setOutputData(JSON.stringify(triggerOutputData, null, 2));
         } else if (componentSchema?.outputSchema) {
           // For steps, generate output data based on component output schema
-          const mockOutputData = generateMockDataFromSchema(componentSchema.outputSchema);
+          // Get the component config to help with dynamic output generation
+          let componentConfig = {};
+          try {
+            componentConfig = JSON.parse(configurationData || '{}');
+          } catch (e) {
+            // Use default config if parsing fails
+            componentConfig = {};
+          }
+          
+          const mockOutputData = generateMockDataFromSchema(
+            componentSchema.outputSchema, 
+            componentSchema.fqn,
+            componentConfig
+          );
           setOutputData(JSON.stringify(mockOutputData, null, 2));
         } else {
           // Default output structure
@@ -932,8 +960,89 @@ const InspectorDebugTestTab: React.FC<{
   }, [selectedElement, currentFlowFqn, moduleRegistry, actions]);
 
   // Helper function to generate mock data from schema
-  const generateMockDataFromSchema = (schema: any): any => {
+  const generateMockDataFromSchema = (schema: any, componentType?: string, config?: any): any => {
     if (!schema || typeof schema !== 'object') return {};
+    
+    // Handle dynamic output schemas for specific component types
+    if (componentType && schema.type === 'object' && schema.additionalProperties) {
+      switch (componentType) {
+        case 'StdLib:Fork':
+          // Generate dynamic output ports based on config.outputNames
+          const forkResult: any = {};
+          if (config?.outputNames && Array.isArray(config.outputNames)) {
+            config.outputNames.forEach((outputName: string) => {
+              forkResult[outputName] = { data: `sample_data_for_${outputName}`, timestamp: new Date().toISOString() };
+            });
+          } else {
+            // Default fork outputs
+            forkResult.output1 = { data: 'sample_data_for_output1', timestamp: new Date().toISOString() };
+            forkResult.output2 = { data: 'sample_data_for_output2', timestamp: new Date().toISOString() };
+          }
+          // Add any fixed properties from schema
+          if (schema.properties) {
+            Object.entries(schema.properties).forEach(([key, propSchema]: [string, any]) => {
+              forkResult[key] = generateMockDataFromSchema(propSchema);
+            });
+          }
+          return forkResult;
+          
+        case 'StdLib:Switch':
+          // Generate dynamic output ports based on config.cases and defaultOutputName
+          const switchResult: any = {};
+          if (config?.cases && Array.isArray(config.cases)) {
+            // Only populate one output port (the first case for demo)
+            const firstCase = config.cases[0];
+            if (firstCase?.outputName) {
+              switchResult[firstCase.outputName] = { data: `sample_data_for_${firstCase.outputName}`, timestamp: new Date().toISOString() };
+            }
+          }
+          if (config?.defaultOutputName) {
+            // Don't populate default output if a case matched
+            if (!config?.cases?.length) {
+              switchResult[config.defaultOutputName] = { data: `sample_data_for_${config.defaultOutputName}`, timestamp: new Date().toISOString() };
+            }
+          }
+          // Add any fixed properties from schema
+          if (schema.properties) {
+            Object.entries(schema.properties).forEach(([key, propSchema]: [string, any]) => {
+              switchResult[key] = generateMockDataFromSchema(propSchema);
+            });
+          }
+          return switchResult;
+          
+        case 'StdLib:FilterData':
+          // Generate dynamic output ports based on config.matchOutput and noMatchOutput
+          const filterResult: any = {};
+          const matchOutput = config?.matchOutput || 'matchOutput';
+          const noMatchOutput = config?.noMatchOutput || 'noMatchOutput';
+          
+          // Simulate a match scenario
+          filterResult[matchOutput] = { data: 'sample_matched_data', timestamp: new Date().toISOString() };
+          filterResult[noMatchOutput] = null; // No data on non-match port
+          
+          // Add any fixed properties from schema
+          if (schema.properties) {
+            Object.entries(schema.properties).forEach(([key, propSchema]: [string, any]) => {
+              filterResult[key] = generateMockDataFromSchema(propSchema);
+            });
+          }
+          return filterResult;
+          
+        case 'StdLib:MergeStreams':
+          // Generate single output port based on config.mergedOutputName
+          const mergeResult: any = {};
+          const mergedOutputName = config?.mergedOutputName || 'mergedOutput';
+          mergeResult[mergedOutputName] = { data: 'sample_merged_data', timestamp: new Date().toISOString() };
+          
+          // Add any fixed properties from schema
+          if (schema.properties) {
+            Object.entries(schema.properties).forEach(([key, propSchema]: [string, any]) => {
+              mergeResult[key] = generateMockDataFromSchema(propSchema);
+            });
+          }
+          return mergeResult;
+      }
+    }
     
     if (schema.type === 'object' && schema.properties) {
       const result: any = {};
@@ -945,9 +1054,9 @@ const InspectorDebugTestTab: React.FC<{
         } else if (propSchema.type === 'boolean') {
           result[key] = propSchema.example !== undefined ? propSchema.example : (propSchema.default !== undefined ? propSchema.default : true);
         } else if (propSchema.type === 'array') {
-          result[key] = propSchema.example || [generateMockDataFromSchema(propSchema.items)];
+          result[key] = propSchema.example || propSchema.default || [generateMockDataFromSchema(propSchema.items)];
         } else if (propSchema.type === 'object') {
-          result[key] = generateMockDataFromSchema(propSchema);
+          result[key] = propSchema.example || propSchema.default || generateMockDataFromSchema(propSchema);
         } else {
           result[key] = propSchema.example || propSchema.default || null;
         }

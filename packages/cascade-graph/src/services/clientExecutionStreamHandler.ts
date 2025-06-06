@@ -4,13 +4,15 @@
 import {
   StreamingExecutionRequest,
   StreamingExecutionEvent,
+  StreamingEventType,
   ExecutionStatus,
   ExecutionCancellationRequest,
   FlowExecutionTrace,
   StepExecutionTrace,
   ExecutionStatusEnum,
-  FlowExecutionStatusEnum
-} from '../models/cfv_models_generated';
+  FlowExecutionStatusEnum,
+  ExecutionError
+} from '@/models/cfv_models_generated';
 
 export interface ExecutionStreamOptions {
   onExecutionStarted?: (data: any) => void;
@@ -341,50 +343,40 @@ export class ClientExecutionStreamHandler {
    * Handle execution started event
    */
   private handleExecutionStarted(execution: ActiveExecution, data: any): void {
-    console.log('🚀 Handling execution started:', data);
+    console.log(`🚀 Execution started: ${execution.executionId}`);
     
-    // Initialize execution trace
-    execution.trace = {
-      traceId: execution.executionId,
-      flowFqn: execution.flowFqn,
-      status: 'RUNNING' as FlowExecutionStatusEnum,
-      startTime: execution.startTime,
-      triggerData: data.triggerInput,
-      steps: []
-    };
-
-    // Add trigger step
-    execution.trace.steps.push({
-      stepId: 'trigger',
-      componentFqn: 'trigger',
-      status: 'PENDING' as ExecutionStatusEnum,
-      startTime: execution.startTime,
-      inputData: data.triggerInput || {},
-      outputData: {}
-    });
-
-    // PRE-POPULATE all flow steps with PENDING status for proper debug mode visualization
-    // This ensures all nodes show PENDING status initially instead of no execution status
-    if (data.totalSteps && data.totalSteps > 1) {
-      // We know the total steps but not the step IDs yet
-      // We'll add placeholder steps that will be updated when step.started events arrive
-      console.log(`📊 Pre-populating ${data.totalSteps - 1} steps with PENDING status`);
-      
-      // Note: We can't know the actual step IDs from execution.started event
-      // But we can prepare the trace structure for proper visualization
-      // The actual step IDs will be populated when step.started events arrive
+    // Initialize or update trace with execution started data
+    if (!execution.trace) {
+      execution.trace = {
+        traceId: execution.executionId,
+        flowFqn: execution.flowFqn,
+        status: 'RUNNING',
+        startTime: new Date().toISOString(),
+        steps: []
+      };
     }
 
-    console.log('📊 Initial execution trace created with trigger step');
-
-    // Update visualizer state
-    if (execution.options.updateExecutionState && execution.trace) {
-      console.log('🔄 Updating visualizer state with initial trace');
-      execution.options.updateExecutionState(execution.flowFqn, execution.trace);
+    // Handle both new triggerContext and legacy triggerInput
+    if (data.triggerContext) {
+      (execution.trace as any).triggerContext = data.triggerContext;
+      execution.trace.triggerData = data.triggerContext.runtimeData; // For backward compatibility
+    } else if (data.triggerInput) {
+      execution.trace.triggerData = data.triggerInput;
     }
 
+    // Store flow definition if provided
+    if (data.flowDefinition) {
+      (execution.trace as any).flowDefinition = data.flowDefinition;
+    }
+
+    // Call user callback
     if (execution.options.onExecutionStarted) {
       execution.options.onExecutionStarted(data);
+    }
+
+    // Update execution state if callback provided
+    if (execution.options.updateExecutionState && execution.trace) {
+      execution.options.updateExecutionState(execution.flowFqn, execution.trace);
     }
   }
 

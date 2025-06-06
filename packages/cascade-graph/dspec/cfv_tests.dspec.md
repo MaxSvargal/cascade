@@ -180,7 +180,7 @@ test cfv_tests.DebugTestTab_InputDataResolutionForForm {
     data_inputs: {
         flowFqn: "com.example.myFlow",
         stepIdToSelect: "s2",
-        triggerInputForSim: "{ initVal: 'testTrigger' }" // This is the data the trigger *provides to the flow*.
+        triggerInputForSim: "{ initVal: 'testTrigger' }" // REFINED: This represents the STANDARDIZED OUTPUT that the trigger provides to the flow (conforming to triggerOutputSchema), not the external event data that the trigger receives.
     }
     steps: [
         "Given the flow definition is available via a mock IModuleRegistry",

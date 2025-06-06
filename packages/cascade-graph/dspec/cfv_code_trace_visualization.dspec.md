@@ -39,8 +39,16 @@ code cfv_code.TraceVisualizationService_EnhanceNodesWithTrace {
             IF node.id EQUALS 'trigger' THEN // Special handling for trigger node
                 ASSIGN newHombreData.executionStatus = traceData.status === 'COMPLETED' ? 'SUCCESS' : (traceData.status === 'FAILED' ? 'FAILURE' : traceData.status)
                 ASSIGN newHombreData.executionDurationMs = traceData.durationMs
-                ASSIGN newHombreData.executionInputData = null // Trigger input is flow-level
-                ASSIGN newHombreData.executionOutputData = traceData.triggerData
+                ASSIGN newHombreData.executionInputData = null // Triggers receive external events, not flow data
+                
+                // REFINED: Use new triggerContext if available, fallback to legacy triggerData
+                IF traceData.triggerContext IS_PRESENT THEN
+                    ASSIGN newHombreData.executionOutputData = traceData.triggerContext.runtimeData
+                    ASSIGN newHombreData.triggerConfig = traceData.triggerContext.triggerConfig
+                    ASSIGN newHombreData.triggerType = traceData.triggerContext.triggerType
+                ELSE_IF traceData.triggerData IS_PRESENT THEN
+                    ASSIGN newHombreData.executionOutputData = traceData.triggerData
+                END_IF
                 // IF options.highlightCriticalPath AND (CALL criticalPathStepIds.has WITH { value: node.id }) THEN ASSIGN newHombreData.isCriticalPath = true END_IF
             ELSE
                 DECLARE stepTrace = CALL stepTraceMap.get WITH { key: node.id } // Assuming node.id is stepId

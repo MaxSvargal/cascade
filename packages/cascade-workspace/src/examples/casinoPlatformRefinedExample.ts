@@ -2198,7 +2198,6 @@ export const casinoPlatformComponentSchemas = {
           },
           payload: {
             description: "The initialPayload configured for the trigger, if any."
-            // type: "any" is not valid JSON schema, typically represented by not specifying type or using oneOf with multiple types
           }
         },
         required: ["triggerTime", "scheduledTime"]
@@ -2249,6 +2248,16 @@ export const casinoPlatformComponentSchemas = {
           }
         },
         required: ["event"]
+      },
+      "ManualTriggerPayload": {
+        $id: "#/definitions/schemas/ManualTriggerPayload",
+        type: "object",
+        properties: {
+          initialData: {
+            description: "The data payload provided when the flow is manually triggered. Structure is defined by the invoker."
+          }
+        },
+        required: ["initialData"]
       }
     }
   },
@@ -2256,32 +2265,45 @@ export const casinoPlatformComponentSchemas = {
   // --- Trigger Schemas ---
   'StdLib.Trigger:Http': {
     fqn: 'StdLib.Trigger:Http',
-    configSchema: { // from stdlib.yml.md config_schema for StdLib.Trigger:Http
+    configSchema: {
       type: "object",
       properties: {
         path: {
           type: "string",
           description: "HTTP path prefix for this trigger (e.g., '/api/v1/orders'). Must be unique.",
-          pattern: "^/"
+          pattern: "^/",
+          default: "/api/trigger",
+          examples: ["/api/v1/orders", "/webhooks/payment", "/api/users"]
         },
         method: {
           type: "string",
           enum: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-          description: "HTTP method to listen for."
+          description: "HTTP method to listen for.",
+          default: "POST"
         },
         authentication: {
           type: "object",
           description: "Configuration for authentication middleware (e.g., API Key, JWT). Processed by Core before triggering.",
-          additionalProperties: true
+          additionalProperties: true,
+          default: {
+            type: "JwtValidator",
+            secretName: "jwt-secret"
+          }
         },
         requestSchema: {
-          type: "object", // JSON Schema
-          description: "Optional JSON Schema to validate the incoming request body (if applicable for method). Rejection occurs before flow trigger."
+          type: "object",
+          description: "Optional JSON Schema to validate the incoming request body (if applicable for method). Rejection occurs before flow trigger.",
+          default: {
+            type: "object",
+            properties: {
+              data: { type: "object" }
+            }
+          }
         },
         responseConfig: {
           type: "object",
           description: "Configuration for mapping flow completion/error to HTTP response. Handled by Core.",
-      properties: {
+          properties: {
             successStatusCode: {
               type: "integer",
               default: 200,
@@ -2295,31 +2317,123 @@ export const casinoPlatformComponentSchemas = {
             successBodyExpression: { type: "string", description: "JMESPath/JsonPointer expression evaluated against flow's final output data to form the success response body." },
             errorBodyExpression: { type: "string", description: "JMESPath/JsonPointer expression evaluated against flow's error object to form the error response body."}
           },
-          additionalProperties: true
+          additionalProperties: true,
+          default: {
+            successStatusCode: 200,
+            errorStatusCode: 500
+          }
         },
         timeoutMs: {
           type: "integer",
-          minimum: 1, // PositiveInteger
+          minimum: 1,
           default: 30000,
           description: "Maximum time Core will wait for the flow to complete for a synchronous HTTP response."
         }
       },
       required: ["path", "method"]
     },
-    outputSchema: { $ref: "#/definitions/schemas/HttpTriggerRequest" } // This is the output_to_flow_schema
+    inputSchema: {
+      type: "object",
+      description: "HTTP trigger input - the raw HTTP request data structure",
+      properties: {
+        path: { type: "string", description: "Request path from the HTTP request." },
+        method: { type: "string", description: "HTTP method from the request." },
+        headers: {
+          type: "object",
+          additionalProperties: { type: "string" },
+          description: "HTTP headers from the request."
+        },
+        queryParameters: {
+          type: "object",
+          additionalProperties: { 
+            oneOf: [
+              { type: "string" },
+              { type: "array", items: { type: "string" } }
+            ]
+          },
+          description: "Query parameters from the request URL."
+        },
+        body: {
+          description: "Request body. Object if JSON, string otherwise (Base64 for binary). Null if no body.",
+          oneOf: [
+            { type: "object", additionalProperties: true },
+            { type: "array" },
+            { type: "string" },
+            { type: "null" }
+          ]
+        },
+        principal: {
+          type: ["object", "null"],
+          description: "Authenticated principal details, if applicable.",
+          properties: {
+            id: { type: "string" },
+            type: { type: "string", description: "e.g., 'user', 'apiKey', 'service_account'" },
+            claims: { type: "object", additionalProperties: true, description: "Additional claims/attributes from token/auth provider." }
+          },
+          required: ["id", "type"]
+        }
+      },
+      required: ["path", "method", "headers"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Actual request path." },
+        method: { type: "string", description: "HTTP method used." },
+        headers: {
+          type: "object",
+          additionalProperties: { type: "string" },
+          description: "Request headers."
+        },
+        queryParameters: {
+          type: "object",
+          additionalProperties: { 
+            oneOf: [
+              { type: "string" },
+              { type: "array", items: { type: "string" } }
+            ]
+          },
+          description: "Parsed query parameters."
+        },
+        body: {
+          description: "Request body. Object if JSON, string otherwise (Base64 for binary). Null if no body.",
+          oneOf: [
+            { type: "object", additionalProperties: true },
+            { type: "array" },
+            { type: "string" },
+            { type: "null" }
+          ]
+        },
+        principal: {
+          type: ["object", "null"],
+          description: "Authenticated principal details, if applicable.",
+          properties: {
+            id: { type: "string" },
+            type: { type: "string", description: "e.g., 'user', 'apiKey', 'service_account'" },
+            claims: { type: "object", additionalProperties: true, description: "Additional claims/attributes from token/auth provider." }
+          },
+          required: ["id", "type"]
+        }
+      },
+      required: ["path", "method", "headers"]
+    }
   },
   'StdLib.Trigger:EventBus': {
     fqn: 'StdLib.Trigger:EventBus',
-    configSchema: { // from stdlib.yml.md config_schema for StdLib.Trigger:EventBus
+    configSchema: {
       type: "object",
       properties: {
         eventTypePattern: {
           type: "string",
-          description: "Pattern to match event types (e.g., 'user.created', 'order.*.processed'). Core defines pattern syntax."
+          description: "Pattern to match event types (e.g., 'user.created', 'order.*.processed'). Core defines pattern syntax.",
+          default: "user.*",
+          examples: ["user.created", "order.*.processed", "payment.completed"]
         },
         filterExpression: {
-          type: "string", // ExpressionString
-          description: "Optional expression (e.g., JMESPath) evaluated against the event's payload to further filter events."
+          type: "string",
+          description: "Optional expression (e.g., JMESPath) evaluated against the event's payload to further filter events.",
+          default: "payload.userId != null",
+          examples: ["payload.amount > 100", "payload.status == 'active'"]
         },
         filterLanguage: {
           type: "string",
@@ -2329,29 +2443,137 @@ export const casinoPlatformComponentSchemas = {
       },
       required: ["eventTypePattern"]
     },
-    outputSchema: { $ref: "#/definitions/schemas/EventBusTriggerPayload" } // This is the output_to_flow_schema
+    inputSchema: {
+      type: "object",
+      description: "EventBus trigger input configuration - the event pattern and filters",
+      properties: {
+        eventTypePattern: { type: "string", description: "Pattern to match event types" },
+        filterExpression: { type: "string", description: "Optional filter expression" },
+        filterLanguage: { type: "string", description: "Expression language for filtering" }
+      },
+      required: ["eventTypePattern"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        event: {
+          type: "object",
+          properties: {
+            id: { type: "string", description: "Unique ID of the event." },
+            type: { type: "string", description: "Type of the event (e.g., 'user.created')." },
+            source: { type: "string", description: "Originator of the event." },
+            timestamp: { type: "string", format: "date-time", description: "ISO 8601 timestamp of event creation." },
+            payload: { description: "The actual event data." }
+          },
+          required: ["id", "type", "source", "timestamp", "payload"]
+        }
+      },
+      required: ["event"]
+    }
   },
-  'StdLib.Trigger:Manual': { // Conceptual, from stdlib.yml.md
-    fqn: 'StdLib.Trigger:Manual',
+  'StdLib:Manual': {
+    fqn: 'StdLib:Manual',
     configSchema: {
       type: "object",
-      description: "Configuration is implicit: the 'initialData' provided at invocation time.",
+      description: "Configuration for manual trigger - defines the expected structure of initialData",
       properties: {
-        initialData: {
-          description: "The data payload provided when the flow is manually triggered."
+        initialDataSchema: {
+          type: "object",
+          description: "JSON Schema defining the structure of initialData that will be provided when manually triggering the flow",
+          default: {
+            type: "object",
+            properties: {
+              data: { type: "object" }
+            }
+          }
+        },
+        description: {
+          type: "string",
+          description: "Human-readable description of what this manual trigger expects",
+          default: "Manual trigger for flow execution"
         }
       }
     },
-    outputSchema: { // Represents trigger.initialData which can be 'any'
-      description: "The data payload provided when the flow is manually triggered. Structure is defined by the invoker."
+    inputSchema: {
+      type: "object",
+      description: "Manual trigger input configuration - defines what data structure is expected",
+      properties: {
+        initialDataSchema: { type: "object", description: "Schema for the initial data" },
+        description: { type: "string", description: "Description of the trigger" }
+      }
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        initialData: {
+          description: "The data payload provided when the flow is manually triggered. Structure is defined by the invoker."
+        }
+      },
+      required: ["initialData"]
     }
   },
-  // --- StdLib & Other Components ---
+  'StdLib.Trigger:Scheduled': {
+    fqn: 'StdLib.Trigger:Scheduled',
+    configSchema: {
+      type: "object",
+      properties: {
+        cronExpression: {
+          type: "string",
+          description: "Cron expression defining when the trigger should fire",
+          default: "0 0 * * *",
+          examples: ["0 0 * * *", "*/5 * * * *", "0 9 * * MON-FRI"]
+        },
+        timezone: {
+          type: "string",
+          description: "Timezone for the cron expression",
+          default: "UTC",
+          examples: ["UTC", "America/New_York", "Europe/London"]
+        },
+        initialPayload: {
+          type: "object",
+          description: "Optional payload to include with each scheduled trigger",
+          default: {}
+        }
+      },
+      required: ["cronExpression"]
+    },
+    inputSchema: {
+      type: "object",
+      description: "Scheduled trigger input configuration - cron schedule and payload",
+      properties: {
+        cronExpression: { type: "string", description: "Cron expression for scheduling" },
+        timezone: { type: "string", description: "Timezone for the schedule" },
+        initialPayload: { type: "object", description: "Payload to include with trigger" }
+      },
+      required: ["cronExpression"]
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        triggerTime: {
+          type: "string",
+          format: "date-time",
+          description: "Actual ISO 8601 timestamp when the trigger fired."
+        },
+        scheduledTime: {
+          type: "string",
+          format: "date-time",
+          description: "ISO 8601 timestamp for which the execution was scheduled."
+        },
+        payload: {
+          description: "The initialPayload configured for the trigger, if any."
+        }
+      },
+      required: ["triggerTime", "scheduledTime"]
+    }
+  },
+
+  // --- StdLib Core Components ---
   'StdLib:JsonSchemaValidator': {
     fqn: 'StdLib:JsonSchemaValidator',
     configSchema: {
       type: "object",
-        properties: {
+      properties: {
         schema: { type: "object", description: "JSON Schema object for validation (inline or $ref if Core supports)." }
       },
       required: ["schema"]
@@ -2363,8 +2585,42 @@ export const casinoPlatformComponentSchemas = {
       },
       required: ["data"]
     },
-    outputSchema: { // Represents the 'validData' output port
-      description: "Original input 'data' if conforms to schema."
+    outputSchema: {
+      type: "object",
+      properties: {
+        validData: {
+          description: "Original input 'data' if it conforms to schema."
+        },
+        error: {
+          type: "object",
+          description: "Validation error if data does not conform to schema.",
+          properties: {
+            type: {
+              type: "string",
+              description: "Category.ComponentName.SpecificErrorType (e.g., 'HttpCall.TimeoutError', 'AdapterError')"
+            },
+            message: {
+              type: "string",
+              description: "Human-readable error message."
+            },
+            code: {
+              type: "string",
+              description: "Optional internal/external code (e.g., HTTP status code)."
+            },
+            details: {
+              type: ["object", "null"],
+              description: "Optional, component-specific non-sensitive details.",
+              additionalProperties: true
+            },
+            timestamp: {
+              type: "string",
+              format: "date-time",
+              description: "ISO 8601 timestamp (added by Core)."
+            }
+          },
+          required: ["type", "message", "timestamp"]
+        }
+      }
     }
   },
   'StdLib:FailFlow': {
@@ -2382,7 +2638,6 @@ export const casinoPlatformComponentSchemas = {
       properties: {
         data: { description: "Context data for errorMessageExpression." }
       }
-      // 'data' is not strictly required by stdlib.yml.md for FailFlow input, but often used.
     },
     outputSchema: null // Terminates flow, no output ports
   },
@@ -2393,8 +2648,14 @@ export const casinoPlatformComponentSchemas = {
       properties: {
         outputNames: {
           type: "array",
-          items: { type: "string" }, // OutputPortNameString
-          description: "List of names for output ports."
+          items: { type: "string" },
+          description: "List of names for output ports.",
+          default: ["output1", "output2"],
+          examples: [
+            ["branch1", "branch2"],
+            ["for_processing", "for_audit"],
+            ["primary", "secondary", "backup"]
+          ]
         }
       },
       required: ["outputNames"]
@@ -2406,8 +2667,12 @@ export const casinoPlatformComponentSchemas = {
       },
       required: ["data"]
     },
-    outputSchema: { // Conceptual: Data on dynamic output ports is a copy of input 'data'
-      description: "Copy of input data, available on dynamically named output ports."
+    outputSchema: {
+      type: "object",
+      description: "Dynamic output ports matching outputNames config. Each port emits a copy of input data.",
+      additionalProperties: {
+        description: "Copy of input data, available on dynamically named output ports."
+      }
     }
   },
   'StdLib:HttpCall': {
@@ -2415,32 +2680,59 @@ export const casinoPlatformComponentSchemas = {
     configSchema: {
       type: "object",
       properties: {
-        url: { type: "string", description: "Target URL (sandboxed if expression)." }, // ["URLString", "ExpressionString"] -> string
+        url: { type: "string", description: "Target URL (sandboxed if expression)." },
         method: { type: "string", enum: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"], default: "GET" },
         headers: {
-          oneOf: [{type: "object"}, {type: "string"}], // ["object", "ExpressionString"]
+          oneOf: [{type: "object"}, {type: "string"}],
           description: "Request headers. Values support {{secrets.my_secret}}. Sandboxed if expression."
         },
         bodyExpression: { type: "string", description: "Expression for request body (sandboxed). If omitted, input 'data' used." },
         bodyLanguage: { type: "string", enum: ["JMESPath", "JsonPointer"], default: "JMESPath" },
-        contentType: { type: "string", default: "application/json", description: "Content-Type header for request body." }, // ContentTypeString
+        contentType: { type: "string", default: "application/json", description: "Content-Type header for request body." },
         queryParameters: {
-           oneOf: [{type: "object"}, {type: "string"}], // ["object", "ExpressionString"]
+           oneOf: [{type: "object"}, {type: "string"}],
            description: "URL query parameters. Sandboxed if expression."
         },
-        timeoutMs: { type: "integer", minimum: 1, default: 5000, description: "Request timeout in ms." }, // PositiveInteger
+        timeoutMs: { type: "integer", minimum: 1, default: 5000, description: "Request timeout in ms." },
         followRedirects: { type: "boolean", default: false, description: "Whether to follow HTTP 3xx redirects." }
       },
-      required: ["url"] // method has a default
+      required: ["url"]
     },
     inputSchema: {
       type: "object",
       properties: {
         data: { description: "Context for expressions and default request body." }
       }
-      // 'data' is not strictly required per stdlib.yml.md but often used.
     },
-    outputSchema: { $ref: "#/definitions/schemas/HttpResponse" } // Represents the 'response' output port
+    outputSchema: {
+      type: "object",
+      properties: {
+        response: {
+          type: "object",
+          properties: {
+            statusCode: { type: "integer" },
+            headers: {
+              type: "object",
+              additionalProperties: { type: "string" }
+            },
+            body: {
+              description: "Response body. Object if JSON, otherwise string (Base64 for binary).",
+              oneOf: [
+                { type: "object", additionalProperties: true },
+                { type: "array" },
+                { type: "string" },
+                { type: "null" }
+              ]
+            }
+          },
+          required: ["statusCode", "headers"]
+        },
+        error: {
+          description: "HTTP call error (timeout, network, etc.)",
+          schema: { $ref: "#/definitions/schemas/StandardErrorStructure" }
+        }
+      }
+    }
   },
   'StdLib:MapData': {
     fqn: 'StdLib:MapData',
@@ -2459,8 +2751,17 @@ export const casinoPlatformComponentSchemas = {
       },
       required: ["data"]
     },
-    outputSchema: { // Represents the 'result' output port
-        description: "Transformed data."
+    outputSchema: {
+      type: "object",
+      properties: {
+        result: {
+          description: "Transformed data."
+        },
+        error: {
+          description: "Error if expression is invalid or evaluation fails.",
+          schema: { $ref: "#/definitions/schemas/StandardErrorStructure" }
+        }
+      }
     }
   },
   'StdLib:SubFlowInvoker': {
@@ -2468,9 +2769,19 @@ export const casinoPlatformComponentSchemas = {
     configSchema: {
       type: "object",
       properties: {
-        flowName: { type: "string", description: "Target Flow definition name. Sandboxed if expression." }, // ["FlowNameString", "ExpressionString"] -> string
+        flowName: { 
+          type: "string", 
+          description: "Target Flow definition name. Sandboxed if expression.",
+          default: "ExampleSubFlow",
+          examples: ["ProcessPaymentFlow", "ValidateUserFlow", "SendNotificationFlow"]
+        },
         waitForCompletion: { type: "boolean", default: false, description: "Pause and wait for sub-flow completion?" },
-        timeoutMs: { type: "integer", minimum: 1, description: "Max wait time if waitForCompletion=true." }, // PositiveInteger
+        timeoutMs: { 
+          type: "integer", 
+          minimum: 1, 
+          description: "Max wait time if waitForCompletion=true.",
+          default: 30000
+        },
         parametersLanguage: { type: "string", enum: ["JMESPath", "JsonPointer"], default: "JMESPath" }
       },
       required: ["flowName"]
@@ -2483,11 +2794,17 @@ export const casinoPlatformComponentSchemas = {
       },
       required: ["initialData"]
     },
-    outputSchema: { // Represents 'subFlowInstanceId' or 'result' port
-      oneOf: [
-        { type: "string", description: "Unique instance ID of started sub-flow (if not waiting or immediate emission)." },
-        { description: "Final output from sub-flow's success (if waitForCompletion=true & success)." }
-      ]
+    outputSchema: {
+      type: "object",
+      properties: {
+        result: {
+          description: "Final output from sub-flow's success (if waitForCompletion=true & success) or sub-flow instance ID."
+        },
+        error: {
+          description: "Error from sub-flow execution.",
+          schema: { $ref: "#/definitions/schemas/StandardErrorStructure" }
+        }
+      }
     }
   },
   'StdLib:Switch': {
@@ -2508,7 +2825,7 @@ export const casinoPlatformComponentSchemas = {
             required: ["conditionExpression", "outputName"]
           }
         },
-        defaultOutputName: { type: "string", default: "defaultOutput", description: "Output port if no cases match." } // OutputPortNameString
+        defaultOutputName: { type: "string", default: "defaultOutput", description: "Output port if no cases match." }
       },
       required: ["cases"]
     },
@@ -2519,8 +2836,18 @@ export const casinoPlatformComponentSchemas = {
       },
       required: ["data"]
     },
-    outputSchema: { // Conceptual: Data on dynamic output ports is the original input 'data'
-      description: "Input data, available on dynamically named output port that matched."
+    outputSchema: {
+      type: "object",
+      description: "Dynamic output ports matching outputName from cases and defaultOutputName. Each port emits input data if condition matched.",
+      additionalProperties: {
+        description: "Input data, available on dynamically named output port that matched."
+      },
+      properties: {
+        error: {
+          description: "Error if any conditionExpression is invalid or evaluation fails.",
+          schema: { $ref: "#/definitions/schemas/StandardErrorStructure" }
+        }
+      }
     }
   },
   'StdLib:FilterData': {
@@ -2528,10 +2855,10 @@ export const casinoPlatformComponentSchemas = {
     configSchema: {
       type: "object",
       properties: {
-        expression: { type: "string", description: "Boolean expression (sandboxed)." }, // BooleanExpressionString
+        expression: { type: "string", description: "Boolean expression (sandboxed)." },
         language: { type: "string", enum: ["JMESPath", "JsonPointer"], default: "JMESPath", description: "Expression language." },
-        matchOutput: { type: "string", default: "matchOutput", description: "Output port name for true evaluation." }, // OutputPortNameString
-        noMatchOutput: { type: "string", default: "noMatchOutput", description: "Output port name for false evaluation." } // OutputPortNameString
+        matchOutput: { type: "string", default: "matchOutput", description: "Output port name for true evaluation." },
+        noMatchOutput: { type: "string", default: "noMatchOutput", description: "Output port name for false evaluation." }
       },
       required: ["expression"]
     },
@@ -2542,33 +2869,47 @@ export const casinoPlatformComponentSchemas = {
       },
       required: ["data"]
     },
-    outputSchema: { // Conceptual: Data on 'matchOutput' or 'noMatchOutput' is the original input 'data'
-      description: "Input data, available on 'matchOutput' or 'noMatchOutput' port."
+    outputSchema: {
+      type: "object",
+      description: "Dynamic output ports matching matchOutput and noMatchOutput config. Emits input data on appropriate port.",
+      additionalProperties: {
+        description: "Input data, available on 'matchOutput' or 'noMatchOutput' port based on expression evaluation."
+      },
+      properties: {
+        error: {
+          description: "Error if expression is invalid or eval fails (non-boolean).",
+          schema: { $ref: "#/definitions/schemas/StandardErrorStructure" }
+        }
+      }
     }
   },
-  'StdLib:MergeStreams': { // Not in stdlib.yml.md, defined based on common usage
+  'StdLib:MergeStreams': {
     fqn: 'StdLib:MergeStreams',
     configSchema: {
       type: "object",
       properties: {
         inputNames: {
           type: "array",
-          items: { type: "string" }, // InputPortNameString
+          items: { type: "string" },
           description: "List of input port names to merge."
         },
-        mergedOutputName: { type: "string", default: "mergedOutput", description: "Single output port name." } // OutputPortNameString
+        mergedOutputName: { type: "string", default: "mergedOutput", description: "Single output port name." }
       },
       required: ["inputNames"]
     },
-    inputSchema: { // Conceptual: Dynamic input ports
+    inputSchema: {
       type: "object",
       description: "Dynamically defined input ports matching inputNames. Each port receives any data.",
       additionalProperties: {
         description: "Data from one of the input streams."
       }
     },
-    outputSchema: { // Conceptual: One dynamic output port
-      description: "Data packet from one of the inputs, available on the 'mergedOutputName' port."
+    outputSchema: {
+      type: "object",
+      description: "Single output port with name from mergedOutputName config.",
+      additionalProperties: {
+        description: "Data packet from one of the inputs, available on the 'mergedOutputName' port."
+      }
     }
   },
   'StdLib:NoOp': {
@@ -2581,8 +2922,13 @@ export const casinoPlatformComponentSchemas = {
       },
       required: ["data"]
     },
-    outputSchema: { // Represents the 'data' output port
-      description: "Input data, unchanged."
+    outputSchema: {
+      type: "object",
+      properties: {
+        data: {
+          description: "Input data, unchanged."
+        }
+      }
     }
   },
   'Integration.ExternalServiceAdapter': {
@@ -2590,9 +2936,36 @@ export const casinoPlatformComponentSchemas = {
     configSchema: {
       type: "object",
       properties: {
-        adapterType: { type: "string", description: "Adapter plugin identifier (e.g., KafkaAdapter, PostgresSqlAdapter)." }, // PluginIdentifierString
-        adapterConfig: { type: "object", description: "Plugin-specific config. Structure per plugin schema. Use Core Secrets." },
-        operation: { type: "string", description: "Logical action defined by plugin (e.g., GetUser, Publish, Query)." } // OperationNameString
+        adapterType: { 
+          type: "string", 
+          description: "Adapter plugin identifier (e.g., KafkaAdapter, PostgresSqlAdapter).",
+          default: "StdLibPlugin:PostgresAdapter",
+          examples: ["StdLibPlugin:PostgresAdapter", "StdLibPlugin:KafkaAdapter", "StdLibPlugin:RedisAdapter"]
+        },
+        adapterConfig: { 
+          type: "object", 
+          description: "Plugin-specific config. Structure per plugin schema. Use Core Secrets.",
+          default: {
+            connectionStringSecretName: "database-connection-string",
+            timeoutMs: 5000
+          },
+          examples: [
+            {
+              connectionStringSecretName: "database-connection-string",
+              timeoutMs: 5000
+            },
+            {
+              brokers: ["kafka1:9092", "kafka2:9092"],
+              clientId: "cascade-client"
+            }
+          ]
+        },
+        operation: { 
+          type: "string", 
+          description: "Logical action defined by plugin (e.g., GetUser, Publish, Query).",
+          default: "QuerySingleRow",
+          examples: ["QuerySingleRow", "ExecuteDML", "QueryMultipleRows", "Publish", "Subscribe"]
+        }
       },
       required: ["adapterType", "adapterConfig", "operation"]
     },
@@ -2603,8 +2976,17 @@ export const casinoPlatformComponentSchemas = {
       },
       required: ["requestData"]
     },
-    outputSchema: { // Represents the 'responseData' output port
-      description: "Parsed/structured data from external service via plugin, per operation."
+    outputSchema: {
+      type: "object",
+      properties: {
+        responseData: {
+          description: "Parsed/structured data from external service via plugin, per operation."
+        },
+        error: {
+          description: "Error from external service adapter.",
+          schema: { $ref: "#/definitions/schemas/StandardErrorStructure" }
+        }
+      }
     }
   },
   'Communication.SendEmail': {
@@ -2612,9 +2994,9 @@ export const casinoPlatformComponentSchemas = {
     configSchema: {
       type: "object",
       properties: {
-        serviceType: { type: "string", description: "Email service plugin ID (e.g., SendGridAdapter)." }, // PluginIdentifierString
+        serviceType: { type: "string", description: "Email service plugin ID (e.g., SendGridAdapter)." },
         serviceConfig: { type: "object", description: "Plugin-specific config. Structure per plugin schema. Use Core Secrets." },
-        fromAddress: { type: "string", description: "'From' email address (sandboxed if expression)." }, // ["EmailString", "ExpressionString"]
+        fromAddress: { type: "string", description: "'From' email address (sandboxed if expression)." },
         defaultFromName: { type: "string", description: "Default 'From' name." }
       },
       required: ["serviceType", "serviceConfig", "fromAddress"]
@@ -2622,14 +3004,14 @@ export const casinoPlatformComponentSchemas = {
     inputSchema: {
       type: "object",
       properties: {
-        toAddresses: { description: "Recipients (sandboxed if expression).", oneOf: [{type: "string"}, {type: "array", items: {type: "string"}}]}, // ["EmailString", "list<EmailString>", "ExpressionString"]
+        toAddresses: { description: "Recipients (sandboxed if expression).", oneOf: [{type: "string"}, {type: "array", items: {type: "string"}}]},
         ccAddresses: { description: "CC recipients (sandboxed if expression).", oneOf: [{type: "string"}, {type: "array", items: {type: "string"}}]},
         bccAddresses: { description: "BCC recipients (sandboxed if expression).", oneOf: [{type: "string"}, {type: "array", items: {type: "string"}}]},
-        subject: { type: "string", description: "Email subject (sandboxed if expression)." }, // ["string", "ExpressionString"]
-        bodyHtml: { type: "string", description: "HTML email body (sandboxed if expression)." }, // ["string", "ExpressionString"]
-        bodyText: { type: "string", description: "Plain text email body (sandboxed if expression)." }, // ["string", "ExpressionString"]
-        templateId: { type: "string", description: "Service template ID (sandboxed if expression)." }, // ["string", "ExpressionString"]
-        templateData: { oneOf: [{type: "object"}, {type: "string"}], description: "Key-value data for template merge (sandboxed if expression)." }, // ["object", "ExpressionString"]
+        subject: { type: "string", description: "Email subject (sandboxed if expression)." },
+        bodyHtml: { type: "string", description: "HTML email body (sandboxed if expression)." },
+        bodyText: { type: "string", description: "Plain text email body (sandboxed if expression)." },
+        templateId: { type: "string", description: "Service template ID (sandboxed if expression)." },
+        templateData: { oneOf: [{type: "object"}, {type: "string"}], description: "Key-value data for template merge (sandboxed if expression)." },
         attachments: {
           type: "array",
           description: "List of attachments.",
@@ -2638,22 +3020,31 @@ export const casinoPlatformComponentSchemas = {
             properties: {
               filename: { type: "string" },
               contentType: { type: "string" },
-              content: { type: "string", description: "Base64 encoded content or expression yielding it." } // ["bytes", "ExpressionString"] -> string
+              content: { type: "string", description: "Base64 encoded content or expression yielding it." }
             },
             required: ["filename", "contentType", "content"]
           }
         },
-        data: { type: "object", description: "Context for all expression inputs." } // Context for expressions
+        data: { type: "object", description: "Context for all expression inputs." }
       },
-      required: ["toAddresses", "subject"] // bodyHtml or bodyText or templateId also effectively required by logic
+      required: ["toAddresses", "subject"]
     },
-    outputSchema: { // Represents the 'result' output port
+    outputSchema: {
       type: "object",
       properties: {
-        messageId: { type: "string", description: "Optional: Provider's message ID." },
-        status: { type: "string", enum: ["queued", "sent"], description: "Status from service API." } // Example, actual values per plugin
-      },
-      required: ["status"]
+        result: {
+          type: "object",
+          properties: {
+            messageId: { type: "string", description: "Optional: Provider's message ID." },
+            status: { type: "string", enum: ["queued", "sent"], description: "Status from service API." }
+          },
+          required: ["status"]
+        },
+        error: {
+          description: "Email sending error.",
+          schema: { $ref: "#/definitions/schemas/StandardErrorStructure" }
+        }
+      }
     }
   },
   'Communication.SendNotification': {
@@ -2661,60 +3052,72 @@ export const casinoPlatformComponentSchemas = {
     configSchema: {
       type: "object",
       properties: {
-        channel: { type: "string", description: "Target channel (sandboxed if expression)." }, // ["enum('Email', 'SMS', 'Push', 'Slack')", "ExpressionString"]
-        serviceType: { type: "string", description: "Specific service plugin ID for channel. Sandboxed if expression." }, // ["PluginIdentifierString", "ExpressionString"]
-        serviceConfig: { oneOf: [{type: "object"}, {type: "string"}], description: "Plugin/channel-specific config. Use Core Secrets. Sandboxed if expression." }, // ["object", "ExpressionString"]
-        templateId: { type: "string", description: "Template ID for service/channel (sandboxed if expression)." } // ["string", "ExpressionString"]
+        channel: { type: "string", description: "Target channel (sandboxed if expression)." },
+        serviceType: { type: "string", description: "Specific service plugin ID for channel. Sandboxed if expression." },
+        serviceConfig: { oneOf: [{type: "object"}, {type: "string"}], description: "Plugin/channel-specific config. Use Core Secrets. Sandboxed if expression." },
+        templateId: { type: "string", description: "Template ID for service/channel (sandboxed if expression)." }
       },
       required: ["channel"]
     },
     inputSchema: {
       type: "object",
       properties: {
-        recipient: { description: "Recipient ID (email, phone, token, webhook). Structure per channel. Sandboxed if expression." }, // ["any", "ExpressionString"]
-        message: { description: "Message content payload. Structure per channel. Sandboxed if expression." }, // ["string", "object", "ExpressionString"]
-        data: { type: "object", description: "Context for all expression inputs." } // Context for expressions
+        recipient: { description: "Recipient ID (email, phone, token, webhook). Structure per channel. Sandboxed if expression." },
+        message: { description: "Message content payload. Structure per channel. Sandboxed if expression." },
+        data: { type: "object", description: "Context for all expression inputs." }
       },
       required: ["recipient", "message"]
     },
-    outputSchema: { // Represents the 'result' output port
+    outputSchema: {
       type: "object",
       properties: {
-        deliveryId: { type: "string", description: "Optional: Provider's delivery/message ID." },
-        status: { type: "string", description: "Status from service API (e.g., queued, sent)." } // enum per plugin
-      },
-      required: ["status"]
+        result: {
+          type: "object",
+          properties: {
+            deliveryId: { type: "string", description: "Optional: Provider's delivery/message ID." },
+            status: { type: "string", description: "Status from service API (e.g., queued, sent)." }
+          },
+          required: ["status"]
+        },
+        error: {
+          description: "Notification sending error.",
+          schema: { $ref: "#/definitions/schemas/StandardErrorStructure" }
+        }
+      }
     }
   },
   'Security.Authorize': {
     fqn: 'Security.Authorize',
     configSchema: {
-    type: "object",
-    properties: {
-        policySourceType: { type: "string", description: "How decisions are made (e.g., 'Static', 'Opa', or PluginIdentifierString)." }, // ["enum('Static', 'Opa', 'DatabaseLookup')", "PluginIdentifierString"]
+      type: "object",
+      properties: {
+        policySourceType: { type: "string", description: "How decisions are made (e.g., 'Static', 'Opa', or PluginIdentifierString)." },
         policySourceConfig: { type: "object", description: "Config for policySourceType. Structure per type/plugin schema. Use Core Secrets." },
-        inputDataExpression: { type: "string", description: "JMESPath to construct/transform input 'data' for policy eval (sandboxed)." } // ExpressionString
+        inputDataExpression: { type: "string", description: "JMESPath to construct/transform input 'data' for policy eval (sandboxed)." }
       },
       required: ["policySourceType", "policySourceConfig"]
     },
     inputSchema: {
-    type: "object",
-    properties: {
+      type: "object",
+      properties: {
         data: {
           type: "object",
           description: "Context for auth decision (principal, action, resource)."
-          // Expected structure based on stdlib.yml.md example:
-          // properties: {
-          //   principal: { type: "object", properties: { id: {type: "string"}, roles: {type: "array", items: {type: "string"}}, permissions: {type: "array", items: {type: "string"}} } },
-          //   action: { type: "string" },
-          //   resource: { type: "object", properties: { type: {type: "string"}, id: {type: "string"}, attributes: {type: "object"} } }
-          // }
         }
       },
       required: ["data"]
     },
-    outputSchema: { // Represents the 'authorized' output port
-      description: "Emits original input 'data' if granted."
+    outputSchema: {
+      type: "object",
+      properties: {
+        authorized: {
+          description: "Emits original input 'data' if granted."
+        },
+        error: {
+          description: "Authorization error (denied, policy error, etc.)",
+          schema: { $ref: "#/definitions/schemas/StandardErrorStructure" }
+        }
+      }
     }
   }
 };

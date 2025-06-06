@@ -139,11 +139,11 @@ code cfv_code.InternalFlowSimulation_ResolveStepInput {
         entry_point_name: "resolveStepInputClientSide",
         entry_point_type: "function"
     }
-    signature: `(params: {
+    signature: \`(params: {
         step: cfv_models.FlowStepDsl,
         executionContext: cfv_models.ExecutionContext,
         moduleRegistry: cfv_models.IModuleRegistry
-    }) => cfv_models.ResolvedStepInput`
+    }) => cfv_models.ResolvedStepInput\`
     detailed_behavior: \`
         // Based on original cfv_internal_services_code.FlowSimulationService.resolveStepInput
         // Simplified for client-side needs (e.g., populating Debug & Test tab forms).
@@ -162,9 +162,11 @@ code cfv_code.InternalFlowSimulation_ResolveStepInput {
                     IF sourceExpression.startsWith('trigger.') THEN
                         DECLARE triggerResult = CALL executionContext.stepResults.get WITH { key: 'trigger' }
                         DECLARE triggerPath = CALL sourceExpression.substring WITH { start: 8 } // "trigger.".length
+                        // REFINED: Trigger output data is the standardized format, not the original external event
                         ASSIGN resolvedValue = triggerResult ? (CALL GetNestedValueUtility.get WITH { obj: triggerResult.outputData, path: triggerPath }) : null
                         ASSIGN sourceInfo.type = 'triggerOutput'
                         ASSIGN sourceInfo.path = triggerPath
+                        ASSIGN sourceInfo.description = 'Data from trigger standardized output (trigger.' + triggerPath + ')'
                     ELSE_IF sourceExpression.startsWith('steps.') THEN
                         DECLARE stepsMatch = CALL RegExpAPI.match WITH { text: sourceExpression, pattern: /^steps\\.([^.]+)\\.(outputs\\.)?(.+)$/ }
                         IF stepsMatch IS_PRESENT THEN
@@ -245,48 +247,93 @@ code cfv_code.InternalComponentExecution_SimulateTrigger {
         entry_point_name: "simulateTriggerClientSide",
         entry_point_type: "function"
     }
-    signature: "(params: { triggerDef: cfv_models.Any, triggerInput: cfv_models.Any, context: cfv_models.ExecutionContext, moduleRegistry: cfv_models.IModuleRegistry }) => cfv_models.StepSimulationResult"
+    signature: "(params: { triggerDef: cfv_models.TriggerDefinitionDsl, triggerInput: cfv_models.Any, context: cfv_models.ExecutionContext, moduleRegistry: cfv_models.IModuleRegistry }) => cfv_models.StepSimulationResult"
     detailed_behavior: \`
-        // Simplified client-side simulation logic. Focus on producing a plausible outputData structure.
+        // REFINED: Triggers are entry points that convert external events into standardized flow contexts.
+        // The triggerInput represents the EXTERNAL EVENT data (e.g., HTTP request, scheduled time, event payload).
+        // The trigger's job is to convert this into a STANDARDIZED OUTPUT that the flow can reliably use.
+        
         DECLARE triggerDef = params.triggerDef
-        DECLARE triggerInput = params.triggerInput
-        DECLARE outputData = triggerInput // Base case: trigger output is its input to the flow
+        DECLARE externalEventData = params.triggerInput // This is the external event data
+        DECLARE standardizedOutput = {} // This will be the standardized output for the flow
 
-        // Attempt to get schema for more structured output if available
+        // Attempt to get schema for structured output generation
         DECLARE triggerSchema = CALL params.moduleRegistry.getComponentSchema WITH { componentTypeFqn: triggerDef.type }
+        
         IF triggerSchema.triggerOutputSchema IS_PRESENT THEN
-            // Generate sample data based on triggerOutputSchema
-            ASSIGN outputData = CALL cfv_code.InternalDataGeneration_GenerateDataFromSchema WITH { schema: triggerSchema.triggerOutputSchema, scenario: 'happyPath' }
-            // Merge/override with actual triggerInput if fields overlap and make sense
-            IF TYPE_OF outputData IS 'object' AND TYPE_OF triggerInput IS 'object' THEN
-                ASSIGN outputData = { ...outputData, ...triggerInput } // Simple merge
+            // Generate sample data based on triggerOutputSchema (the standardized output format)
+            ASSIGN standardizedOutput = CALL cfv_code.InternalDataGeneration_GenerateDataFromSchema WITH { schema: triggerSchema.triggerOutputSchema, scenario: 'happyPath' }
+            
+            // Merge/override with actual external event data where it makes sense
+            // This simulates how a real trigger would process the external event into the standard format
+            IF TYPE_OF standardizedOutput IS 'object' AND TYPE_OF externalEventData IS 'object' THEN
+                // For simulation, we can merge external data into the standard structure
+                // In reality, triggers would have specific logic to map external events to standard format
+                ASSIGN standardizedOutput = { ...standardizedOutput, ...externalEventData }
             END_IF
-        ELSE_IF triggerDef.type EQUALS 'StdLib.Trigger:Http' THEN // Example specific handling
-            CREATE_INSTANCE cfv_models.Any WITH {
-                body: triggerInput.body OR triggerInput, // If triggerInput is simple, assume it's the body
-                headers: triggerInput.headers OR {},
-                query: triggerInput.query OR {},
-                method: triggerDef.config?.method OR 'POST',
-                path: triggerDef.config?.path OR '/api/trigger'
-            } ASSIGN_TO outputData
+        ELSE
+            // Fallback: Use trigger-specific logic to create standardized output
+            SWITCH triggerDef.type
+                CASE 'StdLib.Trigger:Http'
+                    // HTTP triggers standardize HTTP requests into HttpTriggerRequest format
+                    CREATE_INSTANCE cfv_models.Any WITH {
+                        path: triggerDef.config?.path OR '/api/trigger',
+                        method: triggerDef.config?.method OR 'POST',
+                        headers: externalEventData.headers OR {},
+                        queryParameters: externalEventData.queryParameters OR {},
+                        body: externalEventData.body OR externalEventData, // If externalEventData is simple, assume it's the body
+                        principal: externalEventData.principal OR null // Authentication info if available
+                    } ASSIGN_TO standardizedOutput
+                    BREAK
+                CASE 'StdLib.Trigger:Scheduled'
+                    // Scheduled triggers provide timing info and configured payload
+                    CREATE_INSTANCE cfv_models.Any WITH {
+                        triggerTime: (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }),
+                        scheduledTime: externalEventData.scheduledTime OR (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }),
+                        payload: triggerDef.config?.initialPayload OR externalEventData
+                    } ASSIGN_TO standardizedOutput
+                    BREAK
+                CASE 'StdLib.Trigger:EventBus'
+                    // EventBus triggers standardize events into EventBusTriggerPayload format
+                    CREATE_INSTANCE cfv_models.Any WITH {
+                        event: {
+                            id: externalEventData.id OR "sim-event-" + (CALL Math.random).toString(),
+                            type: externalEventData.type OR "simulated.event",
+                            source: externalEventData.source OR "client-simulation",
+                            timestamp: (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }),
+                            payload: externalEventData.payload OR externalEventData
+                        }
+                    } ASSIGN_TO standardizedOutput
+                    BREAK
+                CASE 'StdLib.Trigger:Manual'
+                    // Manual triggers pass through the provided data as initialData
+                    CREATE_INSTANCE cfv_models.Any WITH {
+                        initialData: externalEventData
+                    } ASSIGN_TO standardizedOutput
+                    BREAK
+                DEFAULT
+                    // Generic fallback for unknown trigger types
+                    ASSIGN standardizedOutput = { triggerData: externalEventData, triggerType: triggerDef.type }
+                    BREAK
+            END_SWITCH
         END_IF
 
         DECLARE result AS cfv_models.StepSimulationResult
         CREATE_INSTANCE cfv_models.StepSimulationResult WITH {
             stepId: 'trigger',
             componentFqn: triggerDef.type,
-            inputData: triggerInput, // Original input to the trigger component itself
-            outputData: outputData,  // Data provided by the trigger *to the flow*
-            executionTime: 0,
+            inputData: externalEventData, // The external event data that came into the trigger
+            outputData: standardizedOutput,  // The standardized data provided by the trigger TO THE FLOW
+            executionTime: 0, // Triggers typically have minimal processing time
             timestamp: (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }),
             simulationSuccess: true
         } ASSIGN_TO result
         RETURN_VALUE result
     \`
     dependencies: [
-        "cfv_models.ExecutionContext", "cfv_models.StepSimulationResult", "cfv_models.IModuleRegistry",
+        "cfv_models.TriggerDefinitionDsl", "cfv_models.ExecutionContext", "cfv_models.StepSimulationResult", "cfv_models.IModuleRegistry",
         "cfv_code.InternalDataGeneration_GenerateDataFromSchema",
-        "SystemTime.now", "SystemTime.toISOString"
+        "SystemTime.now", "SystemTime.toISOString", "Math.random"
     ]
 }
 

@@ -66,26 +66,29 @@ export async function generateFlowDetailGraphData(params: GenerateFlowDetailPara
   if (flowDefinition.trigger) {
     const triggerTrace = traceData?.steps.find(t => t.stepId === 'trigger');
     
+    // Get trigger component schema for better type information
+    const triggerComponentSchema = componentSchemas[flowDefinition.trigger.type];
+    
     const triggerNodeData: TriggerEntryPointNodeData = {
-      label: flowFqn.split('.').pop() || 'Flow',
+      label: `${flowDefinition.trigger.type.split(':')[1] || 'Trigger'} Entry Point`,
       triggerType: flowDefinition.trigger.type,
       dslObject: flowDefinition.trigger,
       resolvedComponentFqn: flowDefinition.trigger.type,
-      componentSchema: componentSchemas[flowDefinition.trigger.type] || undefined,
+      componentSchema: triggerComponentSchema,
       isNamedComponent: false,
       contextVarUsages: parseContextVarsFn(JSON.stringify(flowDefinition.trigger)),
-      // CRITICAL: Handle debug mode initialization
+      // REFINED: Handle trigger execution data with new architecture
       ...(triggerTrace ? {
         // Trace data exists - use actual execution status
         executionStatus: triggerTrace.status,
         executionDurationMs: triggerTrace.durationMs,
-        executionInputData: triggerTrace.inputData,
-        executionOutputData: triggerTrace.outputData
+        executionInputData: null, // Triggers don't have input data - they receive external events
+        executionOutputData: triggerTrace.outputData // This is the standardized trigger output
       } : (mode === 'trace' || traceData) ? {
-        // Debug mode (trace mode OR trace data exists) but no trace data yet - initialize with PENDING
+        // Debug mode but no trace data yet - initialize with PENDING
         executionStatus: 'PENDING' as ExecutionStatusEnum,
         executionDurationMs: undefined,
-        executionInputData: undefined,
+        executionInputData: null, // Triggers don't have input data
         executionOutputData: undefined
       } : {}),
       // Force React Flow to detect changes by adding timestamp when execution data exists

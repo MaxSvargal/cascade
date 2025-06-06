@@ -30,7 +30,7 @@ policy cfv_policies.Arch_ComponentSchemasUpfront {
     title: "Component Schemas Provided Upfront"
     nfr PreloadedSchemas {
         id: "CFV_NFR_ARCH_003"
-        statement: "All known component JSON Schemas (cfv_models.ComponentSchema for `configSchema`, `inputSchema`, `outputSchema`, `triggerConfigSchema`, `triggerOutputSchema`) are provided initially via `props.componentSchemas`. The library will not fetch schemas on demand. Schema resolution by cfv_designs.ModuleRegistryService is synchronous and predictable based on component FQNs."
+        statement: "All known component JSON Schemas (cfv_models.ComponentSchema for `configSchema`, `inputSchema`, `outputSchema`) are provided initially via `props.componentSchemas`. The library will not fetch schemas on demand. Schema resolution by cfv_designs.ModuleRegistryService is synchronous and predictable based on component FQNs. For trigger components: `configSchema` defines the structure for configuring the trigger (e.g., HTTP path/method, CRON expression), `inputSchema` defines the structure of external event data the trigger receives, and `outputSchema` defines the standardized data structure the trigger provides to the flow at runtime. Legacy `triggerConfigSchema` and `triggerOutputSchema` fields are deprecated in favor of the standard schema fields."
         verification_method: "API contract review (cfv_models.CascadeFlowVisualizerProps); Test cases ensuring no on-demand schema fetching."
         source: "CascadeFlowVisualizer Library Specification, Section II"
         applies_to: [cfv_designs.ModuleRegistryService, cfv_models.CascadeFlowVisualizerProps]

@@ -203,44 +203,27 @@ export class SimulationService {
   }
 
   private executeTrigger(trigger: any, triggerInput: any, executionContext: ExecutionContext): StepExecutionResult {
-    // CRITICAL: Trigger must produce proper outputData that can be consumed by steps
-    let outputData = triggerInput;
-
-    // Enhance trigger output based on trigger type
-    if (trigger?.type === 'StdLib.Trigger:Http') {
-      // HTTP triggers provide body, headers, query params
-      outputData = {
-        body: triggerInput.body || triggerInput,
-        headers: triggerInput.headers || {},
-        query: triggerInput.query || {},
-        method: triggerInput.method || 'POST',
-        url: triggerInput.url || '/webhook'
-      };
-    } else if (trigger?.type === 'StdLib.Trigger:Schedule') {
-      // Schedule triggers provide timestamp and config
-      outputData = {
-        timestamp: new Date().toISOString(),
-        scheduledTime: triggerInput.scheduledTime || new Date().toISOString(),
-        config: trigger.config || {}
-      };
-    } else {
-      // Generic trigger - ensure we have a proper structure
-      outputData = {
-        data: triggerInput,
-        timestamp: new Date().toISOString(),
-        source: 'trigger'
-      };
-    }
-
-    return {
-      stepId: 'trigger',
-      componentType: trigger?.type || 'trigger',
-      inputData: triggerInput,
-      outputData,
-      executionTime: 10,
-      timestamp: new Date().toISOString(),
-      success: true
+    const stepId = 'trigger';
+    const startTime = new Date().toISOString();
+    
+    // Create standardized trigger output based on trigger type
+    const triggerOutput = this.createTriggerOutputData(trigger, triggerInput);
+    
+    const result: StepExecutionResult = {
+      stepId,
+      componentType: trigger?.type || 'manual',
+      inputData: null, // Triggers don't have input data - they receive external events
+      outputData: triggerOutput,
+      executionTime: 50, // Minimal execution time for trigger processing
+      timestamp: startTime,
+      success: true,
+      inputSources: [] // Triggers don't have input sources
     };
+    
+    // Store trigger result for step dependency resolution
+    executionContext.stepResults.set(stepId, result);
+    
+    return result;
   }
 
   private getStepsUpToTarget(steps: any[], targetStepId: string): any[] {
@@ -713,47 +696,51 @@ export class SimulationService {
     }
   }
 
+  /**
+   * Create standardized trigger output data based on trigger type and configuration
+   */
   private createTriggerOutputData(trigger: any, triggerData: any): any {
-    // CRITICAL: Trigger must produce proper outputData that can be consumed by steps
-    // This should match what DataGenerationService.generateTriggerData produces
+    if (!trigger) {
+      return { initialData: triggerData };
+    }
+
+    const triggerType = trigger.type;
     
-    // For HTTP triggers, the triggerData from DataGenerationService already has the correct structure
-    // We just need to ensure it's properly formatted for step consumption
-    if (trigger?.type === 'StdLib.Trigger:Http') {
-      // triggerData from DataGenerationService already has body, headers, etc.
-      // Just ensure we return it in the correct format
-      return {
-        body: triggerData.body || triggerData,
-        headers: triggerData.headers || {},
-        query: triggerData.query || {},
-        method: triggerData.method || 'POST',
-        url: triggerData.url || triggerData.path || '/webhook'
-      };
-    } else if (trigger?.type === 'StdLib.Trigger:Schedule' || trigger?.type === 'StdLib.Trigger:Scheduled') {
-      // Schedule triggers provide timestamp and config
-      return {
-        timestamp: triggerData.scheduledTime || new Date().toISOString(),
-        scheduledTime: triggerData.scheduledTime || new Date().toISOString(),
-        data: triggerData.data || {},
-        config: trigger.config || {}
-      };
-    } else if (trigger?.type === 'StdLib.Trigger:EventBus') {
-      // Event triggers provide event data
-      return {
-        event: triggerData.eventData || triggerData.data || {},
-        eventType: triggerData.eventType || trigger.config?.eventType || 'generic-event',
-        metadata: {
-          timestamp: triggerData.receivedAt || new Date().toISOString(),
-          eventId: triggerData.eventData?.eventId || 'event-' + Math.random().toString(36).substr(2, 9)
-        }
-      };
-    } else {
-      // Generic trigger - ensure we have a proper structure
-      return {
-        data: triggerData.data || triggerData,
-        timestamp: new Date().toISOString(),
-        source: 'trigger'
-      };
+    switch (triggerType) {
+      case 'StdLib.Trigger:Http':
+        return {
+          path: triggerData.path || trigger.config?.path || '/api/endpoint',
+          method: triggerData.method || trigger.config?.method || 'POST',
+          headers: triggerData.headers || { 'Content-Type': 'application/json' },
+          queryParameters: triggerData.queryParameters || {},
+          body: triggerData.body || triggerData,
+          principal: triggerData.principal || null
+        };
+      
+      case 'StdLib.Trigger:Scheduled':
+        return {
+          triggerTime: triggerData.triggerTime || new Date().toISOString(),
+          scheduledTime: triggerData.scheduledTime || new Date().toISOString(),
+          cronExpression: trigger.config?.cronExpression,
+          payload: triggerData.payload || triggerData
+        };
+      
+      case 'StdLib.Trigger:EventBus':
+        return {
+          event: triggerData.event || {
+            id: triggerData.id || 'evt-' + Date.now(),
+            type: triggerData.type || trigger.config?.eventType || 'generic.event',
+            source: triggerData.source || trigger.config?.source || 'unknown',
+            timestamp: triggerData.timestamp || new Date().toISOString(),
+            payload: triggerData.payload || triggerData
+          }
+        };
+      
+      case 'StdLib.Trigger:Manual':
+      default:
+        return {
+          initialData: triggerData.initialData || triggerData
+        };
     }
   }
 } 

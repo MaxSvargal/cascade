@@ -156,8 +156,20 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
     triggerSchema?: ComponentSchema, 
     dataType: 'happy_path' | 'fork_paths' | 'error_cases' = 'happy_path'
   ) {
-    console.log('Resolving trigger input data:', triggerConfig, triggerSchema, dataType);
-    return this.dataGenerationService.generateTriggerData(triggerConfig);
+    // Generate data that conforms to the trigger's OUTPUT schema (triggerOutputSchema)
+    // This is what the trigger provides to the flow, not what it receives from external events
+    if (triggerSchema?.triggerOutputSchema) {
+      return this.dataGenerationService.generateDataFromSchema(
+        triggerSchema.triggerOutputSchema, 
+        dataType
+      );
+    }
+    
+    // Fallback to trigger data generation based on trigger type
+    return this.dataGenerationService.generateTriggerData({ 
+      type: triggerConfig?.type || 'manual',
+      config: triggerConfig 
+    });
   }
 
   async propagateDataFlow(flowFqn: string, triggerData: any): Promise<Record<string, any>> {
@@ -731,49 +743,58 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
     }
   }
 
+  /**
+   * Create standardized trigger output data for flow execution
+   * This converts trigger input data into the standardized format that flows expect
+   */
   private createTriggerOutputData(trigger: any, triggerData: any): any {
-    // CRITICAL: Trigger must produce proper outputData that can be consumed by steps
-    // This matches the logic in FlowSimulationService.executeTrigger()
-    let outputData = triggerData;
-
-    // Enhance trigger output based on trigger type
-    if (trigger?.type === 'StdLib.Trigger:Http') {
-      // HTTP triggers provide body, headers, query params
-      outputData = {
-        body: triggerData.body || triggerData,
-        headers: triggerData.headers || {},
-        query: triggerData.query || {},
-        method: triggerData.method || 'POST',
-        url: triggerData.url || triggerData.path || '/webhook'
-      };
-    } else if (trigger?.type === 'StdLib.Trigger:Schedule' || trigger?.type === 'StdLib.Trigger:Scheduled') {
-      // Schedule triggers provide timestamp and config
-      outputData = {
-        timestamp: new Date().toISOString(),
-        scheduledTime: triggerData.scheduledTime || new Date().toISOString(),
-        config: trigger.config || {}
-      };
-    } else if (trigger?.type === 'StdLib.Trigger:EventBus') {
-      // Event triggers provide event data
-      outputData = {
-        event: triggerData.eventData || triggerData,
-        metadata: {
-          messageId: triggerData.messageId || 'msg-' + Math.random().toString(36).substr(2, 9),
-          timestamp: new Date().toISOString(),
-          source: triggerData.source || 'system'
-        }
-      };
-    } else {
-      // Generic trigger - ensure we have a proper structure
-      outputData = {
-        data: triggerData,
-        timestamp: new Date().toISOString(),
-        source: 'trigger'
-      };
+    if (!trigger) {
+      return triggerData;
     }
 
-    console.log(`🎯 Created trigger output data for ${trigger?.type}:`, outputData);
-    return outputData;
+    const triggerType = trigger.type;
+    
+    // For different trigger types, ensure the output follows the expected schema
+    switch (triggerType) {
+      case 'StdLib.Trigger:Http':
+        // HTTP triggers provide request data in a standardized format
+        return {
+          path: triggerData.path || trigger.config?.path || '/api/endpoint',
+          method: triggerData.method || trigger.config?.method || 'POST',
+          headers: triggerData.headers || {},
+          queryParameters: triggerData.queryParameters || {},
+          body: triggerData.body || triggerData,
+          principal: triggerData.principal || null
+        };
+      
+      case 'StdLib.Trigger:Scheduled':
+        // Scheduled triggers provide timing and payload data
+        return {
+          triggerTime: triggerData.triggerTime || new Date().toISOString(),
+          scheduledTime: triggerData.scheduledTime || new Date().toISOString(),
+          cronExpression: trigger.config?.cronExpression,
+          payload: triggerData.payload || triggerData
+        };
+      
+      case 'StdLib.Trigger:EventBus':
+        // Event bus triggers provide event data in a standardized format
+        return {
+          event: triggerData.event || {
+            id: triggerData.id || 'evt-' + Date.now(),
+            type: triggerData.type || trigger.config?.eventType || 'generic.event',
+            source: triggerData.source || trigger.config?.source || 'unknown',
+            timestamp: triggerData.timestamp || new Date().toISOString(),
+            payload: triggerData.payload || triggerData
+          }
+        };
+      
+      case 'StdLib.Trigger:Manual':
+      default:
+        // Manual triggers provide initial data
+        return {
+          initialData: triggerData.initialData || triggerData
+        };
+    }
   }
 
   updateExecutionState(flowFqn: string, executionResults: FlowSimulationResult | FlowExecutionTrace) {

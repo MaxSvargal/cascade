@@ -16,7 +16,8 @@ import {
   ExecutionOptions,
   FlowExecutionStatusEnum,
   ExecutionError,
-  ComponentSchema
+  ComponentSchema,
+  TriggerRuntimeContext
 } from '../models/cfv_models_generated';
 
 export interface ExecutionContext {
@@ -24,6 +25,8 @@ export interface ExecutionContext {
   flowFqn: string;
   flowDefinition: any;
   triggerInput: any;
+  /** Complete trigger runtime context including type, config, and standardized output data. */
+  triggerContext?: TriggerRuntimeContext;
   stepResults: Map<string, any>;
   contextVariables: Map<string, any>;
   startTime: string;
@@ -80,75 +83,72 @@ export class ServerExecutionEngine {
     streamCallback: StreamingCallback
   ): Promise<ExecutionContext> {
     const executionId = request.executionId || this.generateExecutionId();
-    const flowFqn = (request as any).flowFqn || request.flowDefinition.name || 'unknown-flow';
+    const flowDefinition = request.flowDefinition;
+    const triggerInput = request.triggerInput;
     
-    // Initialize execution context
+    // Create trigger runtime context
+    const triggerContext: TriggerRuntimeContext = {
+      triggerType: flowDefinition.trigger?.type || 'manual',
+      triggerConfig: flowDefinition.trigger?.config || {},
+      runtimeData: triggerInput,
+      activationTimestamp: new Date().toISOString(),
+      metadata: {
+        originalEvent: triggerInput,
+        processingInfo: {
+          executionId,
+          flowFqn: request.flowDefinition.name || 'unknown'
+        }
+      }
+    };
+
     const context: ExecutionContext = {
       executionId,
-      flowFqn,
-      flowDefinition: request.flowDefinition,
-      triggerInput: request.triggerInput,
+      flowFqn: flowDefinition.name || 'unknown',
+      flowDefinition,
+      triggerInput,
+      triggerContext,
       stepResults: new Map(),
       contextVariables: new Map(),
       startTime: new Date().toISOString(),
-      totalSteps: (request.flowDefinition.steps || []).length + 1, // +1 for trigger
+      totalSteps: (flowDefinition.steps?.length || 0) + 1, // +1 for trigger
       completedSteps: 0,
       failedSteps: 0,
       status: 'running',
       eventSequence: 0,
-      estimatedDuration: this.estimateFlowDuration(request.flowDefinition)
+      estimatedDuration: this.estimateFlowDuration(flowDefinition)
     };
 
     this.activeExecutions.set(executionId, context);
 
     try {
-      console.log(`🚀 Starting flow execution: ${flowFqn} (${executionId})`);
-      
-      // Send execution started event
+      // Send execution started event with enhanced trigger context
       this.sendEvent(streamCallback, context, 'execution.started', {
-        executionId,
-        flowFqn,
-        triggerInput: request.triggerInput,
-        totalSteps: context.totalSteps,
-        estimatedDuration: context.estimatedDuration
-      } as ExecutionStartedEvent);
-
-      // Execute trigger
-      await this.executeTrigger(context, streamCallback);
-
-      // Analyze dependencies and create execution plan
-      const steps = request.flowDefinition.steps || [];
-      const targetStepIndex = request.targetStepId ? 
-        steps.findIndex((s: any) => s.step_id === request.targetStepId) : 
-        steps.length - 1;
-
-      if (request.targetStepId && targetStepIndex === -1) {
-        throw new Error(`Target step not found: ${request.targetStepId}`);
-      }
-
-      const stepsToExecute = steps.slice(0, targetStepIndex + 1);
-      const dependencyAnalysis = this.analyzeDependencies(stepsToExecute);
-      
-      console.log(`📊 Dependency Analysis Complete:`, {
-        totalSteps: stepsToExecute.length,
-        independentSteps: dependencyAnalysis.independentSteps.length,
-        executionLayers: dependencyAnalysis.executionOrder.length,
-        detectedCycles: dependencyAnalysis.cycles.length
+        flowFqn: context.flowFqn,
+        triggerInput: triggerInput, // For backward compatibility
+        triggerContext: triggerContext,
+        flowDefinition: flowDefinition
       });
 
-      // Execute steps using enhanced dependency-aware execution
+      // Execute trigger step
+      await this.executeTrigger(context, streamCallback);
+
+      // Analyze dependencies
+      const dependencyAnalysis = this.analyzeDependencies(flowDefinition.steps || []);
+      
+      // Execute steps with enhanced dependency resolution
       await this.executeStepsWithEnhancedDependencyResolution(
-        stepsToExecute,
+        flowDefinition.steps || [],
         context,
         streamCallback,
         dependencyAnalysis
       );
 
-      // Mark execution as completed
       context.status = 'completed';
+      
+      // Send execution completed event
       this.sendEvent(streamCallback, context, 'execution.completed', {
-        executionId,
-        flowFqn,
+        executionId: context.executionId,
+        flowFqn: context.flowFqn,
         status: 'COMPLETED' as FlowExecutionStatusEnum,
         totalDuration: Date.now() - new Date(context.startTime).getTime(),
         stepCount: context.totalSteps,
@@ -156,31 +156,26 @@ export class ServerExecutionEngine {
         failedSteps: context.failedSteps,
         finalOutput: this.getFinalOutput(context),
         finalContext: Object.fromEntries(context.contextVariables)
-      } as ExecutionCompletedEvent);
+      });
 
     } catch (error: any) {
       context.status = 'failed';
-      console.error(`❌ Flow execution failed: ${error.message}`);
       
+      // Send execution failed event
       this.sendEvent(streamCallback, context, 'execution.failed', {
-        executionId,
-        flowFqn,
+        executionId: context.executionId,
+        flowFqn: context.flowFqn,
         error: {
-          errorType: 'ExecutionError',
+          errorType: 'FlowExecutionError',
           message: error.message,
           timestamp: new Date().toISOString()
         } as ExecutionError,
         totalDuration: Date.now() - new Date(context.startTime).getTime(),
         completedSteps: context.completedSteps,
         failedStep: context.currentStep
-      } as ExecutionFailedEvent);
+      });
       
       throw error;
-    } finally {
-      // Keep execution context for status queries
-      setTimeout(() => {
-        this.activeExecutions.delete(executionId);
-      }, 300000); // 5 minutes
     }
 
     return context;
@@ -531,29 +526,22 @@ export class ServerExecutionEngine {
     // Send step started event
     this.sendEvent(streamCallback, context, 'step.started', {
       stepId,
-      componentFqn: 'trigger',
-      inputData: context.triggerInput,
+      componentFqn: context.triggerContext?.triggerType || 'trigger',
+      inputData: null, // Triggers don't have input data - they receive external events
       estimatedDuration: 100,
       executionOrder: 0
     } as StepStartedEvent);
 
-    // Simulate trigger execution time
+    // Simulate trigger processing time
     await this.delay(50 + Math.random() * 100);
 
-    // Create trigger output - provide both nested and direct access
-    const triggerOutput = {
-      // Direct access to trigger input fields
-      ...context.triggerInput,
-      // Nested structure for compatibility
-      data: context.triggerInput,
-      timestamp: new Date().toISOString(),
-      source: 'trigger'
-    };
+    // Create standardized trigger output based on trigger context
+    const triggerOutput = context.triggerContext?.runtimeData || context.triggerInput;
 
     context.stepResults.set(stepId, {
       stepId,
-      componentFqn: 'trigger',
-      inputData: context.triggerInput,
+      componentFqn: context.triggerContext?.triggerType || 'trigger',
+      inputData: null, // Triggers don't have input data
       outputData: triggerOutput,
       executionOrder: 0
     });
@@ -563,8 +551,8 @@ export class ServerExecutionEngine {
     // Send step completed event
     this.sendEvent(streamCallback, context, 'step.completed', {
       stepId,
-      componentFqn: 'trigger',
-      inputData: context.triggerInput,
+      componentFqn: context.triggerContext?.triggerType || 'trigger',
+      inputData: null,
       outputData: triggerOutput,
       actualDuration: 100,
       executionOrder: 0

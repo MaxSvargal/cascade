@@ -113,6 +113,9 @@ export class TraceVisualizationServiceImpl implements TraceVisualizationService 
       // Calculate execution order from trace
       const executionOrder = traceData.steps.findIndex(step => step.stepId === stepTrace.stepId) + 1;
 
+      // Handle trigger nodes specially - they don't have input data
+      const isTriggerNode = node.id === 'trigger';
+      
       // Enhanced node data
       const enhancedData = {
         ...node.data,
@@ -121,13 +124,17 @@ export class TraceVisualizationServiceImpl implements TraceVisualizationService 
         executionTimestamp: stepTrace.startTime,
         executionError: stepTrace.errorData,
         executionOutput: stepTrace.outputData,
-        executionInput: stepTrace.inputData,
+        executionInput: isTriggerNode ? null : stepTrace.inputData, // Triggers don't have input data
         traceId: traceData.traceId,
         executionOrder,
         performanceClass,
         isCritical,
         isBottleneck,
-        traceEnhanced: true
+        traceEnhanced: true,
+        // Add trigger context information if available
+        ...(isTriggerNode && (traceData as any).triggerContext && {
+          triggerContext: (traceData as any).triggerContext
+        })
       };
 
       // Enhanced styling based on execution status and performance
