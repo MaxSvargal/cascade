@@ -198,7 +198,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
     colorTheme: {
       primaryColor: '#3B82F6',
       secondaryColor: '#10B981',
-      backgroundColor: 'oklch(0.96 0.005 220)', // Darker, more subtle background to complement pastel palette
+      backgroundColor: 'oklch(0.94 0.008 220)', // Darker canvas background for better contrast with pastel nodes
       sidebarBackgroundColor: '#ffffff',
       nodeColors: {
         successColor: '#10B981',
@@ -212,12 +212,12 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
         ...props.uiOptions?.colorTheme?.nodeColors
       },
       edgeColors: {
-        dataFlowColor: '#81C784',
-        controlFlowColor: '#9CA3AF',
-        invocationEdgeColor: '#F59E0B',
-        triggerLinkEdgeColor: '#10B981',
-        executedPathColor: '#10B981',
-        notExecutedPathColor: '#D1D5DB',
+        dataFlowColor: 'oklch(0.7 0.08 135)', // Soft green for data flow, harmonizes with communication category
+        controlFlowColor: 'oklch(0.65 0.05 280)', // Soft purple for control flow, matches control flow category
+        invocationEdgeColor: 'oklch(0.7 0.08 45)', // Soft orange for invocation, matches integration category
+        triggerLinkEdgeColor: 'oklch(0.7 0.08 135)', // Soft green for trigger links
+        executedPathColor: 'oklch(0.65 0.1 135)', // Slightly darker green for executed paths
+        notExecutedPathColor: 'oklch(0.8 0.02 220)', // Very subtle blue-gray for not executed
         ...props.uiOptions?.colorTheme?.edgeColors
       },
       ...props.uiOptions?.colorTheme
@@ -638,7 +638,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
               style={{
                 width: '100%',
                 padding: '8px 12px',
-                backgroundColor: systemViewActive ? '#3B82F6' : 'oklch(0.96 0.005 220)',
+                backgroundColor: systemViewActive ? '#3B82F6' : 'oklch(0.94 0.008 220)',
                 color: systemViewActive ? 'white' : '#374151',
                 border: `1px solid ${systemViewActive ? '#3B82F6' : '#E5E7EB'}`,
                 borderRadius: '6px',
@@ -831,7 +831,7 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
             >
               <Controls />
               <Background 
-                color="oklch(0.92 0.008 220)" 
+                color="oklch(0.88 0.012 220)" 
                 gap={20} 
                 size={1}
               />
