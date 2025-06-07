@@ -252,78 +252,154 @@ code cfv_code.InternalComponentExecution_SimulateTrigger {
         // REFINED: Triggers are entry points that convert external events into standardized flow contexts.
         // The triggerInput represents the EXTERNAL EVENT data (e.g., HTTP request, scheduled time, event payload).
         // The trigger's job is to convert this into a STANDARDIZED OUTPUT that the flow can reliably use.
+        // OUTPUT IS DERIVED FROM INPUT - avoid hardcoded data, use schema structure but populate from actual input.
         
         DECLARE triggerDef = params.triggerDef
         DECLARE externalEventData = params.triggerInput // This is the external event data
         DECLARE standardizedOutput = {} // This will be the standardized output for the flow
 
-        // Attempt to get schema for structured output generation
+        // Get schema for structured output generation
         DECLARE triggerSchema = CALL params.moduleRegistry.getComponentSchema WITH { componentTypeFqn: triggerDef.type }
         
-        IF triggerSchema.triggerOutputSchema IS_PRESENT THEN
-            // Generate sample data based on triggerOutputSchema (the standardized output format)
-            ASSIGN standardizedOutput = CALL cfv_code.InternalDataGeneration_GenerateDataFromSchema WITH { schema: triggerSchema.triggerOutputSchema, scenario: 'happyPath' }
-            
-            // Merge/override with actual external event data where it makes sense
-            // This simulates how a real trigger would process the external event into the standard format
-            IF TYPE_OF standardizedOutput IS 'object' AND TYPE_OF externalEventData IS 'object' THEN
-                // For simulation, we can merge external data into the standard structure
-                // In reality, triggers would have specific logic to map external events to standard format
-                ASSIGN standardizedOutput = { ...standardizedOutput, ...externalEventData }
-            END_IF
-        ELSE
-            // Fallback: Use trigger-specific logic to create standardized output
-            SWITCH triggerDef.type
-                CASE 'StdLib.Trigger:Http'
-                    // HTTP triggers standardize HTTP requests into HttpTriggerRequest format
-                    CREATE_INSTANCE cfv_models.Any WITH {
-                        path: triggerDef.config?.path OR '/api/trigger',
-                        method: triggerDef.config?.method OR 'POST',
-                        headers: externalEventData.headers OR {},
-                        queryParameters: externalEventData.queryParameters OR {},
-                        body: externalEventData.body OR externalEventData, // If externalEventData is simple, assume it's the body
-                        principal: externalEventData.principal OR null // Authentication info if available
-                    } ASSIGN_TO standardizedOutput
-                    BREAK
-                CASE 'StdLib.Trigger:Scheduled'
-                    // Scheduled triggers provide timing info and configured payload
-                    CREATE_INSTANCE cfv_models.Any WITH {
-                        triggerTime: (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }),
-                        scheduledTime: externalEventData.scheduledTime OR (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }),
-                        payload: triggerDef.config?.initialPayload OR externalEventData
-                    } ASSIGN_TO standardizedOutput
-                    BREAK
-                CASE 'StdLib.Trigger:EventBus'
-                    // EventBus triggers standardize events into EventBusTriggerPayload format
-                    CREATE_INSTANCE cfv_models.Any WITH {
-                        event: {
-                            id: externalEventData.id OR "sim-event-" + (CALL Math.random).toString(),
-                            type: externalEventData.type OR "simulated.event",
-                            source: externalEventData.source OR "client-simulation",
-                            timestamp: (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }),
-                            payload: externalEventData.payload OR externalEventData
-                        }
-                    } ASSIGN_TO standardizedOutput
-                    BREAK
-                CASE 'StdLib.Trigger:Manual'
-                    // Manual triggers pass through the provided data as initialData
-                    CREATE_INSTANCE cfv_models.Any WITH {
-                        initialData: externalEventData
-                    } ASSIGN_TO standardizedOutput
-                    BREAK
-                DEFAULT
-                    // Generic fallback for unknown trigger types
-                    ASSIGN standardizedOutput = { triggerData: externalEventData, triggerType: triggerDef.type }
-                    BREAK
-            END_SWITCH
-        END_IF
+        // Use trigger-specific logic to create standardized output DERIVED FROM INPUT
+        SWITCH triggerDef.type
+            CASE 'StdLib.Trigger:Http'
+                // HTTP triggers process standard HTTP request data into standardized HttpTriggerRequest format
+                // Input: Standard HTTP request with url, method, headers, body
+                // Configuration: DSL trigger config with path patterns, method constraints, parsing rules
+                // Output: Standardized format with parsed path, queryParameters, processed headers, body
+                
+                DECLARE inputUrl = externalEventData.url OR "http://localhost/api/trigger"
+                DECLARE inputMethod = externalEventData.method OR triggerDef.config?.method OR 'POST'
+                DECLARE inputHeaders = externalEventData.headers OR {}
+                DECLARE inputBody = externalEventData.body
+                
+                // Parse URL to extract path and query parameters
+                DECLARE parsedUrl = CALL URL.parse WITH { url: inputUrl }
+                DECLARE extractedPath = parsedUrl.pathname OR triggerDef.config?.path OR '/api/trigger'
+                
+                // Extract query parameters from URL
+                DECLARE queryParams = {}
+                IF parsedUrl.searchParams IS_PRESENT THEN
+                    // Convert URLSearchParams to plain object
+                    FOR_EACH param IN parsedUrl.searchParams
+                        ASSIGN queryParams[param.key] = param.value
+                    END_FOR
+                ELSE_IF inputUrl.includes('?') THEN
+                    // Fallback: manual parsing if URL.parse doesn't work
+                    DECLARE queryString = inputUrl.split('?')[1]
+                    IF queryString IS_PRESENT THEN
+                        DECLARE paramPairs = queryString.split('&')
+                        FOR_EACH pair IN paramPairs
+                            DECLARE [key, value] = pair.split('=')
+                            IF key IS_PRESENT THEN
+                                ASSIGN queryParams[decodeURIComponent(key)] = value ? decodeURIComponent(value) : ''
+                            END_IF
+                        END_FOR
+                    END_IF
+                END_IF
+                
+                // Process headers - normalize keys to lowercase for consistency
+                DECLARE processedHeaders = {}
+                FOR_EACH headerKey, headerValue IN inputHeaders
+                    ASSIGN processedHeaders[CALL String.toLowerCase WITH { str: headerKey }] = headerValue
+                END_FOR
+                
+                // Parse body based on content-type and configuration
+                DECLARE processedBody = inputBody
+                IF processedHeaders["content-type"] AND processedHeaders["content-type"].includes("application/json") THEN
+                    IF TYPE_OF inputBody IS 'string' THEN
+                        TRY
+                            ASSIGN processedBody = JSON.parse(inputBody)
+                        CATCH_ERROR parseError
+                            // Keep as string if JSON parsing fails
+                            ASSIGN processedBody = inputBody
+                        END_TRY
+                    END_IF
+                END_IF
+                
+                // Apply configuration-based processing
+                DECLARE finalPath = extractedPath
+                IF triggerDef.config?.pathPattern IS_PRESENT THEN
+                    // Apply path pattern matching/validation if configured
+                    // For now, use extracted path as-is
+                    ASSIGN finalPath = extractedPath
+                END_IF
+                
+                CREATE_INSTANCE cfv_models.Any WITH {
+                    path: finalPath,
+                    method: CALL String.toUpperCase WITH { str: inputMethod },
+                    headers: processedHeaders,
+                    queryParameters: queryParams,
+                    body: processedBody,
+                    remoteAddress: externalEventData.remoteAddress OR "127.0.0.1",
+                    userAgent: externalEventData.userAgent OR processedHeaders["user-agent"] || "Unknown",
+                    timestamp: externalEventData.timestamp OR (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }),
+                    principal: externalEventData.principal OR null
+                } ASSIGN_TO standardizedOutput
+                BREAK
+                
+            CASE 'StdLib.Trigger:Scheduled'
+                // Scheduled triggers provide timing info and configured payload - derive from input
+                DECLARE actualTriggerTime = externalEventData.triggerTime OR (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) })
+                DECLARE actualScheduledTime = externalEventData.scheduledTime OR actualTriggerTime
+                DECLARE actualPayload = externalEventData.payload OR triggerDef.config?.initialPayload OR externalEventData
+                
+                CREATE_INSTANCE cfv_models.Any WITH {
+                    triggerTime: actualTriggerTime,
+                    scheduledTime: actualScheduledTime,
+                    payload: actualPayload
+                } ASSIGN_TO standardizedOutput
+                BREAK
+                
+            CASE 'StdLib.Trigger:EventBus'
+                // EventBus triggers standardize events into EventBusTriggerPayload format - derive from input
+                DECLARE eventData = externalEventData.event OR externalEventData
+                CREATE_INSTANCE cfv_models.Any WITH {
+                    event: {
+                        id: eventData.id OR externalEventData.id OR "sim-event-" + (CALL Math.random).toString(),
+                        type: eventData.type OR externalEventData.type OR "unknown.event",
+                        source: eventData.source OR externalEventData.source OR "client-simulation",
+                        timestamp: eventData.timestamp OR externalEventData.timestamp OR (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }),
+                        payload: eventData.payload OR externalEventData.payload || externalEventData
+                    }
+                } ASSIGN_TO standardizedOutput
+                BREAK
+                
+            CASE 'StdLib.Trigger:Manual'
+            CASE 'StdLib:Manual'
+                // Manual triggers pass through the provided data as initialData - direct derivation
+                CREATE_INSTANCE cfv_models.Any WITH {
+                    initialData: externalEventData
+                } ASSIGN_TO standardizedOutput
+                BREAK
+                
+            DEFAULT
+                // Generic fallback for unknown trigger types - preserve input structure
+                IF triggerSchema.outputSchema IS_PRESENT THEN
+                    // Use schema structure but populate with input data where possible
+                    ASSIGN standardizedOutput = CALL cfv_code.InternalDataGeneration_GenerateDataFromSchemaWithInputOverride WITH { 
+                        schema: triggerSchema.outputSchema, 
+                        inputData: externalEventData,
+                        scenario: 'inputDerived'
+                    }
+                ELSE
+                    // Simple passthrough with type annotation
+                    ASSIGN standardizedOutput = { 
+                        triggerData: externalEventData, 
+                        triggerType: triggerDef.type,
+                        timestamp: externalEventData.timestamp OR (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) })
+                    }
+                END_IF
+                BREAK
+        END_SWITCH
 
         DECLARE result AS cfv_models.StepSimulationResult
         CREATE_INSTANCE cfv_models.StepSimulationResult WITH {
             stepId: 'trigger',
             componentFqn: triggerDef.type,
             inputData: externalEventData, // The external event data that came into the trigger
-            outputData: standardizedOutput,  // The standardized data provided by the trigger TO THE FLOW
+            outputData: standardizedOutput,  // The standardized data derived from the trigger input
             executionTime: 0, // Triggers typically have minimal processing time
             timestamp: (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }),
             simulationSuccess: true
@@ -332,8 +408,8 @@ code cfv_code.InternalComponentExecution_SimulateTrigger {
     \`
     dependencies: [
         "cfv_models.TriggerDefinitionDsl", "cfv_models.ExecutionContext", "cfv_models.StepSimulationResult", "cfv_models.IModuleRegistry",
-        "cfv_code.InternalDataGeneration_GenerateDataFromSchema",
-        "SystemTime.now", "SystemTime.toISOString", "Math.random"
+        "cfv_code.InternalDataGeneration_GenerateDataFromSchemaWithInputOverride",
+        "SystemTime.now", "SystemTime.toISOString", "Math.random", "URL.parse", "String.toLowerCase", "String.toUpperCase"
     ]
 }
 
@@ -513,6 +589,159 @@ code cfv_code.InternalDataGeneration_GenerateDataFromSchema {
         END_SWITCH
     \`
     dependencies: ["cfv_models.JsonSchemaObject", "SystemTime.now", "SystemTime.toISOString"] // Recursive call to self
+}
+
+code cfv_code.InternalDataGeneration_GenerateDataFromSchemaWithInputOverride {
+    title: "Internal: Generate Data from JSON Schema with Input Data Override"
+    part_of_design: cfv_designs.InternalDataGenerationLogic
+    language: "TypeScript"
+    implementation_location: {
+        filepath: "services/ClientDataGenerationLogic.ts",
+        entry_point_name: "generateDataFromSchemaWithInputOverride",
+        entry_point_type: "function"
+    }
+    signature: "(params: { schema: cfv_models.JsonSchemaObject, inputData: any, scenario: 'inputDerived' | 'happyPath' | 'empty' }) => any"
+    detailed_behavior: \`
+        // Generate data from schema but prioritize values from inputData where they exist and are compatible
+        // This allows triggers to derive output from input while maintaining schema structure
+        DECLARE schema = params.schema
+        DECLARE inputData = params.inputData
+        DECLARE scenario = params.scenario
+
+        // If inputData has a value that matches this schema level, prefer it
+        IF inputData IS_NOT_NULL AND scenario EQUALS 'inputDerived' THEN
+            // For primitive types, use input directly if compatible
+            IF schema.type EQUALS 'string' AND TYPE_OF inputData IS 'string' THEN RETURN_VALUE inputData END_IF
+            IF schema.type EQUALS 'number' AND TYPE_OF inputData IS 'number' THEN RETURN_VALUE inputData END_IF
+            IF schema.type EQUALS 'integer' AND TYPE_OF inputData IS 'number' AND (inputData % 1 EQUALS 0) THEN RETURN_VALUE inputData END_IF
+            IF schema.type EQUALS 'boolean' AND TYPE_OF inputData IS 'boolean' THEN RETURN_VALUE inputData END_IF
+            IF schema.type EQUALS 'null' AND inputData IS_NULL THEN RETURN_VALUE null END_IF
+        END_IF
+
+        // Handle schema defaults and constraints first
+        IF schema.default IS_PRESENT THEN RETURN_VALUE schema.default END_IF
+        IF schema.const IS_PRESENT THEN RETURN_VALUE schema.const END_IF
+        IF schema.enum IS_PRESENT AND schema.enum.length > 0 THEN
+            // If input matches an enum value, use it; otherwise use first enum value
+            IF inputData IS_NOT_NULL AND schema.enum.includes(inputData) THEN RETURN_VALUE inputData END_IF
+            RETURN_VALUE schema.enum[0]
+        END_IF
+
+        SWITCH schema.type
+            CASE 'object'
+                DECLARE obj = {}
+                IF schema.properties IS_PRESENT THEN
+                    FOR_EACH propName, propSchema IN schema.properties
+                        DECLARE shouldInclude = (scenario EQUALS 'inputDerived' OR scenario EQUALS 'happyPath') OR (scenario EQUALS 'empty' AND schema.required AND schema.required.includes(propName))
+                        IF shouldInclude THEN
+                            // Extract corresponding value from inputData if it exists
+                            DECLARE inputValue = (TYPE_OF inputData IS 'object' AND inputData IS_NOT_NULL) ? inputData[propName] : undefined
+                            ASSIGN obj[propName] = CALL cfv_code.InternalDataGeneration_GenerateDataFromSchemaWithInputOverride WITH { 
+                                schema: propSchema, 
+                                inputData: inputValue, 
+                                scenario: scenario 
+                            }
+                        END_IF
+                    END_FOR
+                END_IF
+                RETURN_VALUE obj
+                
+            CASE 'array'
+                IF scenario EQUALS 'empty' AND (schema.minItems IS_NULL OR schema.minItems EQUALS 0) THEN RETURN_VALUE [] END_IF
+                
+                // If input is an array, try to use its structure
+                IF TYPE_OF inputData IS 'array' AND scenario EQUALS 'inputDerived' THEN
+                    DECLARE resultArray = []
+                    FOR_EACH item, index IN inputData
+                        IF schema.items IS_PRESENT THEN
+                            ADD (CALL cfv_code.InternalDataGeneration_GenerateDataFromSchemaWithInputOverride WITH { 
+                                schema: schema.items, 
+                                inputData: item, 
+                                scenario: scenario 
+                            }) TO resultArray
+                        ELSE
+                            ADD item TO resultArray
+                        END_IF
+                    END_FOR
+                    RETURN_VALUE resultArray
+                ELSE
+                    // Fallback to standard generation
+                    DECLARE arr = []
+                    DECLARE itemCount = (scenario EQUALS 'happyPath' OR scenario EQUALS 'inputDerived') ? (schema.minItems OR 1) : (schema.minItems OR 0)
+                    IF schema.items IS_PRESENT AND itemCount > 0 THEN
+                        FOR i FROM 1 TO itemCount
+                            ADD (CALL cfv_code.InternalDataGeneration_GenerateDataFromSchemaWithInputOverride WITH { 
+                                schema: schema.items, 
+                                inputData: null, 
+                                scenario: scenario 
+                            }) TO arr
+                        END_FOR
+                    END_IF
+                    RETURN_VALUE arr
+                END_IF
+                
+            CASE 'string'
+                // Use input string if available and valid
+                IF TYPE_OF inputData IS 'string' AND scenario EQUALS 'inputDerived' THEN
+                    // Basic validation against format if specified
+                    IF schema.format EQUALS 'date-time' AND NOT (CALL isValidISODateTime WITH { value: inputData }) THEN
+                        RETURN_VALUE (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) })
+                    ELSE_IF schema.format EQUALS 'date' AND NOT (CALL isValidISODate WITH { value: inputData }) THEN
+                        RETURN_VALUE (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }).substring(0,10)
+                    ELSE
+                        RETURN_VALUE inputData
+                    END_IF
+                END_IF
+                
+                // Fallback to format-specific generation
+                IF schema.format EQUALS 'date-time' THEN RETURN_VALUE (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }) END_IF
+                IF schema.format EQUALS 'date' THEN RETURN_VALUE (CALL SystemTime.toISOString WITH { date: (CALL SystemTime.now) }).substring(0,10) END_IF
+                RETURN_VALUE (scenario EQUALS 'empty' ? "" : "sample_string")
+                
+            CASE 'number'
+            CASE 'integer'
+                IF TYPE_OF inputData IS 'number' AND scenario EQUALS 'inputDerived' THEN
+                    // Validate against schema constraints
+                    IF schema.minimum IS_PRESENT AND inputData < schema.minimum THEN RETURN_VALUE schema.minimum END_IF
+                    IF schema.maximum IS_PRESENT AND inputData > schema.maximum THEN RETURN_VALUE schema.maximum END_IF
+                    IF schema.type EQUALS 'integer' AND (inputData % 1 !== 0) THEN RETURN_VALUE Math.round(inputData) END_IF
+                    RETURN_VALUE inputData
+                END_IF
+                RETURN_VALUE (schema.minimum OR 0)
+                
+            CASE 'boolean'
+                IF TYPE_OF inputData IS 'boolean' AND scenario EQUALS 'inputDerived' THEN RETURN_VALUE inputData END_IF
+                RETURN_VALUE (scenario EQUALS 'happyPath' OR scenario EQUALS 'inputDerived' ? true : false)
+                
+            CASE 'null'
+                RETURN_VALUE null
+                
+            DEFAULT
+                // For any/mixed types, prefer input if available
+                IF inputData IS_NOT_NULL AND scenario EQUALS 'inputDerived' THEN RETURN_VALUE inputData END_IF
+                
+                IF schema.anyOf IS_PRESENT AND schema.anyOf.length > 0 THEN
+                    RETURN_VALUE CALL cfv_code.InternalDataGeneration_GenerateDataFromSchemaWithInputOverride WITH { 
+                        schema: schema.anyOf[0], 
+                        inputData: inputData, 
+                        scenario: scenario 
+                    }
+                END_IF
+                IF schema.oneOf IS_PRESENT AND schema.oneOf.length > 0 THEN
+                    RETURN_VALUE CALL cfv_code.InternalDataGeneration_GenerateDataFromSchemaWithInputOverride WITH { 
+                        schema: schema.oneOf[0], 
+                        inputData: inputData, 
+                        scenario: scenario 
+                    }
+                END_IF
+                RETURN_VALUE (scenario EQUALS 'empty' ? null : (inputData OR { generated_any_value: true }))
+        END_SWITCH
+    \`
+    dependencies: [
+        "cfv_models.JsonSchemaObject", 
+        "SystemTime.now", "SystemTime.toISOString", "Math.round",
+        "isValidISODateTime", "isValidISODate" // Helper validation functions
+    ] // Recursive call to self
 }
 
 

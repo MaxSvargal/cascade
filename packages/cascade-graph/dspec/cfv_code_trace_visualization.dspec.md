@@ -47,7 +47,7 @@ code cfv_code.TraceVisualizationService_EnhanceNodesWithTrace {
                     ASSIGN newHombreData.triggerConfig = traceData.triggerContext.triggerConfig
                     ASSIGN newHombreData.triggerType = traceData.triggerContext.triggerType
                 ELSE_IF traceData.triggerData IS_PRESENT THEN
-                    ASSIGN newHombreData.executionOutputData = traceData.triggerData
+                ASSIGN newHombreData.executionOutputData = traceData.triggerData
                 END_IF
                 // IF options.highlightCriticalPath AND (CALL criticalPathStepIds.has WITH { value: node.id }) THEN ASSIGN newHombreData.isCriticalPath = true END_IF
             ELSE

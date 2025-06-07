@@ -36,17 +36,20 @@ code cfv_code.GraphBuilderService_GenerateFlowDetailGraphData {
                 contextVarUsages: CALL params.parseContextVarsFn WITH { value: JSON.stringify(flowDefinition.trigger) }
             } ASSIGN_TO triggerNodeData
 
-            // REFINED: Handle trigger execution data from trace
+            // REFINED: Handle trigger execution data from trace - input-derived output
             IF params.traceData IS_PRESENT THEN
                 // Triggers are successful if the flow started (they don't have their own failure states typically)
                 ASSIGN triggerNodeData.executionStatus = "SUCCESS"
-                ASSIGN triggerNodeData.executionInputData = null // Triggers receive external events, not flow data
                 
                 // Use new triggerContext if available, fallback to legacy triggerData
                 IF params.traceData.triggerContext IS_PRESENT THEN
-                    ASSIGN triggerNodeData.executionOutputData = params.traceData.triggerContext.runtimeData
+                    // triggerContext contains both the original external event and the derived standardized output
+                    ASSIGN triggerNodeData.executionInputData = params.traceData.triggerContext.originalExternalEvent // The raw input that came into the trigger
+                    ASSIGN triggerNodeData.executionOutputData = params.traceData.triggerContext.runtimeData // The standardized output derived from input
                     ASSIGN triggerNodeData.triggerConfig = params.traceData.triggerContext.triggerConfig
                 ELSE_IF params.traceData.triggerData IS_PRESENT THEN
+                    // Legacy format - triggerData is the standardized output, no separate input tracking
+                    ASSIGN triggerNodeData.executionInputData = null // Not available in legacy format
                     ASSIGN triggerNodeData.executionOutputData = params.traceData.triggerData
                 END_IF
             END_IF

@@ -69,7 +69,7 @@ code cfv_code.ClientExecutionStreamHandler_HandleStreamingEvent {
                     ASSIGN newTrace.triggerContext = esData.triggerContext
                     ASSIGN newTrace.triggerData = esData.triggerContext.runtimeData // For backward compatibility
                 ELSE_IF esData.triggerInput IS_PRESENT THEN
-                    ASSIGN newTrace.triggerData = esData.triggerInput
+                ASSIGN newTrace.triggerData = esData.triggerInput
                 END_IF
                 
                 ASSIGN newTrace.status = 'RUNNING'

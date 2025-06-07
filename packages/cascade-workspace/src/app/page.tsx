@@ -804,16 +804,14 @@ const InspectorDebugTestTab: React.FC<{
 
         // Load configuration data
         if (isTriggerElement && flowDefinition?.trigger) {
-          // For triggers, generate configuration from component schema with defaults
-          if (componentSchema?.configSchema) {
+          // For triggers, use only the trigger configuration (not input data)
+          const actualTriggerConfig = flowDefinition.trigger.config || {};
+          if (Object.keys(actualTriggerConfig).length === 0 && componentSchema?.configSchema) {
+            // Generate default config from schema if none exists
             const mockConfigData = generateMockDataFromSchema(componentSchema.configSchema, componentSchema.fqn);
-            // Merge with actual trigger config from flow definition
-            const actualTriggerConfig = flowDefinition.trigger.config || {};
-            const mergedConfig = { ...mockConfigData, ...actualTriggerConfig };
-            setConfigurationData(JSON.stringify(mergedConfig, null, 2));
+            setConfigurationData(JSON.stringify(mockConfigData, null, 2));
           } else {
-            // Fallback to flow definition trigger config
-            setConfigurationData(JSON.stringify(flowDefinition.trigger, null, 2));
+            setConfigurationData(JSON.stringify(actualTriggerConfig, null, 2));
           }
         } else {
           // For steps, use step configuration or generate from schema
@@ -829,34 +827,28 @@ const InspectorDebugTestTab: React.FC<{
 
         // Generate input data based on appropriate schema
         if (isTriggerElement && flowDefinition?.trigger) {
-          // For triggers, generate input data based on trigger schema or HTTP request structure
-          let triggerInputData = {};
+          // For triggers, generate external event input data based on input schema
+          let triggerInputData: any = {};
           
-          if (flowDefinition.trigger.type === 'http') {
-            // Generate HTTP trigger input data
-            triggerInputData = {
-              method: 'POST',
-              path: '/api/trigger',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer token'
-              },
-              body: {
-                // Generate body based on trigger input schema if available
-                ...(componentSchema?.inputSchema ? 
-                  generateMockDataFromSchema(componentSchema.inputSchema, componentSchema.fqn) : 
-                  { data: 'sample trigger data' })
-              }
-            };
+          if (componentSchema?.inputSchema?.example) {
+            // Use the example from the input schema - this represents external event data
+            triggerInputData = componentSchema.inputSchema.example;
           } else if (componentSchema?.inputSchema) {
+            // Generate from input schema - this is external event data
             triggerInputData = generateMockDataFromSchema(componentSchema.inputSchema, componentSchema.fqn);
           } else {
-            triggerInputData = { triggerData: 'sample data' };
+            // Fallback: generate basic external event data
+            triggerInputData = generateBasicTriggerInputData(componentSchema?.fqn || 'StdLib.Trigger:Http');
+          }
+          
+          // Ensure all required fields are populated for HTTP triggers
+          if (componentSchema?.fqn === 'StdLib.Trigger:Http') {
+            triggerInputData = ensureHttpTriggerInputFields(triggerInputData, flowDefinition.trigger.config);
           }
           
           setInputData(JSON.stringify(triggerInputData, null, 2));
         } else if (selectedElement.sourceType === 'flowNode' && selectedElement.data?.stepId) {
-          // For step nodes, resolve input from flow structure
+          // For step nodes, resolve input from previous step outputs
           if (!stepFlowFqn) {
             console.warn('No flow context available for step resolution');
             setInputData('{}');
@@ -868,7 +860,19 @@ const InspectorDebugTestTab: React.FC<{
               selectedElement.data.stepId, 
               stepFlowFqn
             );
-            setInputData(JSON.stringify(resolvedInput.actualInputData, null, 2));
+            
+            // Use the actual resolved input data, not the complex execution history
+            if (resolvedInput.actualInputData) {
+              setInputData(JSON.stringify(resolvedInput.actualInputData, null, 2));
+            } else {
+              // Fallback to schema-based generation
+              if (componentSchema?.inputSchema) {
+                const mockInputData = generateMockDataFromSchema(componentSchema.inputSchema);
+                setInputData(JSON.stringify(mockInputData, null, 2));
+              } else {
+                setInputData('{}');
+              }
+            }
             
             // Resolve data lineage
             const lineage = await actions.resolveDataLineage(
@@ -892,18 +896,18 @@ const InspectorDebugTestTab: React.FC<{
 
         // Generate output data based on appropriate schema
         if (isTriggerElement && flowDefinition?.trigger) {
-          // For triggers, generate output data based on trigger output schema
-          let triggerOutputData = {};
+          // For triggers, generate standardized output data based on output schema
+          let triggerOutputData: any = {};
           
-          if (componentSchema?.outputSchema) {
+          if (componentSchema?.outputSchema?.example) {
+            // Use the output schema example as base
+            triggerOutputData = componentSchema.outputSchema.example;
+          } else if (componentSchema?.outputSchema) {
+            // Generate from output schema
             triggerOutputData = generateMockDataFromSchema(componentSchema.outputSchema, componentSchema.fqn);
           } else {
-            // Default trigger output structure
-            triggerOutputData = {
-              triggerData: JSON.parse(inputData || '{}'),
-              timestamp: new Date().toISOString(),
-              requestId: 'req-' + Math.random().toString(36).substr(2, 9)
-            };
+            // Fallback: generate basic standardized output
+            triggerOutputData = generateBasicTriggerOutputData(componentSchema?.fqn || 'StdLib.Trigger:Http');
           }
           
           setOutputData(JSON.stringify(triggerOutputData, null, 2));
@@ -959,9 +963,306 @@ const InspectorDebugTestTab: React.FC<{
     resolveData();
   }, [selectedElement, currentFlowFqn, moduleRegistry, actions]);
 
-  // Helper function to generate mock data from schema
+  // Helper function to generate basic trigger input data for external events
+  const generateBasicTriggerInputData = (triggerType: string): any => {
+    switch (triggerType) {
+      case 'StdLib.Trigger:Http':
+        return {
+          url: "https://api.casino.com/api/users/onboard?source=web&campaign=summer2024",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+            "User-Agent": "CasinoApp/1.0",
+            "X-Request-ID": "req-ihtqukro7",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9"
+          },
+          queryParameters: {
+            "source": "web",
+            "campaign": "summer2024",
+            "utm_source": "google",
+            "utm_medium": "cpc"
+          },
+          body: {
+            "email": "john.doe@example.com",
+            "password": "SecurePass123!",
+            "firstName": "John",
+            "lastName": "Doe",
+            "dateOfBirth": "1990-01-15",
+            "country": "US",
+            "phoneNumber": "+1234567890",
+            "referralCode": "REF123",
+            "acceptedTerms": true,
+            "requestMetadata": {
+              "timestamp": new Date().toISOString(),
+              "requestId": "req-ihtqukro7",
+              "userAgent": "CasinoApp/1.0",
+              "ipAddress": "192.168.1.100"
+            }
+          },
+          remoteAddress: "203.0.113.195",
+          userAgent: "CasinoApp/1.0",
+          timestamp: new Date().toISOString(),
+          principal: null
+        };
+      case 'StdLib.Trigger:EventBus':
+        return {
+          event: {
+            id: "event-abc123def456",
+            type: "user.deposit.completed",
+            source: "payment-service",
+            timestamp: new Date().toISOString(),
+            payload: {
+              userId: "user-12345",
+              amount: 100.00,
+              currency: "USD",
+              transactionId: "txn-abc123",
+              paymentMethod: "credit_card",
+              processingTime: 2340
+            }
+          }
+        };
+      case 'StdLib:Manual':
+        return {
+          initialData: {
+            userId: "user-12345",
+            action: "retry_kyc_verification",
+            parameters: {
+              skipDocumentUpload: false,
+              forceManualReview: true,
+              region: "US",
+              tier: "bronze"
+            },
+            reason: "Customer requested KYC retry after document update",
+            triggeredBy: "admin-user-789",
+            timestamp: new Date().toISOString()
+          }
+        };
+      default:
+        return {};
+    }
+  };
+
+  // Helper function to generate basic trigger output data (standardized format)
+  const generateBasicTriggerOutputData = (triggerType: string): any => {
+    switch (triggerType) {
+      case 'StdLib.Trigger:Http':
+        return {
+          path: "/api/users/onboard",
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+            "user-agent": "CasinoApp/1.0",
+            "x-request-id": "req-ihtqukro7",
+            "accept": "application/json"
+          },
+          queryParameters: {
+            "source": "web",
+            "campaign": "summer2024",
+            "utm_source": "google",
+            "utm_medium": "cpc"
+          },
+          body: {
+            "email": "john.doe@example.com",
+            "password": "SecurePass123!",
+            "firstName": "John",
+            "lastName": "Doe",
+            "dateOfBirth": "1990-01-15",
+            "country": "US",
+            "phoneNumber": "+1234567890",
+            "referralCode": "REF123",
+            "acceptedTerms": true,
+            "requestMetadata": {
+              "timestamp": new Date().toISOString(),
+              "requestId": "req-ihtqukro7",
+              "userAgent": "CasinoApp/1.0",
+              "ipAddress": "192.168.1.100"
+            }
+          },
+          remoteAddress: "203.0.113.195",
+          userAgent: "CasinoApp/1.0",
+          timestamp: new Date().toISOString(),
+          principal: null
+        };
+      case 'StdLib.Trigger:EventBus':
+        return {
+          event: {
+            id: "event-abc123def456",
+            type: "user.deposit.completed",
+            source: "payment-service",
+            timestamp: new Date().toISOString(),
+            payload: {
+              userId: "user-12345",
+              amount: 100.00,
+              currency: "USD",
+              transactionId: "txn-abc123",
+              paymentMethod: "credit_card",
+              processingTime: 2340
+            }
+          }
+        };
+      case 'StdLib:Manual':
+        return {
+          initialData: {
+            userId: "user-12345",
+            action: "retry_kyc_verification",
+            parameters: {
+              skipDocumentUpload: false,
+              forceManualReview: true,
+              region: "US",
+              tier: "bronze"
+            },
+            reason: "Customer requested KYC retry after document update",
+            triggeredBy: "admin-user-789",
+            timestamp: new Date().toISOString()
+          }
+        };
+      default:
+        return {};
+    }
+  };
+
+  // Helper function to ensure HTTP trigger input has all required fields
+  const ensureHttpTriggerInputFields = (inputData: any, triggerConfig: any): any => {
+    const enhanced = { ...inputData };
+    
+    // Ensure URL is present and properly formatted
+    if (!enhanced.url) {
+      const path = triggerConfig?.path || "/api/users/onboard";
+      const baseUrl = "https://api.casino.com";
+      enhanced.url = `${baseUrl}${path}?source=web&campaign=summer2024`;
+    }
+    
+    // Ensure method is present
+    if (!enhanced.method) {
+      enhanced.method = triggerConfig?.method || "POST";
+    }
+    
+    // Ensure headers are present and populated
+    if (!enhanced.headers || Object.keys(enhanced.headers).length === 0) {
+      enhanced.headers = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "User-Agent": "CasinoApp/1.0",
+        "X-Request-ID": "req-ihtqukro7",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9"
+      };
+    }
+    
+    // Ensure queryParameters are present
+    if (!enhanced.queryParameters) {
+      try {
+        const url = new URL(enhanced.url);
+        const queryParams: Record<string, string> = {};
+        url.searchParams.forEach((value, key) => {
+          queryParams[key] = value;
+        });
+        enhanced.queryParameters = queryParams;
+      } catch (e) {
+        enhanced.queryParameters = {
+          "source": "web",
+          "campaign": "summer2024"
+        };
+      }
+    }
+    
+    // Ensure body is present for POST/PUT methods
+    if (!enhanced.body && (enhanced.method === "POST" || enhanced.method === "PUT")) {
+      // Use requestSchema from trigger config if available
+      if (triggerConfig?.requestSchema) {
+        enhanced.body = generateMockDataFromSchema(triggerConfig.requestSchema);
+      } else {
+        enhanced.body = {
+          "email": "john.doe@example.com",
+          "password": "SecurePass123!",
+          "firstName": "John",
+          "lastName": "Doe",
+          "dateOfBirth": "1990-01-15",
+          "country": "US",
+          "phoneNumber": "+1234567890",
+          "referralCode": "REF123",
+          "acceptedTerms": true,
+          "requestMetadata": {
+            "timestamp": new Date().toISOString(),
+            "requestId": "req-ihtqukro7",
+            "userAgent": "CasinoApp/1.0",
+            "ipAddress": "192.168.1.100"
+          }
+        };
+      }
+    }
+    
+    // Ensure remoteAddress is present
+    if (!enhanced.remoteAddress) {
+      enhanced.remoteAddress = "203.0.113.195";
+    }
+    
+    // Ensure userAgent is present
+    if (!enhanced.userAgent) {
+      enhanced.userAgent = "CasinoApp/1.0";
+    }
+    
+    // Ensure timestamp is present
+    if (!enhanced.timestamp) {
+      enhanced.timestamp = new Date().toISOString();
+    }
+    
+    // Ensure principal is present (can be null for unauthenticated requests)
+    if (enhanced.principal === undefined) {
+      enhanced.principal = null;
+    }
+    
+    return enhanced;
+  };
+
   const generateMockDataFromSchema = (schema: any, componentType?: string, config?: any): any => {
     if (!schema || typeof schema !== 'object') return {};
+    
+    // Handle trigger components specially - use schema examples or generate basic output
+    if (componentType && componentType.includes('Trigger')) {
+      if (schema.example) {
+        return schema.example;
+      }
+      // Generate basic trigger output based on type
+      switch (componentType) {
+        case 'StdLib.Trigger:Http':
+          return {
+            path: "/api/users/onboard",
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            queryParameters: {},
+            body: null,
+            remoteAddress: "203.0.113.195",
+            userAgent: "Mozilla/5.0",
+            timestamp: new Date().toISOString(),
+            principal: null
+          };
+        case 'StdLib.Trigger:EventBus':
+          return {
+            event: {
+              id: "event-123",
+              type: "sample.event",
+              source: "sample-service",
+              timestamp: new Date().toISOString(),
+              payload: {}
+            }
+          };
+        case 'StdLib:Manual':
+          return {
+            initialData: {}
+          };
+        default:
+          return {};
+      }
+    }
+    
+    // First check if schema has an example property and use it
+    if (schema.example) {
+      return schema.example;
+    }
     
     // Handle dynamic output schemas for specific component types
     if (componentType && schema.type === 'object' && schema.additionalProperties) {
@@ -1047,21 +1348,31 @@ const InspectorDebugTestTab: React.FC<{
     if (schema.type === 'object' && schema.properties) {
       const result: any = {};
       Object.entries(schema.properties).forEach(([key, propSchema]: [string, any]) => {
-        if (propSchema.type === 'string') {
-          result[key] = propSchema.example || propSchema.default || `sample_${key}`;
+        // Check for example first, then default, then generate
+        if (propSchema.example !== undefined) {
+          result[key] = propSchema.example;
+        } else if (propSchema.default !== undefined) {
+          result[key] = propSchema.default;
+        } else if (propSchema.type === 'string') {
+          result[key] = `sample_${key}`;
         } else if (propSchema.type === 'number' || propSchema.type === 'integer') {
-          result[key] = propSchema.example || propSchema.default || 42;
+          result[key] = 42;
         } else if (propSchema.type === 'boolean') {
-          result[key] = propSchema.example !== undefined ? propSchema.example : (propSchema.default !== undefined ? propSchema.default : true);
+          result[key] = true;
         } else if (propSchema.type === 'array') {
-          result[key] = propSchema.example || propSchema.default || [generateMockDataFromSchema(propSchema.items)];
+          result[key] = [generateMockDataFromSchema(propSchema.items)];
         } else if (propSchema.type === 'object') {
-          result[key] = propSchema.example || propSchema.default || generateMockDataFromSchema(propSchema);
+          result[key] = generateMockDataFromSchema(propSchema);
         } else {
-          result[key] = propSchema.example || propSchema.default || null;
+          result[key] = null;
         }
       });
       return result;
+    }
+    
+    // If schema has example at root level, use it
+    if (schema.example) {
+      return schema.example;
     }
     
     return {};
@@ -1149,6 +1460,139 @@ const InspectorDebugTestTab: React.FC<{
     }
   }, [configurationData, selectedElement, moduleRegistry, actions]);
 
+  // Update output data when input data or configuration changes (for triggers)
+  React.useEffect(() => {
+    console.log('🔄 Trigger output effect triggered:', { selectedElement: selectedElement?.id, hasInputData: !!inputData, hasConfigData: !!configurationData });
+    if (selectedElement && inputData && configurationData) {
+      const isTriggerElement = selectedElement.id === 'trigger' || 
+                              selectedElement.data?.stepId === 'trigger' ||
+                              selectedElement.data?.triggerType;
+
+      if (isTriggerElement) {
+        try {
+          const parsedInput = JSON.parse(inputData);
+          const parsedConfig = JSON.parse(configurationData);
+          
+          let componentSchema = null;
+          if (selectedElement.data?.componentSchema) {
+            componentSchema = selectedElement.data.componentSchema;
+          } else if (selectedElement.data?.resolvedComponentFqn) {
+            componentSchema = moduleRegistry.getComponentSchema(selectedElement.data.resolvedComponentFqn);
+          }
+
+          // Generate standardized output data from input data for triggers
+          let triggerOutputData: any = {};
+          
+          if (componentSchema?.fqn === 'StdLib.Trigger:Http') {
+            // For HTTP triggers, process standard HTTP request input into standardized output
+            // Input: Standard HTTP request format (url, method, headers, body)
+            // Configuration: DSL trigger config (path patterns, method constraints, etc.)
+            // Output: Standardized format with parsed components
+            
+            const inputUrl = parsedInput.url || "http://localhost/api/trigger";
+            const inputMethod = parsedInput.method || parsedConfig.method || "POST";
+            const inputHeaders = parsedInput.headers || {};
+            const inputBody = parsedInput.body;
+            
+            // Parse URL to extract path and query parameters
+            const queryParams: Record<string, string> = {};
+            let extractedPath = parsedConfig.path || "/api/users/onboard";
+            
+            try {
+              const url = new URL(inputUrl);
+              extractedPath = url.pathname;
+              
+              // Extract query parameters from URL
+              url.searchParams.forEach((value, key) => {
+                queryParams[key] = value;
+              });
+              console.log('🔍 Extracted query params from URL:', inputUrl, '→', queryParams);
+            } catch (e) {
+              console.warn('Failed to parse URL, trying manual parsing:', e);
+              
+              // Fallback: manual URL parsing
+              if (inputUrl.includes('?')) {
+                try {
+                  const [urlPart, queryString] = inputUrl.split('?');
+                  
+                  // Extract path from URL part
+                  const urlObj = new URL(urlPart);
+                  extractedPath = urlObj.pathname;
+                  
+                  // Parse query string manually
+                  if (queryString) {
+                    const paramPairs = queryString.split('&');
+                    paramPairs.forEach(pair => {
+                      const [key, value] = pair.split('=');
+                      if (key) {
+                        queryParams[decodeURIComponent(key)] = value ? decodeURIComponent(value) : '';
+                      }
+                    });
+                  }
+                } catch (manualParseError) {
+                  console.warn('Manual URL parsing also failed:', manualParseError);
+                }
+              }
+            }
+            
+            // Process headers - normalize keys to lowercase for consistency
+            const processedHeaders: Record<string, string> = {};
+            Object.entries(inputHeaders).forEach(([key, value]) => {
+              processedHeaders[key.toLowerCase()] = String(value);
+            });
+            
+            // Parse body based on content-type and configuration
+            let processedBody = inputBody;
+            const contentType = processedHeaders["content-type"];
+            if (contentType && contentType.includes("application/json") && typeof inputBody === 'string') {
+              try {
+                processedBody = JSON.parse(inputBody);
+              } catch (parseError) {
+                // Keep as string if JSON parsing fails
+                processedBody = inputBody;
+              }
+            }
+            
+            // Apply configuration-based processing
+            let finalPath = extractedPath;
+            if (parsedConfig.pathPattern) {
+              // Apply path pattern matching/validation if configured
+              // For now, use extracted path as-is
+              finalPath = extractedPath;
+            }
+            
+            triggerOutputData = {
+              path: finalPath,
+              method: inputMethod.toUpperCase(),
+              headers: processedHeaders,
+              queryParameters: queryParams,
+              body: processedBody,
+              remoteAddress: parsedInput.remoteAddress || "127.0.0.1",
+              userAgent: parsedInput.userAgent || processedHeaders["user-agent"] || "Unknown",
+              timestamp: parsedInput.timestamp || new Date().toISOString(),
+              principal: parsedInput.principal || null
+            };
+          } else if (componentSchema?.fqn === 'StdLib.Trigger:EventBus') {
+            // For EventBus triggers, output is same as input (event passthrough)
+            triggerOutputData = parsedInput;
+          } else if (componentSchema?.fqn === 'StdLib:Manual') {
+            // For Manual triggers, output is same as input (initialData passthrough)
+            triggerOutputData = parsedInput;
+          } else {
+            // For other trigger types, use input as output
+            triggerOutputData = parsedInput;
+          }
+          
+          console.log('🎯 Setting trigger output data:', triggerOutputData);
+          setOutputData(JSON.stringify(triggerOutputData, null, 2));
+        } catch (error) {
+          // If parsing fails, don't update output
+          console.warn('Failed to update output data:', error);
+        }
+      }
+    }
+  }, [inputData, configurationData, selectedElement, moduleRegistry]);
+
   const validateAndParseInput = (input: string) => {
     try {
       const parsed = JSON.parse(input);
@@ -1235,7 +1679,7 @@ const InspectorDebugTestTab: React.FC<{
                            selectedElement.id === 'trigger';
       
       if (isTriggerNode) {
-        // For trigger nodes, generate trigger input data
+        // For trigger nodes, generate external event input data
         const flowDef = moduleRegistry.getFlowDefinition(currentFlowFqn);
         if (flowDef?.trigger) {
           let componentSchema = null;
@@ -1245,14 +1689,20 @@ const InspectorDebugTestTab: React.FC<{
             componentSchema = moduleRegistry.getComponentSchema(selectedElement.data.resolvedComponentFqn);
           }
           
-          generatedData = actions.resolveTriggerInputData(
-            flowDef.trigger,
-            componentSchema,
-            dataType
-          );
+          // Generate test data based on trigger type and data type
+          if (componentSchema?.fqn === 'StdLib.Trigger:Http') {
+            generatedData = generateHttpTriggerTestData(dataType, flowDef.trigger.config);
+          } else if (componentSchema?.fqn === 'StdLib.Trigger:EventBus') {
+            generatedData = generateEventBusTriggerTestData(dataType);
+          } else if (componentSchema?.fqn === 'StdLib:Manual') {
+            generatedData = generateManualTriggerTestData(dataType);
+          } else {
+            // Fallback to basic generation
+            generatedData = generateBasicTriggerInputData(componentSchema?.fqn || 'StdLib.Trigger:Http');
+          }
         }
       } else if (selectedElement.sourceType === 'flowNode' && selectedElement.data?.stepId) {
-        // For step nodes, generate input data based on schema
+        // For step nodes, generate input data based on component schema
         let componentSchema = null;
         if (selectedElement.data?.componentSchema) {
           componentSchema = selectedElement.data.componentSchema;
@@ -1260,32 +1710,149 @@ const InspectorDebugTestTab: React.FC<{
           componentSchema = moduleRegistry.getComponentSchema(selectedElement.data.resolvedComponentFqn);
         }
         
-        if (componentSchema) {
-          generatedData = actions.generateSchemaBasedInputData(
-            selectedElement.data.stepId,
-            dataType,
-            componentSchema
-          );
+        if (componentSchema?.inputSchema) {
+          // Generate test data based on input schema and data type
+          generatedData = generateStepTestData(componentSchema, dataType);
         }
       }
 
       if (generatedData) {
         setInputData(JSON.stringify(generatedData, null, 2));
-        
-        // If this is a trigger, propagate the data flow to update dependent steps
-        if (isTriggerNode) {
-          actions.propagateDataFlow(currentFlowFqn, generatedData)
-            .then(flowResults => {
-              console.log('Data flow propagated:', flowResults);
-              // The propagation results could be used to update other UI elements
-            })
-            .catch(error => {
-              console.warn('Failed to propagate data flow:', error);
-            });
-        }
       }
     } catch (error) {
       console.error('Error generating test data:', error);
+    }
+  };
+
+  // Helper function to generate HTTP trigger test data
+  const generateHttpTriggerTestData = (dataType: 'happy_path' | 'fork_paths' | 'error_cases', triggerConfig: any) => {
+    const baseData = generateBasicTriggerInputData('StdLib.Trigger:Http');
+    
+    switch (dataType) {
+      case 'happy_path':
+        return baseData;
+      case 'fork_paths':
+        // Generate data that would trigger different fork paths
+        return {
+          ...baseData,
+          body: {
+            ...baseData.body,
+            country: "CA", // Different country for geo-compliance fork
+            referralCode: "SPECIAL123" // Special referral for bonus fork
+          }
+        };
+      case 'error_cases':
+        // Generate data that would cause validation errors
+        return {
+          ...baseData,
+          body: {
+            email: "invalid-email", // Invalid email format
+            firstName: "", // Empty required field
+            dateOfBirth: "2010-01-01", // Underage
+            country: "XX" // Invalid country code
+          }
+        };
+      default:
+        return baseData;
+    }
+  };
+
+  // Helper function to generate EventBus trigger test data
+  const generateEventBusTriggerTestData = (dataType: 'happy_path' | 'fork_paths' | 'error_cases') => {
+    const baseData = generateBasicTriggerInputData('StdLib.Trigger:EventBus');
+    
+    switch (dataType) {
+      case 'happy_path':
+        return baseData;
+      case 'fork_paths':
+        return {
+          event: {
+            ...baseData.event,
+            type: "user.withdrawal.requested",
+            payload: {
+              userId: "user-12345",
+              amount: 500.00,
+              currency: "USD",
+              method: "bank_transfer"
+            }
+          }
+        };
+      case 'error_cases':
+        return {
+          event: {
+            ...baseData.event,
+            type: "user.deposit.failed",
+            payload: {
+              userId: "user-12345",
+              error: "insufficient_funds",
+              amount: -100.00 // Invalid negative amount
+            }
+          }
+        };
+      default:
+        return baseData;
+    }
+  };
+
+  // Helper function to generate Manual trigger test data
+  const generateManualTriggerTestData = (dataType: 'happy_path' | 'fork_paths' | 'error_cases') => {
+    const baseData = generateBasicTriggerInputData('StdLib:Manual');
+    
+    switch (dataType) {
+      case 'happy_path':
+        return baseData;
+      case 'fork_paths':
+        return {
+          initialData: {
+            ...baseData.initialData,
+            action: "force_tier_upgrade",
+            parameters: {
+              targetTier: "gold",
+              bypassChecks: true
+            }
+          }
+        };
+      case 'error_cases':
+        return {
+          initialData: {
+            userId: "", // Empty user ID
+            action: "invalid_action",
+            parameters: null
+          }
+        };
+      default:
+        return baseData;
+    }
+  };
+
+  // Helper function to generate step test data
+  const generateStepTestData = (componentSchema: any, dataType: 'happy_path' | 'fork_paths' | 'error_cases') => {
+    const baseData = generateMockDataFromSchema(componentSchema.inputSchema);
+    
+    switch (dataType) {
+      case 'happy_path':
+        return baseData;
+      case 'fork_paths':
+        // Modify data to trigger different paths
+        if (componentSchema.fqn === 'StdLib:Switch' || componentSchema.fqn === 'StdLib:FilterData') {
+          return {
+            ...baseData,
+            data: {
+              ...baseData.data,
+              condition: true,
+              alternativeValue: "fork_path_data"
+            }
+          };
+        }
+        return baseData;
+      case 'error_cases':
+        // Generate data that would cause errors
+        return {
+          ...baseData,
+          data: null // Null data to trigger validation errors
+        };
+      default:
+        return baseData;
     }
   };
 

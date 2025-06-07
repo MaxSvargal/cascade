@@ -156,20 +156,96 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
     triggerSchema?: ComponentSchema, 
     dataType: 'happy_path' | 'fork_paths' | 'error_cases' = 'happy_path'
   ) {
-    // Generate data that conforms to the trigger's OUTPUT schema (triggerOutputSchema)
-    // This is what the trigger provides to the flow, not what it receives from external events
-    if (triggerSchema?.triggerOutputSchema) {
+    // Generate data that represents external events coming INTO the trigger (input schema)
+    // This is what external systems send to the trigger, not what the trigger outputs to the flow
+    if (triggerSchema?.inputSchema?.example) {
+      // Use the input schema example - this represents realistic external event data
+      return triggerSchema.inputSchema.example;
+    }
+    
+    if (triggerSchema?.inputSchema) {
+      // Generate from input schema structure
       return this.dataGenerationService.generateDataFromSchema(
-        triggerSchema.triggerOutputSchema, 
+        triggerSchema.inputSchema, 
         dataType
       );
     }
     
-    // Fallback to trigger data generation based on trigger type
-    return this.dataGenerationService.generateTriggerData({ 
-      type: triggerConfig?.type || 'manual',
-      config: triggerConfig 
-    });
+    // Fallback to trigger-specific input data generation based on trigger type
+    const triggerType = triggerConfig?.type || 'manual';
+    
+    switch (triggerType) {
+      case 'StdLib.Trigger:Http':
+      case 'StdLib:HttpTrigger':
+        // HTTP trigger input: external HTTP request data
+        return {
+          method: triggerConfig?.method || 'POST',
+          path: triggerConfig?.path || '/api/users/onboard',
+          headers: {
+            'content-type': 'application/json',
+            'authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+            'user-agent': 'CasinoApp/1.0',
+            'x-request-id': 'req-' + Math.random().toString(36).substr(2, 9)
+          },
+          body: {
+            email: 'john.doe@example.com',
+            password: 'SecurePass123!',
+            firstName: 'John',
+            lastName: 'Doe',
+            dateOfBirth: '1990-01-15',
+            country: 'US',
+            phoneNumber: '+1234567890',
+            referralCode: 'REF123',
+            acceptedTerms: true
+          },
+          query: {},
+          timestamp: new Date().toISOString()
+        };
+        
+      case 'StdLib.Trigger:Schedule':
+      case 'StdLib.Trigger:Scheduled':
+      case 'StdLib:ScheduledTrigger':
+        // Scheduled trigger input: scheduled event data
+        return {
+          scheduledTime: new Date().toISOString(),
+          triggeredAt: new Date().toISOString(),
+          jobPayload: {
+            batchId: 'batch-' + Math.random().toString(36).substr(2, 9),
+            scheduleName: triggerConfig?.scheduleName || 'daily-batch',
+            parameters: triggerConfig?.parameters || {}
+          }
+        };
+        
+      case 'StdLib.Trigger:EventBus':
+      case 'StdLib:EventTrigger':
+        // EventBus trigger input: external event data
+        return {
+          id: 'event-' + Math.random().toString(36).substr(2, 9),
+          type: triggerConfig?.eventType || 'user.action',
+          source: 'external-system',
+          timestamp: new Date().toISOString(),
+          payload: {
+            userId: 'user123',
+            action: 'registration',
+            data: {
+              email: 'user@example.com',
+              country: 'US'
+            }
+          }
+        };
+        
+      default:
+        // Manual trigger input: user-initiated data
+        return {
+          triggeredBy: 'user',
+          triggeredAt: new Date().toISOString(),
+          initialData: {
+            userId: 'user123',
+            action: 'manual_trigger',
+            parameters: triggerConfig || {}
+          }
+        };
+    }
   }
 
   async propagateDataFlow(flowFqn: string, triggerData: any): Promise<Record<string, any>> {
@@ -763,15 +839,15 @@ export class DebugTestActionsService implements UnifiedDebugTestActions {
           method: triggerData.method || trigger.config?.method || 'POST',
           headers: triggerData.headers || {},
           queryParameters: triggerData.queryParameters || {},
-          body: triggerData.body || triggerData,
+        body: triggerData.body || triggerData,
           principal: triggerData.principal || null
-        };
+      };
       
       case 'StdLib.Trigger:Scheduled':
         // Scheduled triggers provide timing and payload data
         return {
           triggerTime: triggerData.triggerTime || new Date().toISOString(),
-          scheduledTime: triggerData.scheduledTime || new Date().toISOString(),
+        scheduledTime: triggerData.scheduledTime || new Date().toISOString(),
           cronExpression: trigger.config?.cronExpression,
           payload: triggerData.payload || triggerData
         };

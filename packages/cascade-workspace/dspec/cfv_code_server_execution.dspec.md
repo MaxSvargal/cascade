@@ -394,9 +394,10 @@ code cfv_code.ServerExecutionEngine_ResolveInputMapping {
             RETURN_VALUE "null" // Or throw error
         }}
 
-        // For "trigger.path"
+        // For "trigger.path" - triggerInput contains the standardized output derived from the original external event
         ASSIGN expression = CALL RegExpAPI.replaceAll WITH { text: expression, pattern: /trigger\\.([^\\s{}',"\\]+)/g, replacer: (match, path) => {
             IF context.triggerInput IS_PRESENT THEN
+                // triggerInput is the standardized output that was derived from the original external event
                 DECLARE val = CALL GetNestedValueUtility.get WITH { obj: context.triggerInput, path: path }
                 RETURN_VALUE (TYPE_OF val IS 'string' ? "'" + val + "'" : JSON.stringify(val))
             END_IF

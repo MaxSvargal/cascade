@@ -61,29 +61,42 @@ design cfv_overview.TriggerArchitecture {
     data_flow_pattern: `
         External Event → Trigger Processing → Standardized Output → Flow Execution
         
-        1. External Event Arrives: HTTP request, scheduled time, event publication, manual execution
-        2. Trigger Processing: Authentication, validation, filtering, transformation to standard format
-        3. Standardized Output: Predictable data structure conforming to triggerOutputSchema
+        1. External Event Arrives: Standard HTTP request, scheduled time, event publication, manual execution
+        2. Trigger Processing: Parse URL/headers/body, apply DSL configuration, validate, transform to standard format
+        3. Standardized Output: Predictable data structure conforming to triggerOutputSchema (parsed queryParameters, normalized headers, processed body)
         4. Flow Context: Trigger output becomes available as 'trigger.*' in flow expressions
+        
+        Example for HTTP Trigger:
+        Input: { url: "https://api.com/users?source=web", method: "POST", headers: {...}, body: {...} }
+        Config: { path: "/users", method: "POST", requestSchema: {...} }
+        Output: { path: "/users", method: "POST", queryParameters: {source: "web"}, headers: {...}, body: {...} }
     `
     trigger_types: [
-        "HTTP Triggers: Convert HTTP requests into HttpTriggerRequest format with path, method, headers, body, principal",
-        "Scheduled Triggers: Provide timing information and configured payload in ScheduledTriggerPayload format",
-        "EventBus Triggers: Standardize events into EventBusTriggerPayload with event metadata and payload",
-        "Manual Triggers: Pass through provided data as initialData for programmatic flow execution",
-        "Stream Triggers: Process streaming messages into StreamTriggerMessage or StreamTriggerBatch formats"
+        "HTTP Triggers: Process raw HTTP requests (url, headers, body) into standardized HttpTriggerRequest format (path, method, queryParameters, body, principal)",
+        "Scheduled Triggers: Convert timing events into ScheduledTriggerPayload format with triggerTime, scheduledTime, and configured payload",
+        "EventBus Triggers: Transform event bus messages into EventBusTriggerPayload with standardized event metadata and payload",
+        "Manual Triggers: Process initial data into standardized format with initialData field for programmatic flow execution",
+        "Stream Triggers: Convert streaming messages into StreamTriggerMessage or StreamTriggerBatch formats with message and metadata"
     ]
     schema_distinction: `
-        - configSchema: Defines the structure for configuring the trigger (e.g., HTTP path/method, CRON expression)
-        - inputSchema: Defines the structure of external event data the trigger receives (e.g., HTTP request structure, event bus message format)
-        - outputSchema: Defines the standardized data structure the trigger provides to the flow at runtime
+        - configSchema: Defines the structure for configuring the trigger (e.g., HTTP path/method, CRON expression, authentication settings)
+        - inputSchema: Defines the structure of raw external event data the trigger receives (e.g., raw HTTP request with url/headers/body, raw event bus message)
+        - outputSchema: Defines the standardized, processed data structure the trigger provides to the flow (e.g., parsed path/queryParameters/principal for HTTP)
+        - Key insight: inputSchema ≠ outputSchema - triggers transform raw external data into standardized flow-ready formats
     `
     implementation_notes: [
-        "Triggers receive external events as inputs (not from other flow steps)",
-        "inputSchema defines the structure of external event data triggers expect to receive",
-        "outputSchema defines the standardized format triggers provide to flows",
-        "configSchema defines how triggers should be configured to receive external events",
-        "Client-side simulation focuses on generating plausible standardized output for UI/testing purposes"
+        "Triggers receive standard external events as inputs and transform them into standardized outputs using DSL configuration",
+        "inputSchema defines the structure of standard external event data (e.g., HTTP request with url/method/headers/body)",
+        "outputSchema defines the processed, standardized format provided to flows (e.g., parsed path/queryParameters/normalized headers/processed body)",
+        "configSchema defines how triggers should be configured (path patterns, method constraints, request schemas, authentication rules)",
+        "Triggers act as data adapters: Standard External Data + DSL Config → Processing/Validation → Standardized Flow Data",
+        "Client-side simulation should demonstrate the input + config → output transformation process",
+        "CRITICAL: For HTTP triggers, URL parsing extracts path and queryParameters from the url field in input data",
+        "Input data represents standard external event format, output data represents parsed and standardized flow context",
+        "Configuration influences how input is processed (e.g., path patterns, body parsing rules, header normalization)",
+        "Query parameters are extracted from URL string and converted to key-value object in output",
+        "Headers are normalized to lowercase keys for consistency in output",
+        "Body is parsed based on content-type header and configuration rules"
     ]
     fulfills: [cfv_overview.CorePurpose]
     tags: ["Triggers", "DataFlow", "Architecture", "CascadeDSL"]

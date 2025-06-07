@@ -134,7 +134,7 @@ export class ServerExecutionEngine {
 
       // Analyze dependencies
       const dependencyAnalysis = this.analyzeDependencies(flowDefinition.steps || []);
-      
+
       // Execute steps with enhanced dependency resolution
       await this.executeStepsWithEnhancedDependencyResolution(
         flowDefinition.steps || [],
@@ -535,8 +535,12 @@ export class ServerExecutionEngine {
     // Simulate trigger processing time
     await this.delay(50 + Math.random() * 100);
 
-    // Create standardized trigger output based on trigger context
-    const triggerOutput = context.triggerContext?.runtimeData || context.triggerInput;
+    // Create standardized trigger output from external event input and trigger config
+    const triggerOutput = this.generateTriggerOutput(
+      context.triggerContext?.triggerType || 'trigger',
+      context.triggerInput, // External event data (matches input schema)
+      context.triggerContext?.triggerConfig || {} // DSL configuration
+    );
 
     context.stepResults.set(stepId, {
       stepId,
@@ -919,6 +923,175 @@ export class ServerExecutionEngine {
           valid: true
         };
     }
+  }
+
+  /**
+   * Derive trigger output from input data based on trigger type
+   */
+  private generateTriggerOutput(
+    triggerType: string,
+    eventInput: any, // External event data (matches input schema)
+    triggerConfig: any // DSL configuration (resolved from context/secrets)
+  ): any {
+    if (!eventInput) {
+      return this.generateDefaultTriggerOutput(triggerType);
+    }
+
+    // Get component schema to check for output examples
+    const componentSchema = this.componentSchemas[triggerType];
+    if (componentSchema?.outputSchema?.example) {
+      // Use the output schema example if available
+      return componentSchema.outputSchema.example;
+    }
+
+    switch (triggerType) {
+      case 'StdLib.Trigger:Http':
+        return this.generateHttpTriggerOutput(eventInput, triggerConfig);
+      
+      case 'StdLib.Trigger:Scheduled':
+        return this.generateScheduledTriggerOutput(eventInput, triggerConfig);
+      
+      case 'StdLib.Trigger:EventBus':
+        return this.generateEventBusTriggerOutput(eventInput, triggerConfig);
+      
+      case 'StdLib:Manual':
+        return this.generateManualTriggerOutput(eventInput, triggerConfig);
+      
+      default:
+        // For unknown trigger types, return basic standardized structure
+        return { data: eventInput, timestamp: new Date().toISOString() };
+    }
+  }
+
+  /**
+   * Generate HTTP trigger standardized output from external event input and config
+   */
+  private generateHttpTriggerOutput(eventInput: any, triggerConfig: any): any {
+    const output: any = {};
+
+    // Extract path from URL if available
+    if (eventInput.url) {
+      try {
+        const url = new URL(eventInput.url);
+        output.path = url.pathname;
+        
+        // Parse query parameters from URL
+        const queryParams: any = {};
+        url.searchParams.forEach((value, key) => {
+          queryParams[key] = value;
+        });
+        output.queryParameters = queryParams;
+      } catch {
+        // If URL parsing fails, use input values directly
+        output.path = eventInput.path || '/api/trigger';
+        output.queryParameters = eventInput.queryParameters || {};
+      }
+    } else {
+      output.path = eventInput.path || '/api/trigger';
+      output.queryParameters = eventInput.queryParameters || {};
+    }
+
+    // Normalize method to uppercase
+    output.method = (eventInput.method || 'POST').toUpperCase();
+
+    // Process headers (normalize keys to lowercase)
+    output.headers = {};
+    if (eventInput.headers && typeof eventInput.headers === 'object') {
+      Object.entries(eventInput.headers).forEach(([key, value]) => {
+        output.headers[key.toLowerCase()] = value;
+      });
+    }
+
+    // Pass through body data
+    output.body = eventInput.body || null;
+
+    // Extract client information
+    output.remoteAddress = eventInput.remoteAddress || eventInput.headers?.['x-forwarded-for'] || '127.0.0.1';
+    output.userAgent = eventInput.userAgent || eventInput.headers?.['user-agent'] || 'Unknown';
+    output.timestamp = eventInput.timestamp || new Date().toISOString();
+
+    // Process authentication principal if available
+    if (eventInput.principal) {
+      output.principal = eventInput.principal;
+    }
+
+    return output;
+  }
+
+  /**
+   * Generate scheduled trigger standardized output from external event input and config
+   */
+  private generateScheduledTriggerOutput(eventInput: any, triggerConfig: any): any {
+    const now = new Date().toISOString();
+    
+    return {
+      triggerTime: eventInput.triggerTime || now,
+      scheduledTime: eventInput.scheduledTime || now,
+      payload: eventInput.payload || triggerConfig.initialPayload || {}
+    };
+  }
+
+  /**
+   * Generate event bus trigger standardized output from external event input and config
+   */
+  private generateEventBusTriggerOutput(eventInput: any, triggerConfig: any): any {
+    if (eventInput.event) {
+      // Input already has event structure
+      return { event: eventInput.event };
+    }
+
+    // Transform input into standardized event structure
+    return {
+      event: {
+        id: eventInput.id || `event-${Math.random().toString(36).substr(2, 9)}`,
+        type: eventInput.type || eventInput.eventType || 'generic.event',
+        source: eventInput.source || 'system',
+        timestamp: eventInput.timestamp || new Date().toISOString(),
+        payload: eventInput.payload || eventInput
+      }
+    };
+  }
+
+  /**
+   * Generate manual trigger standardized output from external event input and config
+   */
+  private generateManualTriggerOutput(eventInput: any, triggerConfig: any): any {
+    return {
+      initialData: eventInput.initialData || eventInput
+    };
+  }
+
+  /**
+   * Generate default trigger output when no input is available
+   */
+  private generateDefaultTriggerOutput(triggerType: string): any {
+    // Try to use input schema example as basis for default output
+    const componentSchema = this.componentSchemas[triggerType];
+    if (componentSchema?.inputSchema?.example) {
+      // Use the input schema example and transform it directly
+      const eventInput = componentSchema.inputSchema.example;
+      
+      switch (triggerType) {
+        case 'StdLib.Trigger:Http':
+          return this.generateHttpTriggerOutput(eventInput, {});
+        
+        case 'StdLib.Trigger:Scheduled':
+          return this.generateScheduledTriggerOutput(eventInput, {});
+        
+        case 'StdLib.Trigger:EventBus':
+          return this.generateEventBusTriggerOutput(eventInput, {});
+        
+        case 'StdLib:Manual':
+          return this.generateManualTriggerOutput(eventInput, {});
+        
+        default:
+          return eventInput;
+      }
+    }
+
+    // Fallback to basic default structure
+    const now = new Date().toISOString();
+    return { data: 'default_trigger_data', timestamp: now };
   }
 
   /**

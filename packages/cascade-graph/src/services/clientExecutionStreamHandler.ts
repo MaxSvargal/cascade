@@ -347,13 +347,13 @@ export class ClientExecutionStreamHandler {
     
     // Initialize or update trace with execution started data
     if (!execution.trace) {
-      execution.trace = {
-        traceId: execution.executionId,
-        flowFqn: execution.flowFqn,
+    execution.trace = {
+      traceId: execution.executionId,
+      flowFqn: execution.flowFqn,
         status: 'RUNNING',
         startTime: new Date().toISOString(),
-        steps: []
-      };
+      steps: []
+    };
     }
 
     // Handle both new triggerContext and legacy triggerInput
