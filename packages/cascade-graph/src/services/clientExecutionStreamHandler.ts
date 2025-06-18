@@ -1,12 +1,20 @@
 // Client Execution Stream Handler
 // Handles Server-Sent Events from execution API and updates visualizer state
+// Now uses the unified cascade-client library for better testing and API abstraction
 
 import {
+  CascadeClient,
+  createProductionClient,
+  createTestClient,
+  processEventStream,
   StreamingExecutionRequest,
   StreamingExecutionEvent,
   StreamingEventType,
   ExecutionStatus,
   ExecutionCancellationRequest,
+  ComponentSchema
+} from '@cascade/client';
+import {
   FlowExecutionTrace,
   StepExecutionTrace,
   ExecutionStatusEnum,
@@ -41,6 +49,17 @@ export class ClientExecutionStreamHandler {
   private reconnectAttempts: Map<string, number> = new Map();
   private maxReconnectAttempts = 3;
   private reconnectDelay = 1000; // Start with 1 second
+  private client: CascadeClient;
+
+  constructor(config?: { useTestServer?: boolean; componentSchemas?: Record<string, ComponentSchema> }) {
+    // Default to production API unless explicitly configured to use test server
+    if (config?.useTestServer === true) {
+      this.client = createTestClient(config.componentSchemas);
+    } else {
+      // Use production API by default
+      this.client = createProductionClient();
+    }
+  }
 
   /**
    * Start streaming execution of a flow
@@ -68,8 +87,17 @@ export class ClientExecutionStreamHandler {
     this.reconnectAttempts.set(executionId, 0);
 
     try {
-      // Start streaming connection
-      await this.connectToExecutionStream(executionId, request);
+      // Start streaming execution using unified client
+      const stream = await this.client.executeFlow({
+        flowDefinition: request.flowDefinition,
+        triggerInput: request.triggerInput,
+        executionOptions: request.executionOptions,
+        targetStepId: request.targetStepId,
+        executionId
+      });
+
+      // Process the stream
+      this.processEventStream(executionId, stream);
       return executionId;
     } catch (error: any) {
       execution.status = 'failed';
@@ -94,21 +122,8 @@ export class ClientExecutionStreamHandler {
         execution.eventSource = null;
       }
 
-      // Send cancellation request to server
-      const cancellationRequest: ExecutionCancellationRequest = {
-        executionId,
-        reason
-      };
-
-      const response = await fetch(`/api/execution/${executionId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(cancellationRequest),
-      });
-
-      const result = await response.json();
+      // Send cancellation request using unified client
+      const result = await this.client.cancelExecution(executionId, reason);
       
       if (result.cancelled) {
         execution.status = 'cancelled';
@@ -129,10 +144,7 @@ export class ClientExecutionStreamHandler {
    */
   async getExecutionStatus(executionId: string): Promise<ExecutionStatus | null> {
     try {
-      const response = await fetch(`/api/execution/${executionId}/status`);
-      if (!response.ok) return null;
-      
-      return await response.json();
+      return await this.client.getExecutionStatus(executionId);
     } catch (error) {
       console.error('Failed to get execution status:', error);
       return null;
@@ -179,72 +191,35 @@ export class ClientExecutionStreamHandler {
   }
 
   /**
-   * Connect to execution stream via Server-Sent Events
+   * Process event stream from unified client
    */
-  private async connectToExecutionStream(
-    executionId: string,
-    request: StreamingExecutionRequest
-  ): Promise<void> {
-    const execution = this.activeExecutions.get(executionId);
-    if (!execution) throw new Error('Execution not found');
-
-    // Close existing connection if any
-    if (execution.eventSource) {
-      execution.eventSource.close();
-    }
-
-    // Start flow execution via POST request that returns SSE stream
-    const response = await fetch('/api/execution/flow', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-      },
-      body: JSON.stringify({ ...request, executionId }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to start execution: ${response.statusText}`);
-    }
-
-    if (!response.body) {
-      throw new Error('No response body for streaming');
-    }
-
-    // Create EventSource-like interface from fetch response
-    this.handleStreamingResponse(executionId, response);
-  }
-
-  /**
-   * Handle streaming response from fetch
-   */
-  private async handleStreamingResponse(executionId: string, response: Response): Promise<void> {
+  private async processEventStream(executionId: string, stream: ReadableStream): Promise<void> {
     const execution = this.activeExecutions.get(executionId);
     if (!execution) return;
 
     execution.status = 'running';
 
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-
-    if (!reader) {
-      throw new Error('No reader available for response body');
-    }
-
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) {
-          execution.status = 'completed';
-          if (execution.options.onConnectionClosed) {
-            execution.options.onConnectionClosed();
+      await processEventStream(
+        stream,
+        (eventType: string, eventData: any) => {
+          // Handle the event using existing logic
+          this.handleStreamEvent(executionId, eventType, JSON.stringify(eventData));
+        },
+        (error: Error) => {
+          execution.status = 'failed';
+          if (execution.options.onConnectionError) {
+            execution.options.onConnectionError(error);
           }
-          break;
         }
+      );
 
-        const chunk = decoder.decode(value, { stream: true });
-        this.processStreamChunk(executionId, chunk);
+      // Stream completed successfully
+      if (execution.status === 'running') {
+        execution.status = 'completed';
+        if (execution.options.onConnectionClosed) {
+          execution.options.onConnectionClosed();
+        }
       }
     } catch (error: any) {
       execution.status = 'failed';
@@ -252,37 +227,23 @@ export class ClientExecutionStreamHandler {
         execution.options.onConnectionError(error);
       }
       
-      // Attempt reconnection
+      // Attempt reconnection if configured
       await this.attemptReconnection(executionId);
-    } finally {
-      reader.releaseLock();
     }
   }
 
   /**
-   * Process streaming chunk and parse events
+   * Switch between test server and production API
    */
-  private processStreamChunk(executionId: string, chunk: string): void {
-    const execution = this.activeExecutions.get(executionId);
-    if (!execution) return;
+  setTestMode(useTestServer: boolean): void {
+    this.client.setTestMode(useTestServer);
+  }
 
-    // Parse Server-Sent Events format
-    const lines = chunk.split('\n');
-    let eventType = '';
-    let eventData = '';
-
-    for (const line of lines) {
-      if (line.startsWith('event:')) {
-        eventType = line.substring(6).trim();
-      } else if (line.startsWith('data:')) {
-        eventData = line.substring(5).trim();
-      } else if (line === '' && eventType && eventData) {
-        // Process complete event
-        this.handleStreamEvent(executionId, eventType, eventData);
-        eventType = '';
-        eventData = '';
-      }
-    }
+  /**
+   * Check if currently using test server
+   */
+  isTestMode(): boolean {
+    return this.client.isTestMode();
   }
 
   /**

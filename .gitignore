@@ -9,3 +9,4 @@ playwright-report
 test-results
 test-results.json
 tsconfig.tsbuildinfo
+.DS_Store

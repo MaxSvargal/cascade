@@ -19,6 +19,7 @@
     "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
+    "@cascade/client": "workspace:*",
     "@cascade/graph": "workspace:*",
     "@cascade/chat": "workspace:*",
     "@types/node": "^20.0.0",

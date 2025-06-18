@@ -28,6 +28,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@cascade/client": "workspace:*",
     "@reactflow/background": "^11.3.0",
     "@reactflow/controls": "^11.2.0",
     "@reactflow/core": "^11.10.0",
