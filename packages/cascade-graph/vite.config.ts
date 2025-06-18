@@ -31,7 +31,8 @@ export default defineConfig({
         'react-json-view',
         '@rjsf/core',
         '@rjsf/utils',
-        '@rjsf/validator-ajv8'
+        '@rjsf/validator-ajv8',
+        '@cascade/client'
       ],
       output: {
         globals: {

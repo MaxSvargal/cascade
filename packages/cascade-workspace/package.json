@@ -8,7 +8,7 @@
     "dev:watch": "concurrently \"pnpm run --filter=@cascade/graph dev\" \"pnpm run --filter=@cascade/client dev\" \"pnpm run --filter=@cascade/chat dev\" \"next dev\"",
     "prebuild": "pnpm run build:deps",
     "build": "next build",
-    "build:deps": "pnpm run --filter=@cascade/graph build && pnpm run --filter=@cascade/client build && pnpm run --filter=@cascade/chat build",
+    "build:deps": "pnpm run --filter=@cascade/client build && pnpm run --filter=@cascade/chat build && pnpm run --filter=@cascade/graph build",
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
