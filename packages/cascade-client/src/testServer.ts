@@ -46,6 +46,7 @@ export class CascadeTestServer {
   private componentSchemas: Record<string, ComponentSchema>;
   
   constructor(componentSchemas: Record<string, ComponentSchema> = {}) {
+    console.log('🧪 CascadeTestServer initialized - Running in browser emulation mode');
     this.componentSchemas = {
       // Default component schemas for testing
       'StdLib:HttpCall': {
@@ -157,6 +158,8 @@ export class CascadeTestServer {
    * Execute flow with streaming simulation
    */
   private async handleFlowExecution(request: CascadeExecutionRequest): Promise<ReadableStream> {
+    console.log('🧪 CascadeTestServer: Starting flow execution in browser emulator');
+    
     if (!request.flowDefinition) {
       throw new Error('Flow definition is required for flow execution');
     }

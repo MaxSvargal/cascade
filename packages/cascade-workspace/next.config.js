@@ -10,7 +10,7 @@ const nextConfig = {
     '@cascade/client',
     '@cascade/chat'
   ],
-  
+  output: 'export'
 }
 
 module.exports = nextConfig 

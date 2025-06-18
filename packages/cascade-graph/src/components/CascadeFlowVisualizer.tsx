@@ -45,6 +45,7 @@ import {
 import { createModuleRegistryInterface } from '@/services/moduleRegistryService';
 import { DebugTestActionsService } from '@/services/debugTestActionsService';
 import { createInspectorActions } from '@/services/inspectorActionsService';
+import { ClientExecutionStreamHandler } from '@/services/clientExecutionStreamHandler';
 
 import 'reactflow/dist/style.css';
 
@@ -353,12 +354,16 @@ const CascadeFlowVisualizer: React.FC<CascadeFlowVisualizerProps> = (props) => {
       setCurrentExecutionResults(executionResults);
     };
 
+    // Create a test server-configured stream handler
+    const testStreamHandler = new ClientExecutionStreamHandler({ useTestServer: true });
+
     return new DebugTestActionsService(
       moduleRegistry,
       componentSchemas,
       wrappedOnRunTestCase,
       updateExecutionStateCallback,
-      currentFlowFqn || undefined
+      currentFlowFqn || undefined,
+      testStreamHandler
     );
   }, [moduleRegistry, componentSchemas, props.onRunTestCase, currentFlowFqn]);
 
