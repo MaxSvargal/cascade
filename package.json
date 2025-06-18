@@ -6,6 +6,9 @@
   "workspaces": [
     "packages/*"
   ],
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "pnpm --parallel --recursive dev",
     "build": "pnpm --recursive build",
