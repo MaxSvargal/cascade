@@ -10,8 +10,11 @@
     "node": "22.x"
   },
   "scripts": {
-    "dev": "pnpm --parallel --recursive dev",
-    "build": "pnpm --recursive build",
+    "dev": "pnpm --filter cascade-workspace dev",
+    "dev:watch": "pnpm --filter cascade-workspace dev:watch",
+    "build": "pnpm run build:deps && pnpm --filter cascade-workspace build",
+    "build:all": "pnpm --recursive build",
+    "build:deps": "pnpm --filter=@cascade/graph build && pnpm --filter=@cascade/client build && pnpm --filter=@cascade/chat build",
     "start": "pnpm --filter cascade-workspace start",
     "lint": "pnpm --recursive lint",
     "type-check": "pnpm --recursive type-check",
