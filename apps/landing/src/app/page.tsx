@@ -48,12 +48,16 @@ export default function LandingPage() {
 
               {/* Hero CTAs */}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+                <a target='_blank' href='https://cascade-workspace-alpha.vercel.app/'>
                 <button className="bg-[#00E599] text-black px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#00E599]/90 transition-all duration-200 shadow-lg shadow-[#00E599]/25 backdrop-blur-sm">
                   Try Demo
                 </button>
-                <button className="border border-gray-500/20 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:border-gray-500/25 hover:bg-gray-900/20 transition-colors duration-200 backdrop-blur-sm shadow-lg shadow-gray-800/20">
-                  Talk to Us
-                </button>
+                </a>
+                <a target='_blank' href='https://discord.gg/Nq8PRdYEK2'>
+                  <button className="border border-gray-500/20 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:border-gray-500/25 hover:bg-gray-900/20 transition-colors duration-200 backdrop-blur-sm shadow-lg shadow-gray-800/20">
+                    Talk to Us
+                  </button>
+                </a>
               </div>
             </div>
 
@@ -953,9 +957,11 @@ flows:
                 Available today.
                 </span>
               </h3>
-            <button className="bg-gradient-to-r from-[#00E5BF] to-[#00ffbb] text-black px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#00E599]/90 transition-all duration-200 shadow-lg shadow-[#00E599]/25">
-              Try Demo
-            </button>
+              <a target='_blank' href='https://cascade-workspace-alpha.vercel.app/'>
+                <button className="bg-gradient-to-r from-[#00E5BF] to-[#00ffbb] text-black px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#00E599]/90 transition-all duration-200 shadow-lg shadow-[#00E599]/25">
+                Try Demo
+                </button>
+              </a>
           </div>
         </section>
       </div>
