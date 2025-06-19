@@ -15,69 +15,9 @@ export default function LandingPage() {
 
       {/* Main Content Container - Natural document flow */}
       <div className="relative">
-        {/* Header */}
-        <header className="sticky z-50 top-0 border-b border-gray-800/30 backdrop-blur-xl bg-black/30 backdrop-saturate-150">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              {/* Logo */}
-              <div className="flex items-center">
-                <img 
-                  src="/images/cascade-logo.png" 
-                  alt="Neon"
-                  className="h-5 w-auto"
-                />
-              </div>
-
-              {/* Navigation */}
-              <nav className="hidden md:flex items-center space-x-8">
-                <div className="relative group">
-                  <button className="text-gray-300 hover:text-white transition-colors duration-200 flex items-center">
-                    Product
-                    <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                </div>
-                <div className="relative group">
-                  <button className="text-gray-300 hover:text-white transition-colors duration-200 flex items-center">
-                    Solutions
-                    <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                </div>
-                <a href="#" className="text-gray-300 hover:text-white transition-colors duration-200">
-                  Docs
-                </a>
-                <a href="#" className="text-gray-300 hover:text-white transition-colors duration-200">
-                  Pricing
-                </a>
-                <div className="relative group">
-                  <button className="text-gray-300 hover:text-white transition-colors duration-200 flex items-center">
-                    Company
-                    <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                </div>
-              </nav>
-
-              {/* CTA Buttons */}
-              {/* <div className="flex items-center space-x-4">
-                <a href="#" className="text-gray-300 hover:text-white transition-colors duration-200">
-                  Log In
-                </a>
-                <button className="bg-[#00E599] text-black px-4 py-2 rounded-lg font-medium hover:bg-[#00E599]/90 transition-colors duration-200">
-                  Sign Up
-                </button>
-              </div> */}
-            </div>
-          </div>
-        </header>
-
         {/* Hero Section */}
-        <section className="flex items-center overflow-hidden h-[90vh]">
-          <div className="max-w-7xl mx-auto px-4 pt-[18vh] sm:px-6 lg:px-8 flex flex-col items-center justify-between justify-items-end">
+        <section className="flex items-center overflow-hidden h-[100vh]">
+          <div className="max-w-7xl mx-auto px-4 pt-[28vh] sm:px-6 lg:px-8 flex flex-col items-center justify-between justify-items-end">
             <div className="text-center">
               {/* Hero Badge */}
               {/* <div className="inline-flex items-center px-4 py-2 bg-gray-900/80 border border-gray-700/50 rounded-full text-sm text-gray-300 mb-8 backdrop-blur-sm">
@@ -268,7 +208,7 @@ export default function LandingPage() {
                   </span>
                 </h2>
                 <p className="pt-28 pb-10 text-xl text-gray-200 max-w-4xl mx-auto leading-relaxed">
-                  Cascade is built around a core belief: you should work on your business, not on the plumbing. Our AI Agent is the primary interface to the platform's power.
+                Cascade is built around a core belief: you should work on your business, not on the plumbing. Our AI Agent and visualized flow debugger are the primary interface to the platform's power.
                 </p>
               </div>
 
@@ -348,10 +288,10 @@ export default function LandingPage() {
             <div className="mb-8">
               <div className="text-center mb-16">
                 <h2 className="relative text-6xl mb-6">
-                  <span className="mr-[34%] font-bold bg-gradient-to-r from-[#47e3af] to-[#00ffd9] bg-clip-text text-transparent text-6xl">
+                  <span className="mr-[34%] font-bold bg-gray-200 bg-clip-text text-transparent text-6xl">
                   Your Complete Toolkit
                   </span>
-                  <span className="absolute left-[30%] pt-14 pl-2 bg-gradient-to-r from-[#00E599] to-[#00e549] bg-clip-text text-transparent leading-tight text-5xl">
+                  <span className="absolute left-[30%] pt-14 pl-2 bg-gray-200 bg-clip-text text-transparent leading-tight text-5xl">
                   for Building Resilient Applications
                   </span>
                 </h2>
@@ -740,433 +680,284 @@ flows:
             </div>
 
             {/* Complete Toolkit Section */}
-            <div className="mb-32">
-              <div className="text-center mb-16">
-                <h2 className="text-4xl font-bold mb-6">
-                  <span className="bg-gradient-to-r from-[#00E599] to-[#00B8FF] bg-clip-text text-transparent">
-                    The Complete Toolkit for AI-Native Development.
+            <div className="">
+              <div className="text-center mb-48">
+                <h2 className="relative text-6xl mb-6">
+                  <span className="mr-[34%] font-bold bg-gray-200 bg-clip-text text-transparent">
+                  The Complete Toolkit for 
+                  </span>
+                  
+                  <span className="absolute left-[40%] pt-14 pl-2 bg-gray-50 bg-clip-text text-transparent leading-tight drop-shadow-lg">
+                  AI-Native Development
                   </span>
                 </h2>
-                <p className="text-xl text-gray-400 max-w-4xl mx-auto leading-relaxed">
-                  Cascade provides the integrated tools you need to build faster and more reliably than ever before.
-                </p>
               </div>
 
-              {/* Toolkit Grid */}
-              <div className="max-w-6xl mx-auto mb-12">
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[
-                    {
-                      title: "AI Agent with RAG, Process Generation, and Fleet Management",
-                      icon: (
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                      ),
-                      gradient: "from-[#00E599]/10 to-black",
-                      border: "border-[#00E599]/30",
-                      accent: "from-[#00E599] to-[#00B8FF]"
-                    },
-                    {
-                      title: "Managed SaaS Cloud & Open-Source Self-Hosted Runtime",
-                      icon: (
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-                        </svg>
-                      ),
-                      gradient: "from-blue-950/20 to-black",
-                      border: "border-blue-900/30",
-                      accent: "from-blue-500/50 to-cyan-500/50"
-                    },
-                    {
-                      title: "Visual Editor with Live Debugger",
-                      icon: (
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                      ),
-                      gradient: "from-purple-950/20 to-black",
-                      border: "border-purple-900/30",
-                      accent: "from-purple-500/50 to-pink-500/50"
-                    },
-                    {
-                      title: "Low-Code Extensibility with Secure WASM Modules",
-                      icon: (
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      ),
-                      gradient: "from-orange-950/20 to-black",
-                      border: "border-orange-900/30",
-                      accent: "from-orange-500/50 to-yellow-500/50"
-                    },
-                    {
-                      title: "Built-in Observability, Tracing, and Auditing",
-                      icon: (
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      ),
-                      gradient: "from-green-950/20 to-black",
-                      border: "border-green-900/30",
-                      accent: "from-green-500/50 to-emerald-500/50"
-                    }
-                  ].map((tool, index) => (
-                    <div key={index} className={`bg-gradient-to-br ${tool.gradient} p-6 rounded-2xl border ${tool.border} relative overflow-hidden ${index === 4 ? 'md:col-span-2 lg:col-span-1' : ''}`}>
-                      <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${tool.accent}`}></div>
-                      
-                      <div className="flex items-center mb-4">
-                        <div className="text-white mr-3">{tool.icon}</div>
-                        <h3 className="text-lg text-white font-semibold leading-tight">{tool.title}</h3>
+              {/* Toolkit Cards */}
+              <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-8 mb-12">
+                
+                {/* AI Agent Card */}
+                <div className="bg-gradient-to-br from-[#00E599]/20 to-black backdrop-blur-lg p-8 rounded-2xl border border-green-800/20 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-[#00e572] to-[#00eaff]"></div>
+                  
+                  <div className="flex items-center mb-6">
+                    <div className="w-12 h-12 bg-[#00E599]/20 rounded-lg flex items-center justify-center mr-4">
+                      <svg className="w-6 h-6 text-[#00E599]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-2xl text-white">AI Agent</h3>
+                  </div>
+                  
+                  <p className="text-gray-200 mb-6 text-lg">Your Intelligent Development Partner</p>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-[#00E599] rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-[#00E599] font-medium">RAG-powered process generation.</span> Understands your domain and generates workflows using your existing knowledge base and best practices.
+                      </p>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-[#00E599] rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-[#00E599] font-medium">Fleet management at scale.</span> Manages thousands of workflows across environments with intelligent monitoring and optimization.
+                      </p>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-[#00E599] rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-[#00E599] font-medium">Continuous learning and improvement.</span> Learns from execution patterns to suggest optimizations and prevent failures.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-[#00E599]/30">
+                    <div className="flex items-center text-[#00E599] text-sm">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Natural language to production-ready workflows
+                    </div>
+                  </div>
+                </div>
+
+                {/* Runtime & Cloud Card */}
+                <div className="bg-gradient-to-br from-blue-950/20 to-black p-8 rounded-2xl border border-blue-900/30 relative overflow-hidden backdrop-blur-lg">
+                  <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-500/50 to-cyan-500/50"></div>
+                  
+                  <div className="flex items-center mb-6">
+                    <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mr-4">
+                      <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-2xl text-white">Managed SaaS & Self-Hosted</h3>
+                  </div>
+                  
+                  <p className="text-gray-200 mb-6 text-lg">Flexible Deployment Options</p>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-blue-300 font-medium">Fully managed cloud platform.</span> Zero-ops deployment with enterprise-grade security, monitoring, and compliance built-in.
+                      </p>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-blue-300 font-medium">Open-source self-hosted runtime.</span> Deploy on your infrastructure with complete control over data and execution environment.
+                      </p>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-blue-300 font-medium">Hybrid deployment support.</span> Seamlessly move between cloud and on-premise environments as your needs evolve.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-blue-400/30">
+                    <div className="flex items-center text-blue-300 text-sm">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.031 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                      Enterprise-ready from day one
+                    </div>
+                  </div>
+                </div>
+
+                {/* Visual Editor Card */}
+                <div className="bg-gradient-to-br from-purple-950/20 to-black p-8 rounded-2xl border border-purple-900/30 relative overflow-hidden backdrop-blur-lg">
+                  <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-purple-500/50 to-pink-500/50"></div>
+                  
+                  <div className="flex items-center mb-6">
+                    <div className="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mr-4">
+                      <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-2xl text-white">Visual Editor & Live Debugger</h3>
+                  </div>
+                  
+                  <p className="text-gray-200 mb-6 text-lg">Interactive Development Environment</p>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-purple-300 font-medium">Drag-and-drop workflow builder.</span> Visually compose complex business processes with an intuitive interface that non-technical users can understand.
+                      </p>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-purple-300 font-medium">Real-time execution debugging.</span> Step through workflows as they execute, inspect data at each step, and identify bottlenecks instantly.
+                      </p>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-purple-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-purple-300 font-medium">Collaborative editing and review.</span> Team members can simultaneously edit, comment, and approve changes with built-in version control.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-purple-400/30">
+                    <div className="flex items-center text-purple-300 text-sm">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Visual debugging meets production monitoring
+                    </div>
+                  </div>
+                </div>
+
+                {/* Extensibility Card */}
+                <div className="bg-gradient-to-br from-orange-950/20 to-black p-8 rounded-2xl border border-orange-900/30 relative overflow-hidden backdrop-blur-lg">
+                  <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-orange-500/50 to-yellow-500/50"></div>
+                  
+                  <div className="flex items-center mb-6">
+                    <div className="w-12 h-12 bg-orange-500/20 rounded-lg flex items-center justify-center mr-4">
+                      <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-2xl text-white">Low-Code Extensibility</h3>
+                  </div>
+                  
+                  <p className="text-gray-200 mb-6 text-lg">Secure WASM Module System</p>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-orange-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-orange-300 font-medium">Custom components in any language.</span> Write extensions in Rust, Go, JavaScript, or Python and deploy them as sandboxed WASM modules.
+                      </p>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-orange-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-orange-300 font-medium">Enterprise-grade security sandbox.</span> All custom code runs in isolated WASM environments with strict resource limits and no system access.
+                      </p>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="w-2 h-2 bg-orange-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                      <p className="text-gray-300">
+                        <span className="text-orange-300 font-medium">Marketplace and private registries.</span> Share components across teams or discover community-built integrations in the public marketplace.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-orange-400/30">
+                    <div className="flex items-center text-orange-300 text-sm">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      Secure by design, extensible by nature
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Observability Section */}
+              <div className="max-w-4xl mx-auto mb-12">
+                <div className="bg-gradient-to-br from-green-950/20 to-black p-8 rounded-2xl border border-green-900/30 relative overflow-hidden backdrop-blur-lg">
+                  <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-green-500/50 to-emerald-500/50"></div>
+                  
+                  <div className="flex items-center mb-6">
+                    <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mr-4">
+                      <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-2xl text-white">Built-in Observability, Tracing, and Auditing</h3>
+                  </div>
+                  
+                  <p className="text-gray-200 mb-6 text-lg">Complete Visibility Into Your Business Processes</p>
+                  
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div className="flex items-start">
+                        <div className="w-2 h-2 bg-green-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                        <p className="text-gray-300">
+                          <span className="text-green-300 font-medium">Distributed tracing out of the box.</span> Every workflow execution is automatically traced across all services and dependencies.
+                        </p>
+                      </div>
+                      <div className="flex items-start">
+                        <div className="w-2 h-2 bg-green-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                        <p className="text-gray-300">
+                          <span className="text-green-300 font-medium">Real-time performance monitoring.</span> Track SLAs, identify bottlenecks, and get alerts before issues impact users.
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Final CTA */}
-              <div className="text-center">
-                <p className="text-2xl text-gray-300 mb-8 font-medium">
-                  Ready to stop writing code and start solving problems?
-                </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                  <button className="bg-[#00E599] text-black px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#00E599]/90 transition-all duration-200 shadow-lg shadow-[#00E599]/25">
-                    Try the AI Agent Now
-                  </button>
-                  <button className="border border-gray-500/20 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:border-gray-500/25 hover:bg-gray-900/20 transition-colors duration-200 backdrop-blur-sm shadow-lg shadow-gray-800/20">
-                    Read the Documentation
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Customer Logos */}
-        <section className="py-20 border-t border-gray-800">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <p className="text-gray-500 mb-12 text-lg">Trusted in production by thousands of teams</p>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-8 items-center opacity-80 hover:opacity-100 transition-opacity duration-300">
-              {[
-                { name: 'Zimmer Biomet', logo: '/images/companies/zimmer-biomet-logo.svg' },
-                { name: 'Retool', logo: '/images/companies/retool-logo.svg' },
-                { name: 'Boston Consulting Group', logo: '/images/companies/bcg-logo.svg' },
-                { name: 'Outfront Media', logo: '/images/companies/outfront-media-logo.svg' },
-                { name: 'Replit', logo: '/images/companies/replit-logo.svg' }
-              ].map((company) => (
-                <div key={company.name} className="flex flex-col items-center group">
-                  <div className="mb-4 transition-transform duration-200 group-hover:scale-110">
-                    <img 
-                      src={company.logo} 
-                      alt={company.name}
-                      className="h-10 w-auto filter brightness-75 group-hover:brightness-100 transition-all duration-200"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Code Example Section */}
-        <section className="py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold mb-6">
-                Works with <span className="bg-gradient-to-r from-[#00E599] to-[#00B8FF] bg-clip-text text-transparent">your stack</span>
-              </h2>
-              <p className="text-xl text-gray-400 max-w-3xl mx-auto">
-                Integrate it into your language or framework within minutes and unlock a simpler developer workflow.
-              </p>
-            </div>
-
-            <div className="mb-8">
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                {['Next.js', 'Drizzle', 'Prisma', 'Python', 'Ruby', 'Rust', 'Go', 'Node.js'].map((tech) => (
-                  <span key={tech} className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 hover:border-[#00E599]/50 transition-colors">
-                    {tech}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-8">
-              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-4xl mx-auto">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-gray-500 text-sm">JavaScript</div>
-                  <button className="text-gray-400 hover:text-white transition-colors">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </button>
-                </div>
-                <pre className="text-gray-300 font-mono text-sm overflow-x-auto">
-{`import { neon } from '@neondatabase/serverless';
-
-export async function GET() {
-    const sql = neon(process.env.DATABASE_URL);
-
-    const rows = await sql("SELECT * FROM posts");
-
-    return Response.json({ rows })
-}`}
-                </pre>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Performance Section */}
-        <section className="py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-4xl font-bold mb-6">
-              <span className="bg-gradient-to-r from-[#00E599] to-[#00B8FF] bg-clip-text text-transparent">
-                Lightning fast. Edge ready.
-              </span>
-            </h2>
-            <p className="text-xl text-gray-400 max-w-3xl mx-auto mb-12">
-              The Neon serverless driver, designed for fast queries over HTTP
-            </p>
-            
-            <div className="bg-gradient-to-br from-gray-900 to-gray-800 p-8 rounded-2xl border border-gray-700 max-w-4xl mx-auto">
-              <div className="bg-black rounded-lg p-6 mb-6">
-                <pre className="text-left text-gray-300 font-mono text-sm">
-{`import { neon } from '@neondatabase/serverless';
-const sql = neon('postgresql://usr:pass@proj.us-east-2.aws.neon.tech/db');
-const posts = await sql('SELECT * FROM posts');`}
-                </pre>
-              </div>
-              <button className="bg-[#00E599] text-black px-6 py-3 rounded-lg font-medium hover:bg-[#00E599]/90 transition-colors duration-200">
-                Get the Serverless Driver
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* Features Grid */}
-        <section className="py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold mb-6">
-                Better database. <span className="bg-gradient-to-r from-[#00E599] to-[#00B8FF] bg-clip-text text-transparent">For modern workflows.</span>
-              </h2>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {[
-                {
-                  title: 'Instant read replicas',
-                  description: 'They scale down to zero when idle and don\'t use additional storage.',
-                  icon: (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  )
-                },
-                {
-                  title: 'Easy database ops via API',
-                  description: 'Manage thousands of databases programmatically.',
-                  icon: (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  )
-                },
-                {
-                  title: 'Point-in-time recovery',
-                  description: 'Up to 30 days granularity down to the transaction or second.',
-                  icon: (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  )
-                },
-                {
-                  title: 'AI Applications',
-                  description: 'HNSW index algorithm streamlines performance for vector search.',
-                  icon: (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                  )
-                },
-                {
-                  title: 'Database-per-tenant',
-                  description: 'Scale to fleets of thousands of databases without touching a server.',
-                  icon: (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  )
-                },
-                {
-                  title: '100% Postgres',
-                  description: 'Not a fork, not a rewrite. Trusted Postgres with serverless benefits.',
-                  icon: (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                    </svg>
-                  )
-                }
-              ].map((feature, index) => (
-                <div key={index} className="bg-gradient-to-br from-gray-900 to-gray-800 p-6 rounded-xl border border-gray-700 hover:border-[#00E599]/50 transition-all duration-200 group">
-                  <div className="text-white mb-4">{feature.icon}</div>
-                  <h3 className="text-xl font-semibold text-white mb-3 group-hover:text-[#00E599] transition-colors">{feature.title}</h3>
-                  <p className="text-gray-400">{feature.description}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Testimonials */}
-        <section className="py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold mb-6">
-                Industry leaders <span className="bg-gradient-to-r from-[#00E599] to-[#00B8FF] bg-clip-text text-transparent">trust Neon</span>
-              </h2>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto">
-              {[
-                {
-                  quote: "Neon allows us to develop much faster than we've even been used to",
-                  author: "Alex Klarfeld",
-                  role: "CEO and co-founder of Supergood.ai",
-                  company: "Supergood.ai",
-                  avatar: "/images/testimonials/alex-klarfeld.svg"
-                },
-                {
-                  quote: "Neon's serverless philosophy is aligned with our vision: no infrastructure to manage, no servers to provision, no database cluster to maintain",
-                  author: "Edouard Bonlieu",
-                  role: "Co-founder at Koyeb",
-                  company: "Koyeb",
-                  avatar: "/images/testimonials/edouard-bonlieu.svg"
-                },
-                {
-                  quote: "The killer feature that convinced us to use Neon was branching: it keeps our engineering velocity high",
-                  author: "Léonard Henriquez",
-                  role: "Co-founder and CTO, Topo.io",
-                  company: "Topo.io",
-                  avatar: "/images/testimonials/leonard-henriquez.svg"
-                },
-                {
-                  quote: "We've been able to automate virtually all database tasks via the Neon API, saving us a tremendous amount of time and engineering effort",
-                  author: "Himanshu Bhandoh",
-                  role: "Software Engineer at Retool",
-                  company: "Retool",
-                  avatar: "/images/testimonials/himanshu-bhandoh.svg"
-                }
-              ].map((testimonial, index) => (
-                <div key={index} className="bg-gradient-to-br from-gray-900 to-gray-800 p-8 rounded-xl border border-gray-700 hover:border-[#00E599]/30 transition-all duration-300 hover:transform hover:scale-105">
-                  <blockquote className="text-lg text-gray-300 mb-6 leading-relaxed">
-                    "{testimonial.quote}"
-                  </blockquote>
-                  <div className="flex items-center">
-                    <div className="mr-4">
-                      <img 
-                        src={testimonial.avatar} 
-                        alt={testimonial.author}
-                        className="w-12 h-12 rounded-full"
-                      />
+                    <div className="space-y-4">
+                      <div className="flex items-start">
+                        <div className="w-2 h-2 bg-green-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                        <p className="text-gray-300">
+                          <span className="text-green-300 font-medium">Compliance-ready audit trails.</span> Immutable logs of every decision and data transformation for regulatory compliance.
+                        </p>
+                      </div>
+                      <div className="flex items-start">
+                        <div className="w-2 h-2 bg-green-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                        <p className="text-gray-300">
+                          <span className="text-green-300 font-medium">Business intelligence integration.</span> Export metrics and traces to your existing BI tools and dashboards.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-white font-medium">{testimonial.author}</div>
-                      <div className="text-gray-500 text-sm">{testimonial.role}</div>
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-green-400/30">
+                    <div className="flex items-center text-green-300 text-sm">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      From development to production, visibility at every step
                     </div>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
         </section>
 
         {/* Final CTA */}
-        <section className="py-20">
+        <section className="pb-[32vh] pt-[28vh]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-4xl font-bold mb-6">
-              Features of tomorrow. <span className="bg-gradient-to-r from-[#00E599] to-[#00B8FF] bg-clip-text text-transparent">Available today.</span>
-            </h2>
-            <button className="bg-[#00E599] text-black px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#00E599]/90 transition-all duration-200 shadow-lg shadow-[#00E599]/25">
-              Get Started
+            <h3 className="text-6xl md:text-6xl mb-8 mt-10 leading-snug">
+                <span className="text-white drop-shadow-lg">Features of tomorrow.</span><br/>
+                <span className="bg-gradient-to-r from-[#00E5BF] to-[#00ffbb] bg-clip-text text-transparent drop-shadow-lg leading-snug mx-3">
+                Available today.
+                </span>
+              </h3>
+            <button className="bg-gradient-to-r from-[#00E5BF] to-[#00ffbb] text-black px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#00E599]/90 transition-all duration-200 shadow-lg shadow-[#00E599]/25">
+              Try Demo
             </button>
           </div>
         </section>
-
-        {/* Footer */}
-        <footer className="border-t border-gray-800 py-16 bg-gray-950">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid md:grid-cols-4 gap-8">
-              <div>
-                <div className="mb-4">
-                  <img 
-                    src="/images/neon-logo.svg" 
-                    alt="Neon"
-                    className="h-8 w-auto"
-                  />
-                </div>
-                <p className="text-gray-500 text-sm mb-4">All systems operational</p>
-                <p className="text-gray-500 text-sm">Made in SF and the World</p>
-                <p className="text-gray-500 text-sm mt-8">Copyright Ⓒ 2022 – 2025 Neon, Inc.</p>
-              </div>
-
-              <div>
-                <h4 className="text-white font-semibold mb-4">Company</h4>
-                <ul className="space-y-2 text-sm">
-                  {['About', 'Blog', 'Careers', 'Contact Sales', 'Partners', 'Security'].map((item) => (
-                    <li key={item}>
-                      <a href="#" className="text-gray-500 hover:text-white transition-colors duration-200">
-                        {item}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="text-white font-semibold mb-4">Resources</h4>
-                <ul className="space-y-2 text-sm">
-                  {['Docs', 'Changelog', 'Support', 'Community Guides', 'PostgreSQL Tutorial', 'Creators'].map((item) => (
-                    <li key={item}>
-                      <a href="#" className="text-gray-500 hover:text-white transition-colors duration-200">
-                        {item}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="text-white font-semibold mb-4">Compliance</h4>
-                <ul className="space-y-2 text-sm">
-                  {['SOC 2 Certified', 'ISO 27001 Certified', 'GDPR Compliant', 'HIPAA Compliant', 'Trust Center'].map((item) => (
-                    <li key={item}>
-                      <a href="#" className="text-gray-500 hover:text-white transition-colors duration-200">
-                        {item}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-                </div>
-              </div>
-
-            <div className="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
-              <div className="flex items-center space-x-6 text-sm text-gray-500">
-                <a href="#" className="hover:text-white transition-colors duration-200">Terms</a>
-                <a href="#" className="hover:text-white transition-colors duration-200">Privacy</a>
-                <a href="#" className="hover:text-white transition-colors duration-200">Security</a>
-                <a href="#" className="hover:text-white transition-colors duration-200">Status</a>
-              </div>
-              <div className="flex items-center space-x-4 mt-4 md:mt-0">
-                <span className="text-gray-500 text-sm">Discord</span>
-                <span className="bg-[#00E599] text-black px-2 py-1 rounded text-xs font-medium">18.5k</span>
-              </div>
-            </div>
-          </div>
-        </footer>
       </div>
     </div>
   );
