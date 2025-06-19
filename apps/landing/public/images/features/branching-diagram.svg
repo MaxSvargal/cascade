@@ -1,0 +1,39 @@
+<svg width="400" height="300" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="400" height="300" rx="12" fill="#111827"/>
+  
+  <!-- Main branch -->
+  <rect x="50" y="120" width="80" height="60" rx="8" fill="#374151" stroke="#00E599" stroke-width="2"/>
+  <text x="90" y="145" text-anchor="middle" fill="#00E599" font-family="Inter, sans-serif" font-size="12" font-weight="600">main</text>
+  <text x="90" y="160" text-anchor="middle" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="10">Production</text>
+  
+  <!-- Branch arrows -->
+  <path d="M130 150 L170 120" stroke="#00E599" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <path d="M130 150 L170 180" stroke="#00E599" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Dev branch -->
+  <rect x="180" y="90" width="80" height="60" rx="8" fill="#374151" stroke="#00B8FF" stroke-width="2"/>
+  <text x="220" y="115" text-anchor="middle" fill="#00B8FF" font-family="Inter, sans-serif" font-size="12" font-weight="600">dev</text>
+  <text x="220" y="130" text-anchor="middle" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="10">Development</text>
+  
+  <!-- Test branch -->
+  <rect x="180" y="160" width="80" height="60" rx="8" fill="#374151" stroke="#F59E0B" stroke-width="2"/>
+  <text x="220" y="185" text-anchor="middle" fill="#F59E0B" font-family="Inter, sans-serif" font-size="12" font-weight="600">test</text>
+  <text x="220" y="200" text-anchor="middle" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="10">Testing</text>
+  
+  <!-- Feature branches -->
+  <path d="M260 120 L300 100" stroke="#00B8FF" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <rect x="310" y="80" width="70" height="40" rx="6" fill="#374151" stroke="#8B5CF6" stroke-width="2"/>
+  <text x="345" y="105" text-anchor="middle" fill="#8B5CF6" font-family="Inter, sans-serif" font-size="10" font-weight="600">feature-x</text>
+  
+  <!-- Arrow marker definition -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#00E599"/>
+    </marker>
+  </defs>
+  
+  <!-- Title -->
+  <text x="200" y="250" text-anchor="middle" fill="white" font-family="Inter, sans-serif" font-size="16" font-weight="600">Git-like Database Branching</text>
+  <text x="200" y="270" text-anchor="middle" fill="#9CA3AF" font-family="Inter, sans-serif" font-size="12">Instant isolated environments</text>
+</svg> 

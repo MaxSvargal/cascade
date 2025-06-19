@@ -1,0 +1,7 @@
+<svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Neon dot -->
+  <circle cx="12" cy="20" r="6" fill="#00E599"/>
+  
+  <!-- Neon text -->
+  <text x="28" y="26" fill="white" font-family="Inter, sans-serif" font-size="20" font-weight="700">Neon</text>
+</svg> 
