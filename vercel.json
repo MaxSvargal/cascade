@@ -1,0 +1,6 @@
+{
+  "buildCommand": "pnpm build:landing",
+  "outputDirectory": "apps/landing/.next",
+  "installCommand": "pnpm install",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD apps/landing/"
+}
